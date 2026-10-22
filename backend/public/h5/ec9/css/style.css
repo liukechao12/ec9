@@ -38,9 +38,10 @@ html, body {
 #app.home #header { height: 0; }
 
 /* ---------- 顶部品牌区（设计稿切片：蓝底+地球线稿，文字真字体） ---------- */
+/* 设计稿量测：蓝块 y0-183（白卡顶 y164 + 顶部圆角 20，圆角内透出蓝色） */
 .brand {
-  height: 165px;
-  background: url(../img/signup_bg.png) top center / 375px 165px no-repeat;
+  height: 185px;
+  background: url(../img/signup_bg.png) top center / 375px 185px no-repeat;
   position: relative;
   overflow: hidden;
 }
@@ -52,13 +53,13 @@ html, body {
   letter-spacing: 11px; text-indent: 11px; line-height: 1; white-space: nowrap;
 }
 .brand-tag-en {
-  position: absolute; top: 88px; left: 0; right: 0;
+  position: absolute; top: 89px; left: 0; right: 0;
   text-align: center; color: #fff;
   font-size: 12.5px; font-weight: 600; letter-spacing: 2.4px; text-indent: 2.4px;
   line-height: 1; text-transform: uppercase; white-space: nowrap;
 }
 .brand-tag-cn {
-  position: absolute; top: 109px; left: 0; right: 0;
+  position: absolute; top: 111px; left: 0; right: 0;
   text-align: center; color: #fff;
   font-size: 13.5px; letter-spacing: 4.5px; text-indent: 4.5px; line-height: 1; white-space: nowrap;
 }
@@ -99,11 +100,14 @@ html, body {
 }
 .lang-menu div:hover { background: rgba(255,255,255,.08); }
 
-/* ---------- 白色内容卡（设计稿：sheet 顶 165，标题字形带 y196-217） ---------- */
+/* ---------- 白色内容卡（设计稿：sheet 顶 164，上移 20 压住蓝块底，圆角内露出蓝色） ---------- */
 .sheet {
   background: var(--white);
   border-radius: var(--radius-card) var(--radius-card) 0 0;
-  min-height: calc(100vh - 165px);
+  margin-top: -20px;
+  position: relative;
+  z-index: 1;
+  min-height: calc(100vh - 164px);
   padding: 26px 20px 40px;
 }
 .sheet--flush { min-height: 0; }

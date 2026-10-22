@@ -151,12 +151,15 @@
     p.textContent = msg; p.classList.remove("hidden");
   }
 
-  /* ---------- 品牌头 + 语言切换 ---------- */
+  /* ---------- 品牌头 + 语言切换（设计稿：背景切片 + 真文字，标题48/英标90/中标109） ---------- */
   function header(tall) {
     var langs = ["zh-CN", "en", "zh-Hant"];
     var labels = { "zh-CN": "简体", "en": "English", "zh-Hant": "繁體" };
     return '<div class="brand' + (tall ? " brand--tall" : "") + '">' +
-      '<img src="assets/logo.png" alt="Earth Cloning Plan 9"></div>' +
+      '<div class="brand-title">地球克隆计划9</div>' +
+      '<div class="brand-tag-en">JOIN PHYSICAL AI,HERE AND NOW</div>' +
+      '<div class="brand-tag-cn">拥抱物理AI&#12288;此刻即未来</div>' +
+      '</div>' +
       '<div class="lang-switch" id="langBtn">' +
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6">' +
       '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 4 5.6 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.6-4-9s1.2-6.4 4-9z"/></svg>' +

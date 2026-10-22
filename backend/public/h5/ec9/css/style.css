@@ -7,17 +7,18 @@
   --blue: #3056D4;
   --blue-dark: #2743A8;
   --brand-blue: #3056D4;
+  --btn-blue: #2B77C8;
   --red: #E34D59;
-  --title-gray: #7A7E87;
-  --label-gray: #7A7E87;
-  --placeholder: #C0C4CC;
+  --title-gray: #7E828F;
+  --label-gray: #7E828F;
+  --placeholder: #BEBEBE;
   --input-bg: #EDEDED;
   --page-bg: #FFFFFF;
   --black: #000000;
   --white: #FFFFFF;
   --error-bg: #FDECEC;
   --divider: #E5E6EB;
-  --radius-card: 24px;
+  --radius-card: 20px;
   --radius-input: 8px;
 }
 
@@ -36,30 +37,31 @@ html, body {
 #app.home .brand { display: none; }
 #app.home #header { height: 0; }
 
-/* ---------- 顶部品牌区 ---------- */
+/* ---------- 顶部品牌区（设计稿切片：蓝底+地球线稿，文字真字体） ---------- */
 .brand {
-  background: var(--brand-blue);
-  padding: 44px 20px 30px;
-  display: flex;
-  justify-content: center;
+  height: 165px;
+  background: url(../img/signup_bg.png) top center / 375px 165px no-repeat;
   position: relative;
   overflow: hidden;
 }
-/* 地球线稿装饰（设计稿品牌区背景） */
-.brand::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 50%;
-  width: 375px; height: 340px;
-  transform: translateX(-50%);
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 340'%3E%3Cg fill='none' stroke='%23FFFFFF' stroke-width='1.2'%3E%3Ccircle cx='187.5' cy='294' r='209' stroke-opacity='.42'/%3E%3Cpath d='M58 148 Q95 122 150 128 Q210 134 260 112 Q300 96 340 104' stroke-opacity='.4'/%3E%3Cpath d='M96 128 Q112 110 134 116 Q156 122 176 108 Q194 96 214 100' stroke-opacity='.34'/%3E%3Cpath d='M150 92 Q176 80 208 86' stroke-opacity='.3'/%3E%3C/g%3E%3C/svg%3E") top center / 375px 340px no-repeat;
-  pointer-events: none;
+/* 品牌区文字（设计稿量测：标题字形带 y48-67，英文标语 y90-99，中文标语 y111-122） */
+.brand-title {
+  position: absolute; top: 46px; left: 0; right: 0;
+  text-align: center; color: #fff;
+  font-size: 24px; font-weight: 800; font-style: italic;
+  letter-spacing: 11px; text-indent: 11px; line-height: 1; white-space: nowrap;
 }
-.brand > * { position: relative; z-index: 1; }
-.brand img { width: 78%; display: block; mix-blend-mode: screen; }  /* 黑底 logo 融入蓝底 */
-
-/* 首页品牌区更高 */
-.brand--tall { padding: 70px 20px 56px; }
+.brand-tag-en {
+  position: absolute; top: 88px; left: 0; right: 0;
+  text-align: center; color: #fff;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 2.4px; text-indent: 2.4px;
+  line-height: 1; text-transform: uppercase; white-space: nowrap;
+}
+.brand-tag-cn {
+  position: absolute; top: 109px; left: 0; right: 0;
+  text-align: center; color: #fff;
+  font-size: 13.5px; letter-spacing: 4.5px; text-indent: 4.5px; line-height: 1; white-space: nowrap;
+}
 
 /* 语言切换 */
 .lang-switch {
@@ -97,12 +99,12 @@ html, body {
 }
 .lang-menu div:hover { background: rgba(255,255,255,.08); }
 
-/* ---------- 白色内容卡 ---------- */
+/* ---------- 白色内容卡（设计稿：sheet 顶 165，标题字形带 y196-217） ---------- */
 .sheet {
   background: var(--white);
   border-radius: var(--radius-card) var(--radius-card) 0 0;
-  min-height: calc(100vh - 150px);
-  padding: 30px 20px 40px;
+  min-height: calc(100vh - 165px);
+  padding: 26px 20px 40px;
 }
 .sheet--flush { min-height: 0; }
 .sheet--black { background: transparent; border-radius: 0; padding-top: 1px; }
@@ -127,23 +129,25 @@ html, body {
   font-size: 24px;
   color: var(--title-gray);
   font-weight: 600;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
-/* ---------- 表单 ---------- */
+/* ---------- 表单（设计稿：行距58=框38+间距20，标签13px，输入框x起69/95） ---------- */
 .form-row { display: flex; align-items: center; margin-bottom: 20px; }
-.form-label { width: 76px; flex-shrink: 0; font-size: 14px; color: var(--label-gray); }
-.form-field { flex: 1; display: flex; gap: 10px; align-items: center; }
+.form-label { width: 76px; flex-shrink: 0; font-size: 13px; color: var(--label-gray); }
+.form-field { flex: 1; display: flex; gap: 19px; align-items: center; }
+/* 报名信息页：设计稿标签列 49px（输入框 x69 起）；个人信息页 76px（x95 起） */
+.pg-signup .form-label { width: 49px; white-space: nowrap; }
 
 .input {
   width: 100%;
-  height: 40px;
+  height: 38px;
   background: var(--input-bg);
   border: none;
   outline: none;
   border-radius: var(--radius-input);
-  padding: 0 14px;
-  font-size: 14px;
+  padding: 0 16px;
+  font-size: 13px;
   color: #1D2129;
 }
 .input::placeholder { color: var(--placeholder); }
@@ -160,24 +164,24 @@ select.input.filled { color: #1D2129; }
 }
 
 .btn-code {
-  height: 40px;
-  background: var(--blue);
+  height: 38px;
+  background: var(--btn-blue);
   color: #fff;
   border: none;
   border-radius: var(--radius-input);
   font-size: 13px;
-  padding: 0 14px;
+  padding: 0 10px;
   cursor: pointer;
   white-space: nowrap;
 }
 .btn-code:disabled { background: #A8C3F8; cursor: default; }
 
-/* ---------- 按钮 ---------- */
+/* ---------- 按钮（设计稿：h38，按钮蓝 #2B77C8，与上一行间距51） ---------- */
 .btn-primary {
   display: block;
   width: 100%;
-  height: 40px;
-  background: var(--blue);
+  height: 38px;
+  background: var(--btn-blue);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -185,7 +189,7 @@ select.input.filled { color: #1D2129; }
   font-weight: 600;
   letter-spacing: 1px;
   cursor: pointer;
-  margin-top: 30px;
+  margin-top: 50px;
 }
 .btn-primary:active { background: var(--blue-dark); }
 

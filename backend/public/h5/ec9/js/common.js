@@ -10,7 +10,13 @@
 
   /* ---------- 存储 ---------- */
   var S = {
-    get lang() { return localStorage.getItem("ec9_lang") || "zh-CN"; },
+    /* 语言：设计稿页面内没有切换入口，改用链接参数 ?lang=en / ?lang=zh-Hant，命中即写入本地 */
+    get lang() {
+      var m = /[?&]lang=([^&#]+)/.exec(location.search);
+      var q = m ? decodeURIComponent(m[1]) : "";
+      if (q === "en" || q === "zh-Hant" || q === "zh-CN") { localStorage.setItem("ec9_lang", q); return q; }
+      return localStorage.getItem("ec9_lang") || "zh-CN";
+    },
     set lang(v) { localStorage.setItem("ec9_lang", v); },
     get token() { return sessionStorage.getItem("ec9_vtoken") || ""; },
     set token(v) { sessionStorage.setItem("ec9_vtoken", v); },
@@ -151,33 +157,17 @@
     p.textContent = msg; p.classList.remove("hidden");
   }
 
-  /* ---------- 品牌头 + 语言切换（设计稿：背景切片 + 真文字，标题48/英标90/中标109） ---------- */
+  /* ---------- 品牌头 ----------
+     1) banner 内的主标题 / 英文标语 / 中文标语在设计稿里是「转曲的艺术字」，
+        真字体无法复现字形，已随 img/signup_bg.png 切片输出，这里不再渲染文字；
+     2) 设计稿页面内没有语言切换入口（右上角无地球图标），故不再输出切换器，
+        多语言改由链接参数 ?lang=en / ?lang=zh-Hant 切换。 */
   function header(tall) {
-    var langs = ["zh-CN", "en", "zh-Hant"];
-    var labels = { "zh-CN": "简体", "en": "English", "zh-Hant": "繁體" };
-    return '<div class="brand' + (tall ? " brand--tall" : "") + '">' +
-      '<div class="brand-title">地球克隆计划9</div>' +
-      '<div class="brand-tag-en">JOIN PHYSICAL AI,HERE AND NOW</div>' +
-      '<div class="brand-tag-cn">拥抱物理AI&#12288;此刻即未来</div>' +
-      '</div>' +
-      '<div class="lang-switch" id="langBtn">' +
-      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6">' +
-      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 4 5.6 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.6-4-9s1.2-6.4 4-9z"/></svg>' +
-      '<span>' + labels[S.lang] + '</span></div>' +
-      '<div class="lang-menu hidden" id="langMenu">' +
-      langs.map(function (l) { return '<div data-lang="' + l + '">' + labels[l] + '</div>'; }).join("") +
-      '</div>';
+    return '<div class="brand' + (tall ? " brand--tall" : "") + '"></div>';
   }
 
   function mountHeader(container, tall) {
     container.innerHTML = header(tall);
-    var btn = document.getElementById("langBtn");
-    var menu = document.getElementById("langMenu");
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("hidden"); });
-    menu.querySelectorAll("[data-lang]").forEach(function (el) {
-      el.addEventListener("click", function () { S.lang = el.dataset.lang; location.reload(); });
-    });
-    document.addEventListener("click", function () { menu.classList.add("hidden"); }, { once: true });
   }
 
   /* ---------- URL ---------- */

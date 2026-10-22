@@ -45,61 +45,6 @@ html, body {
   position: relative;
   overflow: hidden;
 }
-/* 品牌区文字（设计稿量测：标题字形带 y48-67，英文标语 y90-99，中文标语 y111-122） */
-.brand-title {
-  position: absolute; top: 46px; left: 0; right: 0;
-  text-align: center; color: #fff;
-  font-size: 24px; font-weight: 800; font-style: italic;
-  letter-spacing: 11px; text-indent: 11px; line-height: 1; white-space: nowrap;
-}
-.brand-tag-en {
-  position: absolute; top: 89px; left: 0; right: 0;
-  text-align: center; color: #fff;
-  font-size: 12.5px; font-weight: 600; letter-spacing: 2.4px; text-indent: 2.4px;
-  line-height: 1; text-transform: uppercase; white-space: nowrap;
-}
-.brand-tag-cn {
-  position: absolute; top: 111px; left: 0; right: 0;
-  text-align: center; color: #fff;
-  font-size: 13.5px; letter-spacing: 4.5px; text-indent: 4.5px; line-height: 1; white-space: nowrap;
-}
-
-/* 语言切换 */
-.lang-switch {
-  position: absolute;
-  top: 52px;
-  right: 16px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  z-index: 30;
-  user-select: none;
-}
-.lang-switch .globe { width: 20px; height: 20px; border: 1.6px solid #fff; border-radius: 50%; position: relative; display: inline-block; }
-.lang-switch .globe::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  border-left-color: transparent; border-right-color: transparent;
-  border: 1.6px solid #fff; clip-path: inset(0 22% 0 22%);
-}
-.lang-menu {
-  position: absolute;
-  top: 84px;
-  right: 16px;
-  background: #2743A8;
-  border-radius: 10px;
-  padding: 6px 0;
-  min-width: 128px;
-  z-index: 40;
-  box-shadow: 0 8px 24px rgba(0,0,0,.4);
-}
-.lang-menu div {
-  color: #fff; font-size: 15px; padding: 12px 20px; cursor: pointer;
-}
-.lang-menu div:hover { background: rgba(255,255,255,.08); }
-
 /* ---------- 白色内容卡（设计稿：sheet 顶 164，上移 20 压住蓝块底，圆角内露出蓝色） ---------- */
 .sheet {
   background: var(--white);
@@ -245,14 +190,6 @@ select.input.filled { color: #1D2129; }
 .home-value1 { top: 461px; }
 .home-label2 { top: 496px; }
 .home-value2 { top: 519px; }
-
-/* 首页语言切换：挂到 .home-stage 内，贴设计稿（图标 x286 y45 20×20，简体右缘 343.5） */
-#app.home .lang-switch { top: 45px; left: 286px; right: auto; font-size: 13.5px; gap: 12px; }
-#app.home .lang-menu {
-  top: 77px; left: 275px; right: auto; min-width: 0; width: 80px;
-  background: #213A8D; border-radius: 8px; padding: 0;
-}
-#app.home .lang-menu div { font-size: 14px; line-height: 14px; padding: 12px 0 12px 17px; }
 
 /* 协议勾选（基础样式：供 signup/profile 等页使用） */
 .agree-row {
@@ -413,7 +350,6 @@ select.input.filled { color: #1D2129; }
 #app.agree-page { background: var(--brand-blue); }
 .agree-page .brand::before { display: none; }
 .agree-page { min-height: 100vh; padding: 64px 12px 30px; position: relative; }
-.agree-page .lang-switch { top: 24px; }
 .agree-page .back-btn { color: #4E5969; }
 .agree-page .back-btn:active { color: #1D2129; }
 .agree-card { background: #fff; border-radius: 16px; padding: 0 0 30px; overflow: hidden; }

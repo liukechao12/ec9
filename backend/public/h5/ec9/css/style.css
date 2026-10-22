@@ -9,10 +9,10 @@
   --brand-blue: #3056D4;
   --red: #E34D59;
   --title-gray: #7A7E87;
-  --label-gray: #909399;
+  --label-gray: #7A7E87;
   --placeholder: #C0C4CC;
-  --input-bg: #F2F2F4;
-  --page-bg: #EFEFEF;
+  --input-bg: #EDEDED;
+  --page-bg: #FFFFFF;
   --black: #000000;
   --white: #FFFFFF;
   --error-bg: #FDECEC;
@@ -31,6 +31,10 @@ html, body {
 }
 
 #app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--page-bg); position: relative; }
+#app.home { background: var(--page-bg); }   /* 蓝色只保留 375px 手机舞台，外围不铺蓝 */
+/* 首页隐藏 H5 自带 logo 大条（设计稿无此元素），仅保留右上角语言切换浮层 */
+#app.home .brand { display: none; }
+#app.home #header { height: 0; }
 
 /* ---------- 顶部品牌区 ---------- */
 .brand {
@@ -39,7 +43,19 @@ html, body {
   display: flex;
   justify-content: center;
   position: relative;
+  overflow: hidden;
 }
+/* 地球线稿装饰（设计稿品牌区背景） */
+.brand::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%;
+  width: 375px; height: 340px;
+  transform: translateX(-50%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 340'%3E%3Cg fill='none' stroke='%23FFFFFF' stroke-width='1.2'%3E%3Ccircle cx='187.5' cy='294' r='209' stroke-opacity='.42'/%3E%3Cpath d='M58 148 Q95 122 150 128 Q210 134 260 112 Q300 96 340 104' stroke-opacity='.4'/%3E%3Cpath d='M96 128 Q112 110 134 116 Q156 122 176 108 Q194 96 214 100' stroke-opacity='.34'/%3E%3Cpath d='M150 92 Q176 80 208 86' stroke-opacity='.3'/%3E%3C/g%3E%3C/svg%3E") top center / 375px 340px no-repeat;
+  pointer-events: none;
+}
+.brand > * { position: relative; z-index: 1; }
 .brand img { width: 78%; display: block; mix-blend-mode: screen; }  /* 黑底 logo 融入蓝底 */
 
 /* 首页品牌区更高 */
@@ -89,24 +105,39 @@ html, body {
   padding: 30px 20px 40px;
 }
 .sheet--flush { min-height: 0; }
-.sheet--black { background: var(--brand-blue); border-radius: 0; padding-top: 1px; }
+.sheet--black { background: transparent; border-radius: 0; padding-top: 1px; }
+
+/* 首页：设计稿切片背景（蓝底+装饰，文字已剥离）精确 375x815（画布状态栏已裁掉） */
+.home-stage {
+  position: relative;
+  width: 375px;
+  height: 815px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: url(../img/home_bg.png) no-repeat center top;
+  background-size: 375px 815px;
+}
+.home-stage .home-hero,
+.home-stage .home-meta { position: static; }
+.home-stage .home-hero > div,
+.home-stage .home-meta > div { position: absolute; left: 0; right: 0; }
 
 .page-title {
   text-align: center;
-  font-size: 21px;
+  font-size: 24px;
   color: var(--title-gray);
   font-weight: 600;
   margin-bottom: 28px;
 }
 
 /* ---------- 表单 ---------- */
-.form-row { display: flex; align-items: center; margin-bottom: 18px; }
+.form-row { display: flex; align-items: center; margin-bottom: 20px; }
 .form-label { width: 76px; flex-shrink: 0; font-size: 14px; color: var(--label-gray); }
 .form-field { flex: 1; display: flex; gap: 10px; align-items: center; }
 
 .input {
   width: 100%;
-  height: 44px;
+  height: 40px;
   background: var(--input-bg);
   border: none;
   outline: none;
@@ -129,7 +160,7 @@ select.input.filled { color: #1D2129; }
 }
 
 .btn-code {
-  height: 44px;
+  height: 40px;
   background: var(--blue);
   color: #fff;
   border: none;
@@ -145,33 +176,39 @@ select.input.filled { color: #1D2129; }
 .btn-primary {
   display: block;
   width: 100%;
-  height: 48px;
+  height: 40px;
   background: var(--blue);
   color: #fff;
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   cursor: pointer;
-  margin-top: 26px;
+  margin-top: 30px;
 }
 .btn-primary:active { background: var(--blue-dark); }
 
-/* 首页斜切报名按钮 */
-.btn-skew-wrap { padding: 0 26px; margin-top: 22px; }
-.btn-skew {
+/* 首页报名按钮：设计稿切图（白色平行四边形，文字已剥离）+ 真文字叠放 */
+.btn-register {
+  position: absolute; left: 63px; top: 628px;
   display: block;
-  width: 100%;
-  height: 52px;
-  background: var(--blue);
-  color: #fff;
+  width: 249px;
+  height: 74px;
+  background: url(../img/btn_register.png) no-repeat center;
+  background-size: 249px 74px;
+  color: #2A54D8;
   border: none;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: 6px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 5px;
+  text-indent: 5px;            /* 字距视觉居中补偿 */
+  line-height: 74px;
+  text-align: center;
   cursor: pointer;
-  clip-path: polygon(4% 0, 100% 0, 96% 100%, 0 100%);
 }
 
 /* 错误提示胶囊 */
@@ -187,17 +224,32 @@ select.input.filled { color: #1D2129; }
   text-align: center;
 }
 
-/* 首页文字 */
-.home-line { text-align: center; color: #fff; }
-.home-ticker { font-size: 20px; letter-spacing: 3px; margin-top: 34px; }
-.home-label { color: #9CA0A8; font-size: 13px; margin-top: 26px; }
-.home-value { font-size: 19px; font-weight: 600; margin-top: 6px; }
-.home-value-lg { font-size: 21px; }
+/* 首页文字（绝对定位贴合设计稿 1x 坐标：标题151 / 英标语204 / 中文语228 / 6651.HK 258） */
+.home-ticker { top: 258px; text-align: center; color: #fff; font-size: 15px; letter-spacing: 1.5px; font-weight: 700; line-height: 1; }
+.home-title { top: 151px; text-align: center; font-size: 26px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 5px; text-indent: 5px; line-height: 1.1; white-space: nowrap; }
+.home-nine { display: inline-block; font-size: 38px; font-weight: 400; font-style: normal; color: rgba(255,255,255,.42); letter-spacing: 0; transform: translateY(3px); }
+.home-tagline-en { top: 204px; text-align: center; color: #fff; font-size: 12.5px; font-weight: 600; letter-spacing: 3px; text-indent: 3px; line-height: 1; text-transform: uppercase; white-space: nowrap; }
+.home-tagline-cn { top: 228px; text-align: center; color: #fff; font-size: 13.5px; letter-spacing: 5px; text-indent: 5px; line-height: 1; white-space: nowrap; }
+/* 时间/地址（label 441/498，value 463/521） */
+.home-meta .home-label { color: rgba(255,255,255,.62); font-size: 11px; line-height: 1; text-align: center; }
+.home-meta .home-value { color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 1px; line-height: 1; text-align: center; }
+.home-label1 { top: 439px; }
+.home-value1 { top: 461px; }
+.home-label2 { top: 496px; }
+.home-value2 { top: 519px; }
 
-/* 协议勾选 */
+/* 首页语言切换：挂到 .home-stage 内，贴设计稿（图标 x286 y45 20×20，简体右缘 343.5） */
+#app.home .lang-switch { top: 45px; left: 286px; right: auto; font-size: 13.5px; gap: 12px; }
+#app.home .lang-menu {
+  top: 77px; left: 275px; right: auto; min-width: 0; width: 80px;
+  background: #213A8D; border-radius: 8px; padding: 0;
+}
+#app.home .lang-menu div { font-size: 14px; line-height: 14px; padding: 12px 0 12px 17px; }
+
+/* 协议勾选（基础样式：供 signup/profile 等页使用） */
 .agree-row {
   display: flex; align-items: center; justify-content: center;
-  gap: 8px; font-size: 12px; color: #4E5969; margin-top: 30px;
+  gap: 8px; font-size: 12px; color: rgba(255,255,255,.85);
 }
 .checkbox {
   width: 16px; height: 16px; border-radius: 50%;
@@ -212,12 +264,33 @@ select.input.filled { color: #1D2129; }
 }
 .agree-row a { color: var(--blue); text-decoration: none; }
 
-/* 首页底部联系我们按钮 */
-.btn-contact {
-  display: block; margin: 20px auto 0;
-  background: #2A2A2C; color: #fff; border: none;
-  font-size: 13px; padding: 9px 34px; cursor: pointer;
-  clip-path: polygon(5% 0, 100% 0, 95% 100%, 0 100%);
+/* 首页协议勾选（蓝底上：白色圆角方块，贴合设计稿 y632） */
+#app.home .agree-row {
+  position: absolute; left: 0; right: 0; top: 590px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px; font-size: 11px; color: #fff;
+}
+#app.home .agree-row a { color: rgba(255,255,255,.6); text-decoration: none; }
+#app.home .checkbox {
+  width: 14px; height: 14px; border-radius: 4px; border: none;
+  background: #fff; flex-shrink: 0; cursor: pointer; position: relative;
+}
+#app.home .checkbox.checked { background: #fff; border: none; }
+#app.home .checkbox.checked::after {
+  content: ""; position: absolute; left: 3.5px; top: 0.5px;
+  width: 4px; height: 7px; border-right: 1.6px solid var(--blue);
+  border-bottom: 1.6px solid var(--blue); transform: rotate(45deg);
+}
+
+/* 首页底部联系我们按钮（设计稿切图：浅蓝平行四边形 + 真文字） */
+#app.home .btn-contact {
+  position: absolute; left: 130px; top: 733px;
+  display: block; width: 122px; height: 52px; margin: 0; padding: 0;
+  background: url(../img/btn_contact.png) no-repeat center;
+  background-size: 122px 52px; border: none;
+  color: #fff; font-family: inherit; font-size: 13px; letter-spacing: 1px;
+  box-sizing: border-box; padding: 0 4px 8.5px 0;   /* 平行四边形视觉中心补偿（button 自带垂直居中，用 padding 收缩内容盒） */
+  line-height: 35px; text-align: center; cursor: pointer;
 }
 
 /* ---------- 门票卡 ---------- */
@@ -282,7 +355,7 @@ select.input.filled { color: #1D2129; }
 .result-page { text-align: center; padding-top: 8px; }
 .result-icon { width: 62%; max-width: 260px; margin: 20px auto 0; }
 .result-icon img { width: 100%; display: block; }
-.result-title { font-size: 30px; color: var(--title-gray); font-weight: 600; margin-top: 34px; letter-spacing: 2px; }
+.result-title { font-size: 34px; color: var(--title-gray); font-weight: 600; margin-top: 34px; letter-spacing: 1px; }
 .result-sub { font-size: 13px; color: #86909C; margin-top: 12px; }
 
 /* ---------- 电子票 ---------- */
@@ -299,7 +372,7 @@ select.input.filled { color: #1D2129; }
 .eticket-head-wrap { border-bottom: 1.5px dashed var(--divider); position: relative; }
 .eticket-head-wrap::before, .eticket-head-wrap::after {
   content: ""; position: absolute; bottom: -10px; width: 20px; height: 20px;
-  border-radius: 50%; background: var(--black);
+  border-radius: 50%; background: var(--brand-blue);
 }
 .eticket-head-wrap::before { left: -10px; }
 .eticket-head-wrap::after { right: -10px; }
@@ -322,49 +395,53 @@ select.input.filled { color: #1D2129; }
 .et-foot { text-align: center; font-size: 12px; color: #86909C; padding: 14px 0 20px; border-top: 1px solid var(--divider); }
 .et-foot a { color: var(--blue); text-decoration: none; }
 
-/* ---------- 协议页 ---------- */
-.agree-page { background: var(--brand-blue); min-height: 100vh; padding: 64px 12px 30px; position: relative; }
+/* ---------- 协议页（设计稿：蓝底白卡深色字） ---------- */
+#app.agree-page { background: var(--brand-blue); }
+.agree-page .brand::before { display: none; }
+.agree-page { min-height: 100vh; padding: 64px 12px 30px; position: relative; }
 .agree-page .lang-switch { top: 24px; }
-.agree-card { background: #161616; border-radius: 16px; padding: 0 0 30px; overflow: hidden; }
+.agree-page .back-btn { color: #4E5969; }
+.agree-page .back-btn:active { color: #1D2129; }
+.agree-card { background: #fff; border-radius: 16px; padding: 0 0 30px; overflow: hidden; }
 .agree-tabs { display: flex; padding: 4px 10px 0; }
 .agree-tab {
-  flex: 1; text-align: center; font-size: 15px; color: #6B6E75;
+  flex: 1; text-align: center; font-size: 15px; color: #86909C;
   padding: 16px 0 12px; cursor: pointer; position: relative;
 }
-.agree-tab.active { color: #fff; font-weight: 600; }
+.agree-tab.active { color: #1D2129; font-weight: 600; }
 .agree-tab.active::after {
   content: ""; position: absolute; left: 28%; right: 28%; bottom: 0;
   height: 2.5px; background: var(--blue); border-radius: 2px;
 }
-.agree-body { color: #B8BAC0; font-size: 13.5px; line-height: 2; padding: 18px 18px 0; }
+.agree-body { color: #4E5969; font-size: 13.5px; line-height: 2; padding: 18px 18px 0; }
 /* 法务文档排版（文档自带 <style> 已被剥掉，这里接管；
    全局 * {margin:0;padding:0} 重置也在这儿补回间距） */
-.agree-body h1 { color: #fff; font-size: 20px; font-weight: 600; text-align: center; margin: 4px 0 16px; letter-spacing: 1px; }
-.agree-body h2 { color: #E5E6EB; font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
-.agree-body h3 { color: #E5E6EB; font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
-.agree-body h4 { color: #E5E6EB; font-size: 14px; margin: 10px 0 4px; }
+.agree-body h1 { color: #1D2129; font-size: 20px; font-weight: 600; text-align: center; margin: 4px 0 16px; letter-spacing: 1px; }
+.agree-body h2 { color: #1D2129; font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
+.agree-body h3 { color: #1D2129; font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
+.agree-body h4 { color: #1D2129; font-size: 14px; margin: 10px 0 4px; }
 .agree-body p { margin: 0 0 10px; }
-.agree-body strong, .agree-body b { color: #E5E6EB; font-weight: 600; }
+.agree-body strong, .agree-body b { color: #1D2129; font-weight: 600; }
 .agree-body ul, .agree-body ol { padding-left: 20px; margin: 0 0 10px; }
 .agree-body li { margin-bottom: 6px; }
 .agree-body a { color: var(--blue); text-decoration: none; }
 .agree-body img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
-.agree-body hr { border: none; border-top: 1px solid #2A2A2C; margin: 16px 0; }
+.agree-body hr { border: none; border-top: 1px solid var(--divider); margin: 16px 0; }
 .agree-body table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.agree-body th, .agree-body td { border: 1px solid #2A2A2C; padding: 6px 8px; text-align: left; }
+.agree-body th, .agree-body td { border: 1px solid var(--divider); padding: 6px 8px; text-align: left; }
 .agree-contact { padding: 18px; }
-.agree-contact .hotline { text-align: center; font-size: 13px; color: #B8BAC0; }
+.agree-contact .hotline { text-align: center; font-size: 13px; color: #4E5969; }
 .agree-contact .hotline b { color: var(--blue); }
-.agree-contact .tel { text-align: center; font-size: 34px; color: #fff; font-weight: 300; letter-spacing: 2px; margin: 14px 0 6px; }
-.agree-contact .hours { text-align: center; font-size: 12px; color: #6B6E75; }
-.office { background: #202022; border-radius: 10px; padding: 14px; margin-top: 12px; }
-.office b { color: #fff; font-size: 14px; display: block; margin-bottom: 8px; }
-.office p { font-size: 12px; color: #9CA0A8; line-height: 1.8; }
+.agree-contact .tel { text-align: center; font-size: 38px; color: #1D2129; font-weight: 400; letter-spacing: 2px; margin: 14px 0 6px; }
+.agree-contact .hours { text-align: center; font-size: 12px; color: #86909C; }
+.office { background: #F5F6F7; border-radius: 10px; padding: 14px; margin-top: 12px; }
+.office b { color: #1D2129; font-size: 14px; display: block; margin-bottom: 8px; }
+.office p { font-size: 12px; color: #86909C; line-height: 1.8; }
 .qr-row { display: flex; gap: 16px; margin: 18px 0 6px; }
 .qr-item { flex: 1; text-align: center; }
-.qr-item img { width: 86px; height: 86px; display: block; margin: 0 auto 8px; background: #fff; padding: 5px; border-radius: 6px; }
-.qr-item span { font-size: 11.5px; color: #9CA0A8; }
-.follow-tip { text-align: center; font-size: 12.5px; color: #B8BAC0; margin-top: 22px; }
+.qr-item img { width: 86px; height: 86px; display: block; margin: 0 auto 8px; background: #fff; border: 1px solid var(--divider); padding: 5px; border-radius: 6px; }
+.qr-item span { font-size: 11.5px; color: #4E5969; }
+.follow-tip { text-align: center; font-size: 12.5px; color: #4E5969; margin-top: 22px; }
 
 /* ---------- 开发票页 ---------- */
 .invoice-page { text-align: center; padding-top: 10px; }
@@ -470,8 +547,14 @@ select.input.filled { color: #1D2129; }
 
 /* 首页蓝底上的协议行与联系我们按钮 */
 .sheet--black .agree-row { color: rgba(255,255,255,.85); }
-.sheet--black .agree-row a { color: #fff; text-decoration: underline; }
-.sheet--black .btn-contact { background: rgba(255,255,255,.16); color: #fff; }
+.sheet--black .agree-row a { color: #fff; text-decoration: none; }
+.sheet--black .checkbox { background: transparent; border-color: #fff; }
+.sheet--black .checkbox.checked { background: #fff; border-color: #fff; }
+.sheet--black .checkbox.checked::after { border-right-color: var(--blue); border-bottom-color: var(--blue); }
+.sheet--black .btn-contact { background: rgba(255,255,255,.25); color: #fff; }
+
+/* 首页建筑线稿（设计稿装饰，蓝底白线图直接融合） */
+.home-building { display: block; width: 100%; margin: 16px auto 0; mix-blend-mode: lighten; }
 
 .invited-tip {
   background: #E8FFEA; border: 1px solid #9FE3A8; color: #008A20;

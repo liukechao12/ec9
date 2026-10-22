@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="et_title">电子票</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" class="eticket-wrap">
+  <div id="header" style="display:none"></div>
+
+  <div class="eticket">
+    <div class="eticket-head-wrap">
+      <div class="eticket-head">
+        <div>
+          <div class="eticket-name" id="tkName">—</div>
+          <div class="eticket-phone" id="tkPhone">—</div>
+        </div>
+        <div class="eticket-co">
+          <b data-i18n="et_company_label">公司名称</b>
+          <span id="tkCompany">—</span><br>
+          <span data-i18n="et_focus_label">关注方向：</span><span id="tkFocus"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="eticket-body">
+      <div class="et-row"><div class="k" data-i18n="et_status">报名状态：</div><div class="v hl" id="tkStatus">—</div></div>
+      <div class="et-row"><div class="k" data-i18n="et_type">门票类型：</div><div class="v" id="tkType">—</div></div>
+      <div class="et-row"><div class="k" data-i18n="et_time">报名时间：</div><div class="v" id="tkTime">—</div></div>
+      <div class="et-row"><div class="k" data-i18n="checkin_code">签到码：</div><div class="v" id="tkCode">—</div></div>
+      <div id="etGroup"></div>
+
+      <div class="et-tabs">
+        <div class="et-tab active" data-tab="b" data-i18n="tab_benefits">门票权益</div>
+        <div class="et-tab" data-tab="a" data-i18n="tab_agenda">论坛议程</div>
+      </div>
+      <div class="et-panel" id="etPanel"></div>
+    </div>
+
+    <div class="et-foot"><a href="invoice.html" data-i18n="et_foot">如需开票/退款</a></div>
+  </div>
+
+  <div style="text-align:center;margin-top:18px">
+    <button class="btn-primary" id="btnCheckin" style="background:#2A2A2C" data-i18n="go_checkin">去签到</button>
+    <button class="btn-primary" id="btnHome" style="background:#2A2A2C" data-i18n="back_home">回到首页</button>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var d = E.S.data;
+
+  // 语言切换（黑底页手动挂载）
+  var wrap = document.getElementById("app");
+  var holder = document.createElement("div");
+  wrap.appendChild(holder);
+  E.mountHeader(holder, false);
+  document.querySelector(".brand").style.background = "transparent";
+
+  document.getElementById("tkName").textContent = d.name || "—";
+  document.getElementById("tkPhone").textContent = E.S.phone || "—";
+  document.getElementById("tkCompany").textContent = d.company || "—";
+  document.getElementById("tkFocus").textContent = d.focus || "";
+  document.getElementById("tkType").textContent = (d.ticket && d.ticket.name) || "—";
+  document.getElementById("tkTime").textContent = d.reg_time || new Date().toLocaleString();
+  document.getElementById("tkCode").textContent = d.checkin_code || "—";
+
+  // 报名状态：paid → 已支付；approved → 审核通过；其余 → 待审核
+  function renderStatus(paid, status) {
+    var key = paid ? "st_paid" : (status === "approved" ? "st_approved" : "result_pending");
+    document.getElementById("tkStatus").textContent = E.t(key);
+  }
+  renderStatus(!!d.paid, d.status);
+
+  // 有凭证就向 /mine 核一次真，避免本地缓存过期显示旧状态
+  if (E.S.token) {
+    E.Api.mine(eventId).then(function (m) {
+      if (!m || !m.registered) return;
+      E.S.patch({
+        paid: m.paid, status: m.status,
+        checkin_code: m.checkin_code || d.checkin_code,
+        order_no: m.order_no || d.order_no
+      });
+      renderStatus(!!m.paid, m.status);
+      document.getElementById("tkCode").textContent = m.checkin_code || "—";
+      if (m.ticket_name) document.getElementById("tkType").textContent = m.ticket_name;
+      // 多人代报：展示整单成员（本人高亮）
+      if (m.group && m.group.members && m.group.members.length > 1) {
+        var html = '<div class="et-divider" style="border-top:1px dashed #d5d8e0;margin:10px 0"></div>' +
+          '<div class="fee-title" style="font-size:12px;color:#7A7E87;margin-bottom:6px">' + E.t("group_members_box") + '（' + m.group.members.length + '）</div>';
+        m.group.members.forEach(function (x) {
+          var stTxt = x.status === 'paid' ? E.t("st_paid") : (x.status === 'approved' ? E.t("st_approved") : E.t("result_pending"));
+          html += '<div class="fee-row" style="font-size:12px"><span>' + E.esc(x.name || '') +
+            (x.is_buyer ? ' · ' + E.t("buyer_tag") : '') + '</span><span>' + E.esc(x.ticket_name || '') + ' · ' + stTxt + '</span></div>';
+        });
+        document.getElementById("etGroup").innerHTML = html;
+      }
+    }).catch(function () { /* 网络异常保留本地渲染 */ });
+  }
+
+  var panel = document.getElementById("etPanel");
+  panel.style.whiteSpace = "pre-line";
+  panel.textContent = E.t("benefits_content");
+
+  Array.prototype.forEach.call(document.querySelectorAll(".et-tab"), function (el) {
+    el.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".et-tab"), function (x) { x.classList.remove("active"); });
+      el.classList.add("active");
+      panel.textContent = el.dataset.tab === "b" ? E.t("benefits_content") : E.t("agenda_content");
+    });
+  });
+
+  document.getElementById("btnCheckin").addEventListener("click", function () { E.go("checkin.html", { event_id: eventId }); });
+  document.getElementById("btnHome").addEventListener("click", function () { E.go("index.html", { event_id: eventId }); });
+})();
+</script>
+</body>
+</html>

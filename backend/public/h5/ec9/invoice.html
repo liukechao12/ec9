@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="invoice_title">开发票</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet invoice-page">
+    <div class="invoice-tip" data-i18n="invoice_tip"></div>
+    <div class="qr-big"><img src="assets/emb_开发票页_1.png" alt="QR"></div>
+    <button class="btn-primary" id="btnBack" data-i18n="back_home">回到首页</button>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  document.getElementById("btnBack").addEventListener("click", function () { E.go("index.html", { event_id: eventId }); });
+})();
+</script>
+</body>
+</html>

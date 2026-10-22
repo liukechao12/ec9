@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="format-detection" content="telephone=no">
+<title data-i18n="h5.ticket.title">我的门票</title>
+<link rel="stylesheet" href="/h5/ticket.css">
+</head>
+<body>
+<div class="page">
+  <!-- 加载中 -->
+  <div id="loading" class="state">
+    <div class="spinner"></div>
+    <p data-i18n="h5.common.loading">加载中...</p>
+  </div>
+
+  <!-- 错误 -->
+  <div id="error" class="state" style="display:none">
+    <div class="state-icon">!</div>
+    <p id="errorMsg" data-i18n="h5.ticket.invalid">票码无效或已失效</p>
+    <p class="state-sub" data-i18n="h5.ticket.contact">请联系主办方重新获取链接</p>
+  </div>
+
+  <!-- 门票 -->
+  <div id="ticket" style="display:none">
+    <div class="ticket-head">
+      <div class="ticket-brand" data-i18n="h5.ticket.brand">入场凭证</div>
+      <div id="codeStatus" class="badge"></div>
+    </div>
+
+    <div class="ticket-body">
+      <div class="field">
+        <span class="label" data-i18n="h5.ticket.guest">嘉宾</span>
+        <span class="value" id="guestName">-</span>
+      </div>
+      <div class="field">
+        <span class="label" data-i18n="h5.ticket.company">单位</span>
+        <span class="value" id="company">-</span>
+      </div>
+      <div class="field">
+        <span class="label" data-i18n="h5.ticket.position">职务</span>
+        <span class="value" id="position">-</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <span class="label" data-i18n="h5.ticket.event">会议</span>
+        <span class="value" id="eventName">-</span>
+      </div>
+      <div class="field" id="sessionRow" style="display:none">
+        <span class="label" data-i18n="h5.ticket.session">场次</span>
+        <span class="value" id="sessionName">-</span>
+      </div>
+      <div class="field" id="ticketTypeRow" style="display:none">
+        <span class="label" data-i18n="h5.ticket.type">票种</span>
+        <span class="value" id="ticketName">-</span>
+      </div>
+      <div class="field" id="timeRow" style="display:none">
+        <span class="label" data-i18n="h5.ticket.time">时间</span>
+        <span class="value" id="eventTime">-</span>
+      </div>
+      <div class="field" id="locationRow" style="display:none">
+        <span class="label" data-i18n="h5.ticket.location">地点</span>
+        <span class="value" id="eventLocation">-</span>
+      </div>
+    </div>
+
+    <div class="ticket-code">
+      <div class="code-label" data-i18n="h5.ticket.codeLabel">票码</div>
+      <div class="code-value" id="code">-</div>
+      <div class="code-hint" data-i18n="h5.ticket.codeHint">入场时出示此票码</div>
+    </div>
+  </div>
+
+  <!-- 语言切换 -->
+  <div id="langSwitcher" class="lang-switcher"></div>
+</div>
+
+<script src="/i18n.js?v=20261015.1"></script>
+<script src="/h5/ticket.js"></script>
+</body>
+</html>

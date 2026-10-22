@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EC9</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" class="agree-page">
+  <div id="header" style="display:none"></div>
+
+  <div class="agree-card">
+    <div class="back-bar">
+      <button class="back-btn" id="btnBack">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span data-i18n="back">返回</span>
+      </button>
+    </div>
+    <div class="agree-tabs">
+      <div class="agree-tab" data-tab="user" data-i18n="user_agreement">用户协议</div>
+      <div class="agree-tab" data-tab="privacy" data-i18n="privacy_policy">隐私政策</div>
+      <div class="agree-tab" data-tab="contact" data-i18n="contact_us">联系我们</div>
+    </div>
+    <div id="agreeBody"></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  var tab = E.param("tab", "user");
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  // 来源页：返回时优先回这里。
+  // 不用 history.back() —— 微信 webview / 直接落地的分享链接里它不可靠
+  // （实测会跳到历史栈里任意一页，甚至不动）。
+  var redirect = E.param("redirect", "");
+
+  // 语言切换挂载到页面容器
+  var holder = document.createElement("div");
+  document.getElementById("app").appendChild(holder);
+  E.mountHeader(holder, false);
+  document.querySelector(".brand").style.background = "transparent";
+
+  var body = document.getElementById("agreeBody");
+  var TAB_TITLE = { user: "user_agreement", privacy: "privacy_policy", contact: "contact_us" };
+
+  // 法务文档是后台存的一段完整 HTML（自带 <style> 和弹窗查看器的关闭按钮）。
+  // 直接 innerHTML 会反噬整个页面：文档里的 body{background:#fff;padding:20px}
+  // 和 *{margin:0;padding:0} 后注入会覆盖我们的深色底（顶出一条白边），
+  // close-btn 是 fixed 定位的死按钮，还会挡住语言切换。
+  // 所以先剥掉这两样，排版交给 .agree-body 的规则接管。
+  function sanitizeLegalHtml(html) {
+    return String(html)
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<link[^>]*>/gi, '')
+      .replace(/<button[^>]*class="[^"]*close-btn[^"]*"[\s\S]*?<\/button>/gi, '');
+  }
+
+  function contactHtml() {
+    return '<div class="agree-contact">' +
+      '<div class="hotline">' + E.esc(E.t("contact_prefix")) + '<b>' + E.esc(E.t("contact_invoice")) + '</b>' + E.esc(E.t("contact_suffix")) + '</div>' +
+      '<div class="tel">' + E.esc(E.t("hotline")) + '</div>' +
+      '<div class="hours">' + E.esc(E.t("work_hours")) + '</div>' +
+      '<div class="follow-tip">' + E.esc(E.t("follow")) + '</div>' +
+      '<div class="qr-row">' +
+        '<div class="qr-item"><img src="assets/emb_联系我们_1.png" alt=""><span>' + E.esc(E.t("wechat_oa")) + '</span></div>' +
+        '<div class="qr-item"><img src="assets/emb_联系我们_2.png" alt=""><span>' + E.esc(E.t("video_account")) + '</span></div>' +
+      '</div>' +
+      '<div class="office"><b>' + E.esc(E.t("office_bj")) + '</b><p>' + E.esc(E.t("office_bj_addr")) + '<br>' + E.esc(E.t("hotline")) + '</p></div>' +
+      '<div class="office"><b>' + E.esc(E.t("office_sh")) + '</b><p>' + E.esc(E.t("office_sh_addr")) + '<br>021-54106202</p></div>' +
+      '<div class="office"><b>' + E.esc(E.t("office_cd")) + '</b><p>' + E.esc(E.t("office_cd_addr")) + '<br>028-62301371</p></div>' +
+      '<div class="office"><b>' + E.esc(E.t("office_sz")) + '</b><p>' + E.esc(E.t("office_sz_addr")) + '<br>010-84388170</p></div>' +
+    '</div>';
+  }
+
+  function renderTab(name) {
+    tab = name;
+    Array.prototype.forEach.call(document.querySelectorAll(".agree-tab"), function (el) {
+      el.classList.toggle("active", el.dataset.tab === name);
+    });
+    document.title = E.t(TAB_TITLE[name] || "user_agreement");
+
+    if (name === "user" || name === "privacy") {
+      var path = name === "user" ? "/api/legal/user-agreement" : "/api/legal/privacy-policy";
+      body.innerHTML = '<div class="agree-body">…</div>';
+      // 后端法务文档（HTML）
+      fetch(path).then(function (r) {
+        if (!r.ok) throw new Error("fallback");
+        return r.text();
+      }).then(function (html) {
+        body.innerHTML = '<div class="agree-body">' + sanitizeLegalHtml(html) + '</div>';
+      }).catch(function () {
+        body.innerHTML = '<div class="agree-body" style="white-space:pre-line">' +
+          E.esc(name === "user" ? E.t("agreement_sample") : E.t("privacy_sample")) + '</div>';
+      });
+    } else {
+      body.innerHTML = contactHtml();
+    }
+  }
+
+  // 切 Tab 不跳页：不堆历史栈、不丢 redirect
+  Array.prototype.forEach.call(document.querySelectorAll(".agree-tab"), function (el) {
+    el.addEventListener("click", function () {
+      renderTab(el.dataset.tab);
+      // 同步 URL，刷新 / 分享时还能落在正确 Tab
+      history.replaceState(null, "", "agreement.html?tab=" + el.dataset.tab +
+        "&event_id=" + eventId + (redirect ? "&redirect=" + encodeURIComponent(redirect) : ""));
+    });
+  });
+
+  // 返回：有来源页就回来源页；没有（分享链接直接落地）就回首页。
+  // 刻意不用 history.back() —— 微信 webview 里它会跳到历史栈里任意一页，
+  // 用户从报名页点进来却回不到报名页，就是这个原因。
+  document.getElementById("btnBack").addEventListener("click", function () {
+    if (redirect) {
+      // redirect 自带查询串（如 profile.html?event_id=1&reg_id=5）时直接用，
+      // 不能再套 E.go —— 那会拼出两个 "?"
+      if (redirect.indexOf("?") > -1) {
+        location.href = redirect.indexOf("event_id=") > -1
+          ? redirect
+          : redirect + "&event_id=" + eventId;
+      } else {
+        E.go(redirect, { event_id: eventId });
+      }
+      return;
+    }
+    E.go("index.html", { event_id: eventId });
+  });
+
+  renderTab(tab);
+})();
+</script>
+</body>
+</html>

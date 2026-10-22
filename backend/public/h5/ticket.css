@@ -1,0 +1,132 @@
+/* EC9 H5 · 购票/查票页 ticket 专用样式
+ * 视觉沿用 EC8 H5 的暖色卡片语言，不自创设计
+ */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: #1a1410;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #f5efe6;
+}
+
+.page {
+  min-height: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- 状态区 ---------- */
+.state {
+  width: 100%;
+  margin-top: 18vh;
+  text-align: center;
+  color: #b9ada0;
+}
+.state-icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 16px;
+  border: 2px solid #8a7a6a;
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 52px;
+  color: #d9534f;
+}
+.state-sub { margin-top: 8px; font-size: 13px; color: #8a7a6a; }
+.spinner {
+  width: 32px; height: 32px;
+  margin: 0 auto 14px;
+  border: 3px solid rgba(212,163,105,.25);
+  border-top-color: #d4a369;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 票面 ---------- */
+#ticket { width: 100%; }
+
+.ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 12px;
+}
+.ticket-brand {
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: #d4a369;
+  font-weight: 600;
+}
+.badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid currentColor;
+}
+.badge.active { color: #6fbf8b; }
+.badge.used  { color: #b9ada0; }
+
+.ticket-body {
+  background: linear-gradient(160deg, #2a211a 0%, #241c16 100%);
+  border: 1px solid rgba(212,163,105,.28);
+  border-radius: 14px;
+  padding: 20px 18px;
+}
+
+.field {
+  display: flex;
+  align-items: flex-start;
+  padding: 9px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.label {
+  flex: 0 0 62px;
+  color: #8a7a6a;
+  font-size: 13px;
+}
+.value {
+  flex: 1;
+  color: #f5efe6;
+  word-break: break-word;
+}
+
+.divider {
+  height: 1px;
+  margin: 12px 0;
+  background: repeating-linear-gradient(90deg, rgba(212,163,105,.35) 0 6px, transparent 6px 12px);
+}
+
+/* ---------- 票码 ---------- */
+.ticket-code {
+  margin-top: 14px;
+  padding: 18px;
+  text-align: center;
+  background: rgba(212,163,105,.08);
+  border: 1px dashed rgba(212,163,105,.4);
+  border-radius: 12px;
+}
+.code-label { font-size: 12px; color: #8a7a6a; letter-spacing: 1px; }
+.code-value {
+  margin: 8px 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #d4a369;
+  word-break: break-all;
+}
+.code-hint { font-size: 12px; color: #8a7a6a; }
+
+/* ---------- 语言切换 ---------- */
+.lang-switcher {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title data-i18n="h5.checkin.title">活动签到</title>
+    <link rel="stylesheet" href="/h5/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 加载状态 -->
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p data-i18n="h5.common.loading">加载中...</p>
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="error" class="error-message" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <h2 data-i18n="h5.common.error">出错了</h2>
+            <p id="error-text"></p>
+            <button class="btn-primary" onclick="location.reload()" data-i18n="h5.common.reload">重新加载</button>
+        </div>
+
+        <!-- 签到页面 -->
+        <div id="checkin-page" class="page" style="display: none;">
+            <div class="header">
+                <h1 id="event-name" data-i18n="h5.checkin.title">活动签到</h1>
+                <p class="subtitle" data-i18n="h5.invite.welcome">欢迎参加本次活动</p>
+            </div>
+
+            <div class="content">
+                <div class="info-card">
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.invite.eventTime">活动时间</span>
+                        <span class="value" id="event-time">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.invite.eventLocation">活动地点</span>
+                        <span class="value" id="event-location">-</span>
+                    </div>
+                    <div class="info-item" id="location-type-info">
+                        <span class="label" data-i18n="h5.checkin.type">签到类型</span>
+                        <span class="value" id="location-type">-</span>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h2 data-i18n="h5.invite.enterPhone">请输入您的手机号</h2>
+                    <p class="tip-text" data-i18n="h5.checkin.enterPhone">请输入报名时使用的手机号</p>
+                    <div class="input-group">
+                        <input 
+                            type="tel" 
+                            id="phone-input" 
+                            class="input" 
+                            placeholder="请输入11位手机号"
+                            maxlength="11"
+                            pattern="[0-9]{11}"
+                        >
+                        <div class="input-error" id="phone-error" style="display: none;"></div>
+                    </div>
+                    <button id="checkin-btn" class="btn-primary btn-block" disabled data-i18n="h5.checkin.confirm">确认签到</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 签到成功页面 -->
+        <div id="success-page" class="page" style="display: none;">
+            <div class="header">
+                <div class="success-icon">✓</div>
+                <h1 data-i18n="h5.checkin.success">签到成功</h1>
+                <p class="subtitle" data-i18n="h5.invite.welcome">欢迎参加本次活动</p>
+            </div>
+
+            <div class="content">
+                <div class="success-card">
+                    <div class="success-header">
+                        <h2 id="success-event-name" data-i18n="h5.common.eventName">活动名称</h2>
+                    </div>
+                    <div class="success-body">
+                        <div class="success-info">
+                            <div class="info-item">
+                                <span class="label" data-i18n="h5.common.name">姓名</span>
+                                <span class="value" id="success-guest-name">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label" data-i18n="h5.common.company">公司</span>
+                                <span class="value" id="success-guest-company">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label" data-i18n="h5.checkin.time">签到时间</span>
+                                <span class="value" id="success-checkin-time">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label" data-i18n="h5.checkin.location">签到地点</span>
+                                <span class="value" id="success-location-type">-</span>
+                            </div>
+                        </div>
+                        <div class="success-tip">
+                            <p data-i18n="h5.checkin.successTip">✓ 签到成功，请妥善保管您的门票</p>
+                            <p class="tip-secondary" data-i18n="h5.checkin.helpStaff">如需帮助，请联系现场工作人员</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 重复签到页面 -->
+        <div id="duplicate-page" class="page" style="display: none;">
+            <div class="header">
+                <div class="info-icon">ℹ️</div>
+                <h1 data-i18n="h5.checkin.already">您已签到</h1>
+                <p class="subtitle" data-i18n="h5.checkin.noRepeat">无需重复签到</p>
+            </div>
+
+            <div class="content">
+                <div class="info-card">
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.common.name">姓名</span>
+                        <span class="value" id="duplicate-guest-name">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.common.company">公司</span>
+                        <span class="value" id="duplicate-guest-company">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.checkin.time">签到时间</span>
+                        <span class="value" id="duplicate-checkin-time">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label" data-i18n="h5.checkin.location">签到地点</span>
+                        <span class="value" id="duplicate-location-type">-</span>
+                    </div>
+                </div>
+                <p class="tip-text center" data-i18n="h5.checkin.question">如有疑问，请联系现场工作人员</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/i18n.js?v=20261015.1"></script>
+    <script src="/h5/checkin.js"></script>
+</body>
+</html>

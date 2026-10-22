@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EC9</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet result-page">
+    <div class="result-icon"><img id="resIcon" src="" alt=""></div>
+    <div class="result-title" id="resTitle">—</div>
+    <div class="result-sub hidden" id="resSub"></div>
+    <div id="groupBox"></div>
+    <button class="btn-primary" id="btnMain" data-i18n="back_home">回到首页</button>
+    <button class="btn-primary hidden" id="btnSecond" style="background:#2A2A2C"></button>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var type = E.param("type", "reg");       // reg | checkin
+  var status = E.param("status", "pending");
+  var regId = E.param("reg_id", "");
+  var groupNo = E.param("group_no", "");
+
+  // 报名结果
+  var REG = {
+    pending:  { icon: "earth_blue_review.png",   title: "result_pending",  sub: "" },
+    rejected: { icon: "earth_orange_reject.png", title: "result_rejected", sub: "result_rejected_sub" },
+    approved: { icon: "earth_green_check.png",   title: "result_success",  sub: "" },
+    paid:     { icon: "earth_green_check.png",   title: "st_paid",        sub: "" }
+  };
+  // 签到结果
+  var CHK = {
+    success:  { icon: "earth_green_signin.png",    title: "checkin_ok",       sub: "" },
+    repeat:   { icon: "earth_blue_repeat.png",     title: "checkin_repeat",   sub: "" },
+    mismatch: { icon: "earth_orange_mismatch.png", title: "checkin_mismatch", sub: "" },
+    network:  { icon: "earth_pink_network.png",    title: "checkin_network",  sub: "" }
+  };
+
+  var map = type === "checkin" ? CHK : REG;
+  var cfg = map[status] || (type === "checkin" ? CHK.success : REG.pending);
+
+  document.getElementById("resIcon").src = "assets/" + cfg.icon;
+  document.getElementById("resTitle").textContent = E.t(cfg.title);
+  if (cfg.sub) {
+    var sub = document.getElementById("resSub");
+    sub.textContent = E.t(cfg.sub); sub.classList.remove("hidden");
+  }
+
+  var main = document.getElementById("btnMain");
+  var second = document.getElementById("btnSecond");
+
+  function setMain(txt, fn) { main.textContent = txt; main.addEventListener("click", fn); }
+  function setSecond(txt, fn) { second.textContent = txt; second.classList.remove("hidden"); second.addEventListener("click", fn); }
+
+  /* ---------- 多人代报结果：按整单实时状态渲染 ---------- */
+  function renderGroup(g) {
+    var regs = g.registrations || [];
+    var order = g.order;
+    var box = document.getElementById("groupBox");
+    var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
+    var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
+    var anyApproved = regs.some(function (r) { return r.status === "approved"; });
+    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited; });
+
+    var html = '<div class="group-tip ' + (allPaid ? 'ok' : (anyRejected ? 'warn' : 'info')) + '" style="margin-top:14px">';
+    if (autoApproved) html = '<div class="group-tip ok" style="margin-top:14px">' + E.t("auto_approved_tip") + '</div>';
+    if (allPaid) html += E.t("group_paid_ok");
+    else if (anyRejected) {
+      html += E.t("group_rejected_tip");
+      var rj = regs.find(function (r) { return r.status === "rejected" && r.reject_reason; });
+      if (rj) html += '<br>' + E.esc(rj.reject_reason);
+      html += '<br>' + E.t("group_rejected_resub");
+    } else if (anyApproved && order && order.status === 'pending_payment') html += E.t("group_approved_tip");
+    else html += E.t("group_submitted_tip");
+    html += '</div>';
+
+    // 全员名单
+    html += '<div class="fee-box"><div class="fee-title">' + E.t("group_members_box") + '（' + regs.length + '）</div>';
+    regs.forEach(function (r) {
+      var stTxt = r.status === 'paid' ? E.t("st_paid") : (r.status === 'approved' ? E.t("st_approved") :
+                  (r.status === 'rejected' ? E.t("result_rejected") : E.t("result_pending")));
+      html += '<div class="fee-row"><span>' + E.esc(r.name || '') +
+        (r.is_invited ? '<span class="mc-tag">' + E.t("invited_tag") + '</span>' : '') +
+        '<span class="mc-tag">' + E.esc(r.ticket_name || '') + (r.is_invited ? ' ¥0' : (r.is_student ? ' ¥0' : ' ¥' + r.price)) + '</span></span>' +
+        '<span>' + stTxt + '</span></div>';
+    });
+    if (order && !allPaid) {
+      html += '<div class="fee-row"><span>' + E.t("total_row") + '</span><span>¥' + Number(order.final_amount).toFixed(2) +
+        (order.discount_rate < 1 ? '（' + E.t("discount_row") + ' ' + (order.discount_rate * 10) + '折）' : '') + '</span></div>';
+    }
+    html += '</div>';
+    box.innerHTML = html;
+
+    // 按钮
+    if (allPaid) {
+      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId }); });
+      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    } else if (anyRejected) {
+      setMain(E.t("resubmit"), function () { E.go("profile.html", { event_id: eventId }); });
+      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    } else if (anyApproved && order && order.status === "pending_payment") {
+      setMain(E.t("go_pay"), function () {
+        E.go("pay.html", { event_id: eventId, group_no: groupNo, order_no: order.order_no });
+      });
+      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    } else {
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    }
+  }
+
+  var payTokenParam = E.param("pay_token", "");
+  if (groupNo) {
+    E.Api.groupInfo(groupNo, payTokenParam).then(function (g) {
+      // 以服务端真实状态覆盖 URL 里的 status 猜测
+      var regs = g.registrations || [];
+      var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
+      var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
+      var anyApproved = regs.some(function (r) { return r.status === "approved"; });
+      var st = allPaid ? "paid" : (anyRejected ? "rejected" : (anyApproved ? "approved" : "pending"));
+      var c = REG[st] || REG.pending;
+      document.getElementById("resIcon").src = "assets/" + c.icon;
+      document.getElementById("resTitle").textContent = E.t(c.title);
+      renderGroup(g);
+    }).catch(function (e) {
+      E.toast(e.message || "");
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    });
+  } else if (type === "checkin") {
+    // 签到结果：回首页 / 看电子票
+    setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    setSecond(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId }); });
+  } else if (status === "approved" || status === "paid") {
+    // 审核通过 → 去支付；已支付 → 看电子票
+    if (status === "paid") {
+      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId, reg_id: regId }); });
+    } else {
+      setMain(E.t("go_pay"), function () { E.go("pay.html", { event_id: eventId, reg_id: regId }); });
+    }
+    setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+  } else {
+    setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    if (status === "rejected") {
+      setSecond(E.t("re_edit"), function () { E.go("profile.html", { event_id: eventId }); });
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="profile_title">个人信息</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet">
+    <div class="page-title" data-i18n="profile_title">个人信息</div>
+    <div class="group-tip info" id="topTip" data-i18n="buyer_pay_tip">你是购票人，请完成本单支付</div>
+
+    <div id="memberList"></div>
+    <button class="add-member-btn" id="btnAddMember" data-i18n="add_member">＋ 添加填报人</button>
+
+    <div class="fee-box" id="feeBox">
+      <div class="fee-title" data-i18n="fee_summary">费用明细</div>
+      <div id="feeRows"></div>
+    </div>
+
+    <div class="agree-row">
+      <span class="checkbox" id="agreeCk"></span>
+      <span>
+        <span data-i18n="agree_prefix">我已阅读并同意</span>
+        <a href="agreement.html?tab=user&event_id=1" data-i18n="user_agreement">《用户协议》</a>
+        <a href="agreement.html?tab=privacy&event_id=1" data-i18n="privacy_policy">《隐私政策》</a>
+      </span>
+    </div>
+
+    <button class="btn-primary" id="btnSubmit" data-i18n="next">下一步</button>
+    <div class="refund-note" data-i18n="refund_note">2026年11月26日23:59（北京时间）前可申请全额退款，退款按原支付渠道退回。</div>
+    <div class="error-pill hidden" id="errPill"></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var buyerPhone = E.S.phone;
+  var tickets = [];
+  var sessions = [];
+  var MAX = 10;
+
+  if (!buyerPhone || !E.S.token) { E.go("signup.html", { event_id: eventId }); return; }
+
+  // 协议链接带上来源（从协议页返回回到填表现场）
+  var selfUrl = location.pathname.split("/").pop() + location.search;
+  Array.prototype.forEach.call(document.querySelectorAll('a[href^="agreement.html"]'), function (a) {
+    var base = a.getAttribute("href");
+    a.setAttribute("href", base + (base.indexOf("?") > -1 ? "&" : "?") + "redirect=" + encodeURIComponent(selfUrl));
+  });
+
+  var agreed = false;
+  document.getElementById("agreeCk").addEventListener("click", function () {
+    agreed = this.classList.toggle("checked");
+  });
+
+  /* ---------- 填报人卡片 ---------- */
+  // members 内存态：{ id, name, phone, company, position, inviter, focus, session_id, ticket_id }
+  var seq = 0;
+  var members = [];
+
+  function ticketById(id) {
+    for (var i = 0; i < tickets.length; i++) if (tickets[i].id === Number(id)) return tickets[i];
+    return null;
+  }
+
+  function memberCardHtml(m, idx) {
+    var isBuyer = idx === 0;
+    var ticketOpts = tickets.map(function (tk) {
+      var priceTxt = Number(tk.price) === 0 ? "¥0" : "¥" + tk.price;
+      return '<option value="' + tk.id + '"' + (Number(m.ticket_id) === tk.id ? " selected" : "") + '>' +
+        E.esc(tk.name) + " " + priceTxt + '</option>';
+    }).join("");
+    var sessOpts = '<option value="">' + E.esc(E.t("forum_ph")) + '</option>' +
+      sessions.map(function (s) {
+        return '<option value="' + s.id + '"' + (Number(m.session_id) === s.id ? " selected" : "") + '>' + E.esc(s.name) + '</option>';
+      }).join("");
+    return '<div class="member-card" data-mid="' + m.id + '">' +
+      '<div class="mc-head">' +
+        '<div><span class="mc-title">' + E.t("member_card").replace("{n}", idx + 1) + '</span>' +
+          '<span class="mc-tag">' + E.t(isBuyer ? "buyer_tag" : "member_tag") + '</span></div>' +
+        (isBuyer ? '' : '<button class="mc-remove" data-remove="' + m.id + '">' + E.t("remove_member") + '</button>') +
+      '</div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="name">姓名：</span></div>' +
+        '<div class="form-field"><input class="input f-name" maxlength="100" data-i18n="name_ph" value="' + E.esc(m.name) + '"></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="phone">手机：</span></div>' +
+        '<div class="form-field"><input class="input f-phone" maxlength="11" data-i18n="phone_ph" value="' + E.esc(m.phone) + '"' + (isBuyer ? " readonly" : "") + '></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="company">公司：</span></div>' +
+        '<div class="form-field"><input class="input f-company" maxlength="200" data-i18n="company_ph" value="' + E.esc(m.company) + '"></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="job">职务：</span></div>' +
+        '<div class="form-field"><input class="input f-position" maxlength="100" data-i18n="job_ph" value="' + E.esc(m.position) + '"></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="inviter">邀请人：</span></div>' +
+        '<div class="form-field"><input class="input f-inviter" maxlength="100" data-i18n="inviter_ph" value="' + E.esc(m.inviter) + '"></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="focus">关注方向：</span></div>' +
+        '<div class="form-field"><input class="input f-focus" maxlength="200" data-i18n="focus_ph" value="' + E.esc(m.focus) + '"></div></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="forum">论坛：</span></div>' +
+        '<div class="form-field select-wrap"><select class="input f-session filled">' + sessOpts + '</select></div></div>' +
+      '<div class="form-row ticket-select-row"><div class="form-label"><span data-i18n="ticket_select">票种</span></div>' +
+        '<div class="form-field select-wrap"><select class="input f-ticket filled">' + ticketOpts + '</select></div></div>' +
+      '<div class="student-tip hidden"></div>' +
+      '<div class="invited-tip hidden"></div>' +
+    '</div>';
+  }
+
+  function render() {
+    var box = document.getElementById("memberList");
+    box.innerHTML = members.map(function (m, i) { return memberCardHtml(m, i); }).join("");
+    // 绑定
+    Array.prototype.forEach.call(box.querySelectorAll(".member-card"), function (card, idx) {
+      var mid = Number(card.getAttribute("data-mid"));
+      card.querySelector(".f-name").addEventListener("input", function () { members[idx].name = this.value; });
+      card.querySelector(".f-phone").addEventListener("input", function () {
+        if (idx === 0) { this.value = buyerPhone; E.toast(E.t("err_self_phone")); return; }
+        members[idx].phone = this.value;
+      });
+      card.querySelector(".f-phone").addEventListener("change", function () {
+        checkInvited(card, idx);
+      });
+      card.querySelector(".f-company").addEventListener("input", function () { members[idx].company = this.value; });
+      card.querySelector(".f-position").addEventListener("input", function () { members[idx].position = this.value; });
+      card.querySelector(".f-inviter").addEventListener("input", function () { members[idx].inviter = this.value; });
+      card.querySelector(".f-focus").addEventListener("input", function () { members[idx].focus = this.value; });
+      card.querySelector(".f-session").addEventListener("change", function () { members[idx].session_id = Number(this.value) || 0; });
+      card.querySelector(".f-ticket").addEventListener("change", function () {
+        members[idx].ticket_id = Number(this.value) || 0;
+        updateStudentTip(card, members[idx]);
+        updateFee();
+      });
+      updateStudentTip(card, members[idx]);
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-remove]"), function (btn) {
+      btn.addEventListener("click", function () {
+        var mid = Number(btn.getAttribute("data-remove"));
+        members = members.filter(function (m) { return m.id !== mid; });
+        render(); updateFee();
+      });
+    });
+    document.getElementById("btnAddMember").style.display = members.length >= MAX ? "none" : "";
+    E.applyLang();
+  }
+
+  function updateStudentTip(card, m) {
+    var tip = card.querySelector(".student-tip");
+    var tk = ticketById(m.ticket_id);
+    if (tk && Number(tk.price) === 0 && String(tk.name).indexOf("学生") > -1) {
+      tip.textContent = E.t("student_tip");
+      tip.classList.remove("hidden");
+    } else {
+      tip.classList.add("hidden");
+    }
+  }
+
+  /* 邀约名单：命中的人免审核、免票（提交时后端同样判定，这里是给用户即时反馈） */
+  var invitedSet = {};
+  function checkInvited(card, idx) {
+    var phones = members.map(function (x) { return x.phone; }).filter(function (p) { return /^1[3-9]\d{9}$/.test(p); });
+    if (!phones.length) { renderInvitedTips(); return; }
+    E.Api.checkInvited(phones, Number(eventId)).then(function (d) {
+      invitedSet = (d && d.invited) || {};
+      members.forEach(function (m) { m.is_invited = !!invitedSet[m.phone]; });
+      renderInvitedTips();
+      updateFee();
+    }).catch(function () { /* 查询失败不阻塞填写，后端提交时会再判一次 */ });
+  }
+
+  function renderInvitedTips() {
+    var box = document.getElementById("memberList");
+    Array.prototype.forEach.call(box.querySelectorAll(".member-card"), function (card, i) {
+      var m = members[i];
+      var tip = card.querySelector(".invited-tip");
+      if (!tip) return;
+      if (m && m.is_invited) {
+        tip.textContent = E.t("invited_tip");
+        tip.classList.remove("hidden");
+        var tag = card.querySelector(".mc-tag");
+        if (tag) tag.textContent = E.t("invited_tag");
+      } else {
+        tip.classList.add("hidden");
+      }
+    });
+  }
+
+  /* ---------- 费用明细（本地实时计算，口径同后端 calcDiscount） ---------- */
+  function updateFee() {
+    var paid = 0, free = 0, raw = 0;
+    members.forEach(function (m) {
+      var tk = ticketById(m.ticket_id);
+      if (!tk) return;
+      if (m.is_invited) return; // 邀约成员免票，不计入付费票与金额（口径同后端）
+      if (Number(tk.price) === 0) free++;
+      else { paid++; raw += Number(tk.price); }
+    });
+    var rate = paid >= 5 ? 0.8 : (paid >= 3 ? 0.9 : 1.0);
+    var finalAmt = Math.round(raw * rate * 100) / 100;
+    var invitedCount = members.filter(function (m) { return m.is_invited; }).length;
+    var html = "";
+    if (paid) html += '<div class="fee-row"><span>' + E.t("paid_ticket_count").replace("{n}", paid) + '</span><span>¥' + raw.toFixed(2) + '</span></div>';
+    if (invitedCount) html += '<div class="fee-row"><span>' + E.t("invited_free_row") + ' ' + invitedCount + ' ' + E.t("group_members_box") + '</span><span class="free-mark">¥0.00</span></div>';
+    if (free) html += '<div class="fee-row"><span>' + E.t("free_ticket_count").replace("{n}", free) + '</span><span class="free-mark">¥0.00</span></div>';
+    if (paid >= 3) {
+      html += '<div class="fee-row discount"><span>' + E.t("discount_row") + '（' + (rate * 10) + '折）</span><span>-¥' + (raw - finalAmt).toFixed(2) + '</span></div>';
+    } else {
+      html += '<div class="fee-row" style="color:var(--label-gray)"><span>' + E.t("discount_row") + '</span><span>' + E.t("discount_none") + '</span></div>';
+    }
+    html += '<div class="fee-row total"><span>' + E.t("total_row") + '</span><span>¥' + finalAmt.toFixed(2) + '</span></div>';
+    document.getElementById("feeRows").innerHTML = html;
+    return { paid: paid, free: free, rate: rate, final: finalAmt };
+  }
+
+  document.getElementById("btnAddMember").addEventListener("click", function () {
+    if (members.length >= MAX) { E.toast(E.t("err_max_member")); return; }
+    members.push({ id: ++seq, name: "", phone: "", company: "", position: "", inviter: members[0] ? members[0].inviter : "", focus: "", session_id: 0, ticket_id: tickets.length ? tickets[0].id : 0 });
+    render(); updateFee();
+  });
+
+  /* ---------- 加载场次 + 票种 ---------- */
+  Promise.all([E.Api.event(eventId), E.Api.tickets(eventId)]).then(function (res) {
+    var ev = res[0].event || res[0];
+    sessions = res[0].sessions || ev.sessions || [];
+    tickets = res[1].ticket_types || res[1].list || res[1] || [];
+    tickets = tickets.filter(function (t) { return t.on_shelf === undefined || t.on_shelf == 1; });
+
+    // 默认票种：第一张付费票（标准票优先），学生票不默认
+    var defaultTicket = tickets.find(function (t) { return Number(t.price) > 0; }) || tickets[0];
+    members.push({ id: ++seq, name: (E.S.data && E.S.data.name) || "", phone: buyerPhone, company: (E.S.data && E.S.data.company) || "", position: (E.S.data && E.S.data.position) || "", inviter: "", focus: (E.S.data && E.S.data.focus) || "", session_id: 0, ticket_id: defaultTicket ? defaultTicket.id : 0 });
+    render(); updateFee();
+    checkInvited();   // 购票人本人也可能在邀约名单内
+  }).catch(function (e) { E.errPill(e.message || "票种加载失败"); });
+
+  /* ---------- 提交 ---------- */
+  document.getElementById("btnSubmit").addEventListener("click", function () {
+    E.errPill("");
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (!String(m.name).trim() || !String(m.company).trim() || !String(m.position).trim() || !String(m.inviter).trim()) {
+        E.errPill(E.t("err_required")); return;
+      }
+      if (!/^1[3-9]\d{9}$/.test(String(m.phone))) { E.errPill(E.t("err_phone_bad")); return; }
+    }
+    var seen = {};
+    for (var j = 0; j < members.length; j++) {
+      if (seen[members[j].phone]) { E.errPill(E.t("err_dup_phone")); return; }
+      seen[members[j].phone] = true;
+    }
+    if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    E.Api.submitGroup({
+      event_id: Number(eventId),
+      buyer_phone: buyerPhone,
+      members: members.map(function (m) {
+        return {
+          name: String(m.name).trim(), phone: m.phone, is_invited: !!m.is_invited,
+          company: String(m.company).trim(), position: String(m.position).trim(),
+          inviter: String(m.inviter).trim(), focus: String(m.focus).trim(),
+          session_id: Number(m.session_id) || 0, ticket_type_id: Number(m.ticket_id) || 0
+        };
+      })
+    }).then(function (d) {
+      E.S.patch({ group_no: d.group_no, quote: d.quote });
+      E.go("result.html", { event_id: eventId, group_no: d.group_no, status: "pending" });
+    }).catch(function (e) {
+      btn.disabled = false;
+      E.errPill(e.message || E.t("err_submit"));
+    });
+  });
+})();
+</script>
+</body>
+</html>

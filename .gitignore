@@ -1,0 +1,13 @@
+# ===== 本地 Postgres 数据（开发机专用，非程序代码） =====
+pgdata/
+pg-start.cmd
+
+# ===== 历史遗留 EC8 模板（非 EC9 程序） =====
+EC8-用户协议-20251216更新.docx
+EC8-隐私政策-20251216更新.docx
+
+# ===== 依赖 / 构建产物 / 系统文件 =====
+node_modules/
+*.log
+.DS_Store
+.workbuddy/

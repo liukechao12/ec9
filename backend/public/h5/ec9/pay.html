@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="pay_title">支付</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet">
+    <div class="page-title" data-i18n="pay_title">支付</div>
+
+    <div id="orderBox">
+      <div class="et-row"><div class="k" data-i18n="et_type">门票类型：</div><div class="v" id="tkName">—</div></div>
+      <div class="et-row"><div class="k" data-i18n="order_no">订单号：</div><div class="v" id="orderNo">—</div></div>
+    </div>
+
+    <div id="groupBox"></div>
+
+    <div class="price"><span class="cny">¥</span> <span id="amountText">0</span></div>
+
+    <div id="qrBox" class="qr-big hidden"><img id="qrImg" src="" alt=""></div>
+    <div id="qrTip" class="invoice-tip hidden" data-i18n="qr_tip">请用微信扫一扫完成支付</div>
+
+    <button class="btn-primary" id="btnPay" data-i18n="pay_now">立即支付</button>
+    <button class="btn-primary hidden" id="btnMock" style="background:#E8A33D" data-i18n="mock_pay">模拟支付</button>
+
+    <div class="refund-tip" data-i18n="refund_tip"></div>
+    <div class="error-pill hidden" id="errPill"></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var regId = E.param("reg_id", "") || (E.S.data.reg_id || "");
+  var groupNo = E.param("group_no", "");
+  var orderNoParam = E.param("order_no", "");
+  var payToken = E.param("pay_token", "");
+  var state = E.S.data;
+  var orderNo = "";
+  var polling = null;
+
+  /* ============================================================
+     模式 A：短信付款链接（group_no + order_no + pay_token，免登录）
+     ============================================================ */
+  if (groupNo && orderNoParam && payToken) {
+    orderNo = orderNoParam;
+    document.getElementById("orderNo").textContent = orderNo;
+
+    function renderGroupOrder(d) {
+      document.getElementById("tkName").textContent = "多人代报 · " + ((d.price_detail || []).length) + " 人";
+      var html = "";
+      (d.price_detail || []).forEach(function (it) {
+        html += '<div class="fee-row"><span>' + E.esc(it.ticket_name || "") + '</span><span>' +
+          (it.is_free ? '<span class="free-mark">¥0.00</span>' : '¥' + Number(it.price).toFixed(2)) + '</span></div>';
+      });
+      if (Number(d.discount_amount) > 0) {
+        html += '<div class="fee-row discount"><span>' + E.t("discount_row") + '（' + (Number(d.discount_rate) * 10) + '折）</span><span>-¥' + Number(d.discount_amount).toFixed(2) + '</span></div>';
+      }
+      if (html) {
+        document.getElementById("groupBox").innerHTML =
+          '<div class="fee-box"><div class="fee-title">' + E.t("fee_summary") + '</div>' + html + '</div>';
+      }
+      document.getElementById("amountText").textContent = Number(d.final_amount).toFixed(2);
+
+      if (d.status === "paid") {
+        E.toast(E.t("group_paid_ok"));
+        E.go("result.html", { event_id: eventId, group_no: groupNo, status: "paid", pay_token: payToken });
+        return true;
+      }
+      return false;
+    }
+
+    E.Api.groupPayInfo(orderNo, payToken).then(function (d) {
+      if (renderGroupOrder(d)) return;
+    }).catch(function (e) { E.errPill(e.message || "订单加载失败"); });
+
+    document.getElementById("btnPay").addEventListener("click", function () {
+      E.toast(E.t("pay_loading"));
+      E.Api.groupPay(orderNo, payToken).then(function (d) {
+        if (d && d.jsapi_params) callWechatPay(d.jsapi_params);
+        else if (d && d.mock) { document.getElementById("btnMock").classList.remove("hidden"); startGroupPoll(); }
+        else startGroupPoll();
+      }).catch(function (e) { E.errPill(e.message || "支付发起失败"); });
+    });
+
+    document.getElementById("btnMock").addEventListener("click", function () {
+      E.Api.groupMockPay(orderNo, payToken).then(function () { startGroupPoll(); }).catch(function (e) { E.errPill(e.message); });
+    });
+
+    function startGroupPoll() {
+      if (polling) return;
+      E.toast(E.t("pay_waiting"));
+      polling = setInterval(function () {
+        E.Api.groupPayInfo(orderNo, payToken).then(function (d) {
+          if (d.status === "paid") {
+            clearInterval(polling);
+            E.S.patch({ paid: true, group_no: groupNo });
+            E.go("result.html", { event_id: eventId, group_no: groupNo, status: "paid", pay_token: payToken });
+          }
+        }).catch(function () {});
+      }, 2000);
+    }
+
+    function callWechatPay(p) {
+      if (typeof WeixinJSBridge === "undefined") { E.toast(E.t("pay_in_wechat")); return; }
+      WeixinJSBridge.invoke("getBrandWCPayRequest", {
+        appId: p.appId, timeStamp: p.timeStamp, nonceStr: p.nonceStr,
+        package: p.package, signType: p.signType || "RSA", paySign: p.paySign
+      }, function (res) {
+        if (res.err_msg === "get_brand_wcpay_request:ok") startGroupPoll();
+        else E.errPill(res.err_msg || E.t("pay_cancel"));
+      });
+    }
+    return; // 模式 A 结束
+  }
+
+  /* ============================================================
+     模式 B：H5 内登录支付（单人 / group 兜底走原链路）
+     ============================================================ */
+  if (!regId) { E.go("signup.html", { event_id: eventId }); return; }
+
+  document.getElementById("tkName").textContent = (state.ticket && state.ticket.name) || "—";
+
+  // 1. 建单（已有订单则复用，避免重复锁库存）
+  function setOrder(no, amount) {
+    orderNo = no;
+    document.getElementById("orderNo").textContent = no || "—";
+    document.getElementById("amountText").textContent = amount || 0;
+  }
+
+  if (state.order_no) {
+    setOrder(state.order_no, (state.ticket && state.ticket.price) || 0);
+  } else {
+    E.Api.createOrder(Number(regId), 1).then(function (d) {
+      var order = d.order || d;
+      setOrder(order.order_no || order.out_trade_no || "", order.final_amount || order.amount || (state.ticket && state.ticket.price) || 0);
+      E.S.patch({ order_no: orderNo });
+    }).catch(function (e) { E.errPill(e.message || "订单创建失败"); });
+  }
+
+  // 2. 支付
+  document.getElementById("btnPay").addEventListener("click", function () {
+    if (!orderNo) { E.errPill("订单未就绪"); return; }
+    E.toast(E.t("pay_loading"));
+
+    // JSAPI（后端补齐后生效）；失败则回落 NATIVE 二维码
+    E.Api.payJsapi(orderNo).then(function (d) {
+      if (d && d.jsapi_params) { callWechatPay(d.jsapi_params); }
+      else if (d && d.code_url) { showNative(d); }
+      else if (d && d.mock) { showNative({ mock: true }); }   // JSAPI 未配置 + mock 模式
+      else { startPoll(); }
+    }).catch(function () {
+      E.Api.payNative(orderNo).then(function (d) {
+        showNative(d);
+      }).catch(function (e2) { E.errPill(e2.message || "支付发起失败"); });
+    });
+  });
+
+  function showNative(d) {
+    if (d.qr_image) {
+      document.getElementById("qrImg").src = d.qr_image;
+      document.getElementById("qrBox").classList.remove("hidden");
+      document.getElementById("qrTip").classList.remove("hidden");
+    }
+    if (d.mock) document.getElementById("btnMock").classList.remove("hidden");
+    startPoll();
+  }
+
+  function callWechatPay(p) {
+    if (typeof WeixinJSBridge === "undefined") {
+      E.toast(E.t("pay_in_wechat"));
+      return;
+    }
+    WeixinJSBridge.invoke("getBrandWCPayRequest", {
+      appId: p.appId, timeStamp: p.timeStamp, nonceStr: p.nonceStr,
+      package: p.package, signType: p.signType || "RSA", paySign: p.paySign
+    }, function (res) {
+      if (res.err_msg === "get_brand_wcpay_request:ok") startPoll();
+      else E.errPill(res.err_msg || E.t("pay_cancel"));
+    });
+  }
+
+  document.getElementById("btnMock").addEventListener("click", function () {
+    E.Api.mockPay(orderNo).then(function () { startPoll(); }).catch(function (e) { E.errPill(e.message); });
+  });
+
+  // 3. 轮询支付结果
+  function startPoll() {
+    if (polling) return;
+    E.toast(E.t("pay_waiting"));
+    polling = setInterval(function () {
+      E.Api.queryPay(orderNo).then(function (d) {
+        var st = d.status || d.order_status;
+        if (st === "paid" || st === "success") {
+          clearInterval(polling);
+          E.S.patch({ paid: true, checkin_code: d.checkin_code || "" });
+          E.go("eticket.html", { event_id: eventId });
+        }
+      }).catch(function () {});
+    }, 2000);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title>活动报名系统</title>
+    <base href="/">
+    <link rel="stylesheet" href="/h5/pages.css">
+</head>
+<body>
+    <!-- 页面1: 首页 (375x813) -->
+    <div id="page-home" class="page">
+        <!-- 背景图：地球 (位置: x: -574, y: -649, 尺寸: 1536x1536) -->
+        <img src="/h5/images/bg-planet.png" class="home-planet" alt="">
+        
+        <!-- Logo: 地球克隆计划 8 (x: 47, y: 150, w: 280, h: 66.15) -->
+        <img src="/h5/images/logo-new.svg" class="home-logo" alt="地球克隆计划 8">
+        
+        <!-- 网站地址、时间、地址信息 - 使用设计图切图 -->
+        <div class="home-info">
+            <img src="/h5/images/text-6651hk.svg" class="home-website-img" alt="6651.HK">
+            <img src="/h5/images/text-time.svg" class="home-time-img" alt="时间: 2025年12月30日">
+            <img src="/h5/images/text-location.svg" class="home-location-img" alt="地址: 深圳华侨城洲际大酒店">
+        </div>
+        
+        <!-- 立即报名按钮 - 使用切图 -->
+        <div class="home-btn-wrapper">
+            <img src="/h5/images/btn-register.png" class="btn-register-img" alt="">
+            <img src="/h5/images/btn-text-register.svg" class="btn-register-text" alt="立即报名">
+            <button class="btn-register" id="btnRegisterHome"></button>
+        </div>
+        
+        <!-- 用户协议和隐私政策链接 - 使用切图背景和文字 -->
+        <div class="legal-links">
+            <div class="legal-link-wrapper legal-link-left">
+                <img src="/h5/images/legal-bg-left.png" class="legal-link-bg" alt="">
+                <img src="/h5/images/text-user-agreement.svg" class="legal-link-text" alt="用户协议">
+                <a href="/api/legal/user-agreement" target="_blank" class="legal-link"></a>
+            </div>
+            <div class="legal-link-wrapper legal-link-right">
+                <img src="/h5/images/legal-bg-right.png" class="legal-link-bg" alt="">
+                <img src="/h5/images/text-privacy-policy.svg" class="legal-link-text" alt="隐私政策">
+                <a href="/api/legal/privacy-policy" target="_blank" class="legal-link"></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页面2: 电子票 (375x813) -->
+    <div id="page-ticket" class="page" style="display: none;">
+        <!-- 背景图容器 (375x320) -->
+        <div class="ticket-bg-container">
+            <img src="/h5/images/bg-planet.png" class="ticket-planet" alt="">
+        </div>
+        
+        <!-- Logo (x: 47, y: 50, w: 280, h: 66.15) -->
+        <img src="/h5/images/logo-new.svg" class="ticket-logo" alt="地球克隆计划 8">
+        
+        <!-- 渐变遮罩 (x: 0, y: 143, w: 375, h: 177) -->
+        <div class="ticket-gradient-mask"></div>
+        
+        <!-- 半透明卡片 (x: 20, y: 150, w: 335, h: 65) -->
+        <div class="ticket-semi-card"></div>
+        
+        <!-- 电子票标题 (x: 39, y: 160, fontSize: 14) -->
+        <div class="ticket-title">电子票</div>
+        
+        <!-- 电子票内容区 (x: 20, y: 184, w: 335, h: 409) -->
+        <div class="ticket-content">
+            <!-- 打孔效果 - 只有一个圆形缺口在虚线位置 -->
+            <div class="ticket-hole"></div>
+            
+            <!-- 姓名 (x: 39, y: 216, fontSize: 36) -->
+            <div class="guest-name">菲老师</div>
+            
+            <!-- 座位号 (x: 39, y: 268, fontSize: 18) -->
+            <div class="seat-number">07桌02</div>
+            
+            <!-- VISION 2030 (x: 231.25, y: 243.92, fontSize: 小) -->
+            <div class="vision-text">VISION 2030</div>
+            
+            <!-- 虚线分隔 (x: 29, y: 328) -->
+            <div class="dashed-line"></div>
+            
+            <!-- 会议日程 (x: 40, y: 348, fontSize: 24) -->
+            <div class="agenda-title">会议日程</div>
+        </div>
+    </div>
+
+    <!-- 页面3: 报名信息 (375x813) -->
+    <div id="page-register-info" class="page" style="display: none;">
+        <!-- 背景区域容器 (375x185) - 限制背景图显示范围 -->
+        <div class="register-header-bg">
+            <img src="/h5/images/bg-planet.png" class="register-planet" alt="">
+            <!-- Logo (x: 47, y: 50) -->
+            <img src="/h5/images/logo-new.svg" class="register-logo" alt="地球克隆计划 8">
+        </div>
+        
+        <!-- 白色卡片容器 - 包含所有表单元素 -->
+        <div class="register-form-card">
+            <!-- 标题 (x: 139, y: 195, 96x24) -->
+            <div class="register-title" data-i18n="h5.common.regInfo">报名信息</div>
+            
+            <!-- 手机号标签 (x: 19, y: 261, 48x12) -->
+            <label class="register-label-phone" data-i18n="h5.common.phoneLabel">手机号：</label>
+            <!-- 手机号输入框 (x: 69, y: 248, 286x38) -->
+            <input type="tel" class="register-input-phone" placeholder="请输入手机号" id="registerPhone" maxlength="11">
+            
+            <!-- 验证码标签 (x: 19, y: 319, 48x12) -->
+            <label class="register-label-code" data-i18n="h5.common.codeLabel2">验证码：</label>
+            <!-- 验证码输入框 (x: 69, y: 306, 184x38) -->
+            <input type="text" class="register-input-code" placeholder="请输入验证码" id="registerCode" maxlength="6">
+            <!-- 获取验证码按钮 (x: 271, y: 306, 84x38) -->
+            <button class="btn-code" id="btnGetCode" data-i18n="h5.common.getCode">获取验证码</button>
+            
+            <!-- 下一步按钮 (x: 20, y: 404, 335x38) -->
+            <button class="btn-submit" id="btnNext" data-i18n="h5.common.next">下一步</button>
+        </div>
+    </div>
+
+    <!-- 页面4: 签到信息 (375x813) -->
+    <div id="page-checkin-info" class="page" style="display: none;">
+        <!-- 背景区域容器 (375x185) - 限制背景图显示范围 -->
+        <div class="register-header-bg">
+            <img src="/h5/images/bg-planet.png" class="register-planet" alt="">
+            <!-- Logo (x: 47, y: 50) -->
+            <img src="/h5/images/logo-new.svg" class="register-logo" alt="地球克隆计划 8">
+        </div>
+        
+        <!-- 白色卡片容器 - 包含所有表单元素 -->
+        <div class="register-form-card">
+            <!-- 标题 (x: 139, y: 195, 96x24) -->
+            <div class="register-title" data-i18n="h5.checkin.title">活动签到</div>
+            
+            <!-- 手机号标签 (x: 19, y: 261, 48x12) -->
+            <label class="register-label-phone" data-i18n="h5.common.phoneLabel">手机号：</label>
+            <!-- 手机号输入框 (x: 69, y: 248, 286x38) -->
+            <input type="tel" class="register-input-phone" placeholder="请输入手机号" id="checkinPhone" maxlength="11">
+            
+            <!-- 验证码标签 (x: 19, y: 319, 48x12) -->
+            <label class="register-label-code" data-i18n="h5.common.codeLabel2">验证码：</label>
+            <!-- 验证码输入框 (x: 69, y: 306, 184x38) -->
+            <input type="text" class="register-input-code" placeholder="请输入验证码" id="checkinCode" maxlength="6">
+            <!-- 获取验证码按钮 (x: 271, y: 306, 84x38) -->
+            <button class="btn-code" id="btnGetCodeCheckin" data-i18n="h5.common.getCode">获取验证码</button>
+            
+            <!-- 下一步按钮 (x: 20, y: 404, 335x38) -->
+            <button class="btn-submit" id="btnCheckin" data-i18n="h5.common.next">下一步</button>
+            
+            <!-- 错误提示 (x: 68, y: 462, w: 240, h: 24) -->
+            <div class="error-message" style="display: none;" data-i18n="h5.checkin.failMismatch">签到失败，手机号不匹配</div>
+        </div>
+    </div>
+
+    <!-- 页面5: 报名信息填写 (375x813) -->
+    <div id="page-register-form" class="page" style="display: none;">
+        <!-- 背景区域容器 (375x185) - 限制背景图显示范围 -->
+        <div class="register-header-bg">
+            <img src="/h5/images/bg-planet.png" class="register-planet" alt="">
+            <!-- Logo (x: 47, y: 50) -->
+            <img src="/h5/images/logo-new.svg" class="register-logo" alt="地球克隆计划 8">
+        </div>
+        
+        <!-- 白色卡片容器 - 仅作为背景 -->
+        <div class="register-form-card"></div>
+        
+        <!-- 所有表单元素直接放在页面内，位置相对于整个页面 -->
+        <!-- 标题 (x: 139, y: 195, 96x24) -->
+        <div class="register-title" data-i18n="h5.common.personalInfo">个人信息</div>
+        
+        <!-- 姓名：标签 (x: 20, y: 261, 36x12)，输入框 (x: 69, y: 248, 286x38) -->
+        <label class="form-label-name" data-i18n="h5.common.nameLabel">姓名：</label>
+        <input type="text" class="form-input-name" placeholder="请输入姓名" id="guestName">
+        
+        <!-- 手机：标签 (x: 20, y: 319, 36x12)，输入框 (x: 69, y: 306, 286x38) -->
+        <label class="form-label-phone" data-i18n="h5.common.phoneLabel">手机：</label>
+        <input type="tel" class="form-input-phone" placeholder="请输入手机号" id="guestPhone" maxlength="11">
+        
+        <!-- 公司：标签 (x: 20, y: 377, 36x12)，输入框 (x: 69, y: 364, 286x38) -->
+        <label class="form-label-company" data-i18n="h5.common.companyLabel">公司：</label>
+        <input type="text" class="form-input-company" placeholder="请输入公司名称" id="guestCompany">
+        
+        <!-- 职务：标签 (x: 20, y: 435, 36x12)，输入框 (x: 69, y: 422, 286x38) -->
+        <label class="form-label-position" data-i18n="h5.common.positionLabel">职务：</label>
+        <input type="text" class="form-input-position" placeholder="请输入职务" id="guestPosition">
+        
+        <!-- 邀请人：标签 (x: 19, y: 493, 48x12)，输入框 (x: 69, y: 480, 286x38) -->
+        <label class="form-label-inviter" data-i18n="h5.pages.inviter">邀请人：</label>
+        <input type="text" class="form-input-inviter" placeholder="请输入邀请人" id="inviter">
+        
+        <!-- 住宿选择1：是否需要12月29日住宿 -->
+        <!-- 标签 (x: 19, y: 538, 137x12) -->
+        <label class="form-hotel-label-1" data-i18n="h5.pages.hotel1229">是否需要12月29日住宿：</label>
+        <!-- 是选项 (按钮 x: 243, y: 538, 文字 x: 262) -->
+        <label class="radio-option-yes-1">
+            <input type="radio" name="hotel1" value="yes">
+            <span>是</span>
+        </label>
+        <!-- 否选项 (按钮 x: 309, y: 538, 文字 x: 328) -->
+        <label class="radio-option-no-1">
+            <input type="radio" name="hotel1" value="no">
+            <span>否</span>
+        </label>
+        
+        <!-- 住宿选择2：是否需要12月30日住宿 -->
+        <!-- 标签 (x: 19, y: 570, 137x12) -->
+        <label class="form-hotel-label-2" data-i18n="h5.pages.hotel1230">是否需要12月30日住宿：</label>
+        <!-- 是选项 (按钮 x: 243, y: 570, 文字 x: 262) -->
+        <label class="radio-option-yes-2">
+            <input type="radio" name="hotel2" value="yes">
+            <span>是</span>
+        </label>
+        <!-- 否选项 (按钮 x: 309, y: 570, 文字 x: 328) -->
+        <label class="radio-option-no-2">
+            <input type="radio" name="hotel2" value="no">
+            <span>否</span>
+        </label>
+        
+        <!-- 下一步按钮 (x: 20, y: 627, 335x38) -->
+        <button class="btn-submit-form" id="btnSubmitForm" data-i18n="h5.common.next">下一步</button>
+        
+        <!-- 错误提示 (x: 68, y: 685, 240x24) -->
+        <div class="form-error-message" style="display: none;" data-i18n="h5.pages.failed">报名失败信息</div>
+    </div>
+
+    <!-- 页面6: 报名成功 -->
+    <div id="page-success" class="page" style="display: none;">
+        <div class="success-container">
+            <div class="success-title" data-i18n="h5.invite.success">报名成功</div>
+            <button class="btn-back-home" onclick="PageManager.showPage('page-home')" data-i18n="h5.common.backHome">回到首页</button>
+        </div>
+    </div>
+
+    <!-- 页面7: 待审核 -->
+    <div id="page-pending" class="page" style="display: none;">
+        <div class="pending-container">
+            <!-- 标题与文案 -->
+            <div class="pending-title" data-i18n="h5.pages.pending">待审核</div>
+
+            <!-- 按钮 -->
+            <button class="pending-btn" onclick="PageManager.showPage('page-home')" data-i18n="h5.common.backHome">回到首页</button>
+        </div>
+    </div>
+
+    <!-- 页面8: 报名信息填写2 (与页面5相同结构，但可能根据条件显示不同内容) -->
+    <div id="page-register-form-2" class="page" style="display: none;">
+        <!-- 背景区域容器 (375x185) - 限制背景图显示范围 -->
+        <div class="register-header-bg">
+            <img src="/h5/images/bg-planet.png" class="register-planet" alt="">
+            <!-- Logo (x: 47, y: 50) -->
+            <img src="/h5/images/logo-new.svg" class="register-logo" alt="地球克隆计划 8">
+        </div>
+        
+        <!-- 白色卡片容器 - 仅作为背景 -->
+        <div class="register-form-card"></div>
+        
+        <!-- 所有表单元素直接放在页面内，位置相对于整个页面 -->
+        <!-- 标题 (x: 139, y: 195, 96x24) -->
+        <div class="register-title" data-i18n="h5.common.personalInfo">个人信息</div>
+        
+        <!-- 姓名：标签 (x: 20, y: 261, 36x12)，输入框 (x: 69, y: 248, 286x38) -->
+        <label class="form-label-name" data-i18n="h5.common.nameLabel">姓名：</label>
+        <input type="text" class="form-input-name" placeholder="请输入姓名" id="guestName2">
+        
+        <!-- 手机：标签 (x: 20, y: 319, 36x12)，输入框 (x: 69, y: 306, 286x38) -->
+        <label class="form-label-phone" data-i18n="h5.common.phoneLabel">手机：</label>
+        <input type="tel" class="form-input-phone" placeholder="请输入手机号" id="guestPhone2" maxlength="11">
+        
+        <!-- 公司：标签 (x: 20, y: 377, 36x12)，输入框 (x: 69, y: 364, 286x38) -->
+        <label class="form-label-company" data-i18n="h5.common.companyLabel">公司：</label>
+        <input type="text" class="form-input-company" placeholder="请输入公司名称" id="guestCompany2">
+        
+        <!-- 职务：标签 (x: 20, y: 435, 36x12)，输入框 (x: 69, y: 422, 286x38) -->
+        <label class="form-label-position" data-i18n="h5.common.positionLabel">职务：</label>
+        <input type="text" class="form-input-position" placeholder="请输入职务" id="guestPosition2">
+        
+        <!-- 邀请人：标签 (x: 19, y: 493, 48x12)，输入框 (x: 69, y: 480, 286x38) -->
+        <label class="form-label-inviter" data-i18n="h5.pages.inviter">邀请人：</label>
+        <input type="text" class="form-input-inviter" placeholder="请输入邀请人" id="inviter2">
+        
+        <!-- 住宿选择：是否需要12月30日住宿 (仅此一个) -->
+        <!-- 标签 (x: 19, y: 551, 137x12) -->
+        <label class="form-hotel-label-2-only" data-i18n="h5.pages.hotel1230">是否需要12月30日住宿：</label>
+        <!-- 是选项 (按钮 x: 243, y: 551, 文字 x: 262) -->
+        <label class="radio-option-yes-2-only">
+            <input type="radio" name="hotel2-2" value="yes">
+            <span>是</span>
+        </label>
+        <!-- 否选项 (按钮 x: 309, y: 551, 文字 x: 328) -->
+        <label class="radio-option-no-2-only">
+            <input type="radio" name="hotel2-2" value="no">
+            <span>否</span>
+        </label>
+        
+        <!-- 温馨提示 (x: 19, y: 585, 290x13) -->
+        <div class="form-tip-message">温馨提示：请您如实填写个人信息，填写信息不完整将可能导致审核不通过</div>
+        
+        <!-- 下一步按钮 (x: 20, y: 627, 335x38) -->
+        <button class="btn-submit-form" id="btnSubmitForm2" data-i18n="h5.common.next">下一步</button>
+        
+        <!-- 错误提示 (x: 68, y: 685, 240x24) -->
+        <div class="form-error-message" style="display: none;" data-i18n="h5.pages.failed">报名失败信息</div>
+    </div>
+
+    <script src="/i18n.js?v=20261015.1"></script>
+    <script src="/h5/pages.js"></script>
+</body>
+</html>

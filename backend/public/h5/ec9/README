@@ -1,0 +1,244 @@
+# EC9 H5 报名（多页面版）
+
+按 MasterGo 设计稿「EC9-外部」还原，接 EC9 后端真实接口，**多页面文件跳转**（非单页 hash 路由），三语（简体 / English / 繁體）。
+
+访问：`http://<host>:7098/h5/ec9/index.html?event_id=1`
+
+---
+
+## 一、页面与文件（一个画板 = 一个 HTML 文件）
+
+| 文件 | 页面 | 说明 |
+|---|---|---|
+| `index.html` | 首页 | 活动详情（`/api/public/events/:id`）、协议勾选、立即报名 |
+| `signup.html` | 报名信息 | 手机号 + 验证码，换发凭证 |
+| `profile.html` | 个人信息 + 门票类型 | 姓名/公司/职务/邀请人/关注方向/场次 + 票种卡选择 → 提交报名 |
+| `result.html` | 结果页 | 报名结果：待审核 / 驳回 / 审核通过；签到结果：成功 / 重复 / 不匹配 / 网络错误 |
+| `pay.html` | 支付 | 建单 → 发起支付 → 轮询 → 跳电子票 |
+| `eticket.html` | 电子票 | 持票人信息 + 门票权益 / 论坛议程 + 开票入口 |
+| `checkin.html` | 活动签到 | 手机号 + 验证码 → 签到 |
+| `invoice.html` | 开发票 | 企微二维码 |
+| `agreement.html` | 协议三 Tab | 用户协议 / 隐私政策 / 联系我们 |
+
+共享：`css/style.css`、`js/i18n.js`（三语字典）、`js/common.js`（接口封装 / 状态 / 跳转 / 语言）、`assets/`（logo、状态图标、二维码、会场图）。
+
+---
+
+## 二、流程（报名 → 审核 → 支付）
+
+```
+index.html
+   ↓ 勾选协议 → 立即报名
+signup.html   手机号 + 验证码  → POST /api/verification/verify-code → x-verify-token
+   ↓
+profile.html  填个人信息 + 选票种/场次 → POST /api/registrations/submit-by-phone
+   ↓
+result.html   待审核 / 驳回
+   ↓ 审核通过（后台审批）
+pay.html      POST /api/orders 建单 → POST /api/payment/jsapi 支付 → 轮询 query/:orderNo
+   ↓ 支付成功
+eticket.html  电子票（含签到码）
+   ↓
+checkin.html  签到 → result.html?type=checkin&status=...
+```
+
+---
+
+## 三、接口对接明细
+
+| 页面 | 接口 |
+|---|---|
+| index | `GET /api/public/events/:id?lang=` |
+| signup | `POST /api/verification/send-code`、`POST /api/verification/verify-code` |
+| profile | `GET /api/public/events/:id`、`GET /api/public/events/:id/tickets`、`POST /api/registrations/submit-by-phone` |
+| pay | `POST /api/orders`、`POST /api/payment/jsapi`、`POST /api/payment/native`（回落）、`GET /api/payment/query/:orderNo`、`POST /api/payment/mock-pay/:orderNo` |
+| eticket | 本地缓存 + `GET /api/payment/query/:orderNo` |
+| checkin | `POST /api/verification/*`、`POST /api/checkins/event-checkin` |
+| agreement | `GET /api/legal/user-agreement`、`/api/legal/privacy-policy` |
+
+凭证：验证码换来的 token 放在请求头 **`x-verify-token`**（后端中间件读的是小写）。
+
+---
+
+## 四、后端改造（已全部完成并实跑验证）
+
+> 以下 4 项是联调期发现的阻塞点，**均已修改并验证通过**。
+
+1. **【已修】`POST /api/orders` 用了「一次性」凭证校验**
+   原 `authAdminOrSelf` 无 Bearer 时走 `requireVerified`（`consumeToken`），
+   建单会把验证码凭证消费掉，紧接着 `/api/payment/*` 就 401。
+   **改法**：`routes/orders.js` 改用 `requireVerifiedReusable`（不消费凭证）。
+   验证：同一 `x-verify-token` 连续打 `mine → orders → orders → jsapi` 全部 200。
+
+2. **【已修】审批邀约未同步报名状态**
+   `POST /api/invitations/:id/approve`（及 `mark-registered`）成功后 `registrations.status` 仍是 `submitted`，
+   导致 `POST /api/orders` 返回 400「报名状态不可创建订单：submitted」。
+   **改法**：`routes/invitations.js` 审批/标记成功时同步把对应 `Registration.status` 置为 `approved`。
+   验证：审批后查报名记录，`status=approved`、`focus` 字段正确回带。
+
+3. **【已补】`POST /api/payment/jsapi`（手机端支付）**
+   `routes/payment.js` 新增该接口，契约：
+   ```
+   POST /api/payment/jsapi   header: x-verify-token
+   body: { order_no }
+   响应: { code:0, data:{ jsapi_params:{ appId,timeStamp,nonceStr,package,signType,paySign }, order_no } }
+   ```
+   mock 模式下降级返回 `{ mock:true, jsapi_ready:false }`，H5 据此回落 NATIVE 二维码 + 模拟支付按钮。
+   **待后端团队**：接入真实微信 JSAPI（商户号 / APIv3 密钥 / 平台证书）后返回真 `jsapi_params`，
+   H5 端 `WeixinJSBridge.invoke` 调用链已写好，无需再改前端。
+
+4. **【已补】`GET /api/registrations/mine`（查我的报名）**
+   `routes/registrations.js` 新增，凭 `x-verify-token` 返回本人报名，用于 H5 状态分流：
+   ```
+   GET /api/registrations/mine?event_id=1   header: x-verify-token
+   响应: { code:0, data:{ registered, registration_id, status, ticket_type_id, ticket_name, price,
+                          order_no, order_status, paid, checkin_code, focus, name, company, position } }
+   ```
+   `signup.html` 已按返回值分流：未报名→profile / 待审核→result / 驳回→result / 审核通过→pay / 已支付→eticket。
+   `eticket.html` 也会用它校正状态，本地缓存丢了不丢状态。
+
+### 追加修复（本轮补）
+
+5. **建单幂等**（`services/orderService.js`）
+   同一报名已有「待付款」订单时直接复用，不重复锁库存；过期单就地关单释放库存（不动报名状态，
+   区别于 `closeOrder()` 会把报名置 `closed` 的副作用）。修掉「重复进支付页锁双倍库存、
+   付完一单另一单仍待付款」的问题。验证：连打 3 次建单返回同一订单号，`stock_locked` 只 +1。
+
+6. **`/mine` 选单口径**（`routes/registrations.js`）
+   原按 `id DESC` 取最新订单，历史残留的待付单会把已付款用户误判成待付款。
+   改为优先取 `paid` 订单，其次最近一单。
+
+7. **前端字段对齐**：`Registration` 模型与报名表新增 `focus`（关注方向）列，
+   迁移脚本 `scripts/add-registration-focus.js`；提交接口 `submit-by-phone` 已接收并落库。
+
+8. **票种数据**：`scripts/seed-ec9-design.js` 按设计稿录入标准票 ¥2510 / 尊享票 ¥5100、
+   会场「前海国际会议中心」、会期 2026-12-04。
+
+9. **协议页返回链路**（`agreement.html` + 各入口页）
+   原实现只有 `history.back()`，在微信 webview 里会跳到历史栈里任意一页
+   （实测从报名页点进去却回到电子票页），分享链接直接落地时甚至不动。
+   改为**确定性返回**：入口链接带 `redirect=<来源页>`（`profile.html` 还会用 JS 把当前
+   查询串——含 `reg_id`——补进 redirect），返回按钮优先回来源页，没有 redirect 才回首页。
+   同时：切 Tab 不再跳页（不堆历史栈、不丢 redirect，用 `replaceState` 同步 URL）；
+   标题按 Tab 切换（原来恒显「联系我们」）。
+   验证：6 个场景 18 项断言全过（首页/联系我们/报名流带 reg_id/直接落地/Tab 切换/分享落地）。
+
+10. **法务文档样式隔离**（`agreement.html`）
+    后台存的是自带 `<style>` 的完整 HTML，直接 `innerHTML` 会反噬整个深色页面：
+    文档里的 `body{background:#fff;padding:20px}` 后注入会盖掉我们的底色（顶出一条白边），
+    `*{margin:0;padding:0}` 会冲掉全局重置，弹窗查看器的 `button.close-btn` 是 fixed
+    定位的死按钮还挡住语言切换。
+    现注入前剥掉 `<style>`/`<link>`/`close-btn`，排版由 `.agree-body` 系列规则接管
+    （h1/h2/h3/p/ul/ol/table 等，补回被全局重置吃掉的间距）。
+
+---
+
+## 四之附：报名字段四层对齐（表单 → 提交 → 接口 → 数据库）
+
+实测核对（数据库 `information_schema` + 真实落库记录）：
+
+| H5 表单字段 | 提交参数 | 接口入参 | 落库列 | 列宽 / 限制 |
+|---|---|---|---|---|
+| 手机号（signup 页取，只读） | `phone` | `phone` | `ec9_guests.phone` + `phone_hmac` | varchar(255) / (64)，AES + HMAC |
+| 姓名 `#pName` | `name` | `name` | `ec9_guests.name` | varchar(100) NOT NULL |
+| 公司 `#pCompany` | `company` | `company` | `ec9_guests.company` | varchar(200) |
+| 职务 `#pJob` | `position` | `position` | `ec9_guests.position` | varchar(100) |
+| 邀请人 `#pInviter` | `inviter` | `inviter` | `ec9_invitations.source_bd` | varchar(100) |
+| 关注方向 `#pFocus` | `focus` | `focus` | `ec9_registrations.focus` | varchar(200) |
+| 论坛/场次 `#pSession` | `session_id` | `session_id` | `ec9_registrations.session_id` | int NOT NULL DEFAULT 0 |
+| 票种（卡片点选） | `ticket_type_id` | `ticket_type_id` | `ec9_registrations.ticket_type_id` | int NOT NULL DEFAULT 0 |
+| 活动（URL） | `event_id` | `event_id` | `ec9_registrations.event_id` | int NOT NULL |
+| 协议勾选 | 不传 | — | — | 仅前端门禁 |
+
+**长度对齐（本次修）**：原先 5 个输入框都没设 `maxlength`，而 `name`/`position`/`source_bd`
+是 varchar(100)、`company` varchar(200)——手机端粘贴/自动填充超长值会撞 PG 22001 直接 500。
+现 H5 按列宽加 `maxlength`（100/200/100/100/200），后端 `submit-by-phone` 也加
+`clipField()` 截断兜底（防直连接口）。实测灌 300/400/500 字符：HTTP 200，库里分别是
+100/200/100/100/200，正常字段一个不丢。
+
+**设计稿没有、故不传的字段**：`hotel_12_29` / `hotel_12_30`（住宿）后端有接收、
+默认 false，落在 `extra_fields.accommodation`，H5 无对应输入框——与设计稿一致。
+
+---
+
+## 五、联调状态（本机实跑，后端 7098）
+
+| 环节 | 结果 |
+|---|---|
+| 首页活动信息（时间/地址） | ✅ 接口取到并渲染 |
+| 三语切换（简/繁/En） | ✅ 即时生效，电子票状态词三语正确 |
+| 验证码发送 + 校验 | ✅ 拿到 `x-verify-token` |
+| 票种加载（标准票/尊享票） | ✅ 票卡渲染、价格联动 |
+| 报名提交（含关注方向） | ✅ 返回待审核 → 结果页 |
+| 审批 → 报名状态同步 | ✅ `submitted → approved` |
+| `GET /registrations/mine` 状态分流 | ✅ 已报名按 paid/approved/rejected/pending 分流 |
+| 建单 | ✅ 订单号 `EC9202610…`、金额正确 |
+| 建单幂等（重复进支付页） | ✅ 3 次建单同单号，库存只锁 1 次 |
+| 凭证复用（建单不吃掉 token） | ✅ 同 token 连打 mine/orders/jsapi 全 200 |
+| JSAPI 支付发起 | ✅ 200；mock 模式返回 `jsapi_ready:false`，前端回落二维码 |
+| 模拟支付 `/payment/mock-pay` | ✅ 「模拟支付成功」 |
+| 支付查询 `/payment/query` | ✅ `status:paid`，返回 `checkin_code` |
+| 支付成功自动跳电子票 | ✅ 全链路打通 |
+| 电子票状态 / 签到码 | ✅ 显示「已支付」+ 签到码，`/mine` 兜底 |
+| 协议页返回按钮 | ✅ 存在，且**确定性回来源页**（不再靠 history.back） |
+| 协议页三 Tab 切换 | ✅ 不跳页、不堆历史栈、标题随 Tab 变 |
+| 法务文档渲染 | ✅ 后台真实文档；已隔离自带样式，不污染深色主题 |
+| 签到 / 发票 / 协议页冒烟 | ✅ 无 JS 异常 |
+
+**测试遗留数据**（可清理）：手机号 `13800138002/13800138011/13800138012/13800138013` 的报名记录
+（registration 121–124）、若干测试订单（含已支付单）。
+调试提示：验证码有 60s 重发间隔 + 日上限，`/api/verification/dev-code` 可在 mock 模式下取码联调。
+
+### 仍未闭环（需后端团队/商务）
+
+- **真实微信 JSAPI 支付**：接口契约已就位，缺商户配置（商户号 / APIv3 密钥 / 平台证书），
+  配好后 H5 无需改动。
+- **短信模板缺失**：日志报 `未找到可用模板 messageType=REG_SUCCESS, scene=SHENZHEN, lang=zh-CN`，
+  三语报名成功/支付成功短信都发不出去，需在短信后台按「业务类型 + 场景 + 语种」补模板。
+  不影响 H5 主流程（mock 模式本就不发信），但上线前必须补。
+
+## 六、多人代报 + 审核后付款改版（2026-10-22，按票务优化方案完成）
+
+### 6.1 新流程
+```
+购票人手机验证 → 一人填报多人（1~10人，可混票种，可含本人）
+  → 提交（整单 submitted，group_no 串联）
+  → 后台整单审核（一票否决；「报名审核」页支持批量通过/驳回）
+     ├─ 通过 → 建单锁库存 + 购票人收短信（含付款链接，pay_token 免登录）
+     │          → 购票人付款（微信 JSAPI）
+     │          → 全员 paid + 每人独立入场码 + 全员订票成功短信
+     └─ 驳回 → 全员 rejected（含原因），可修改后重新提交
+  → 入场：各填报人凭自身手机签到（签到页手机号+验证码）
+```
+
+### 6.2 票种（¥ 与折扣按昊哥 2026-10-21 拍板）
+| 票种 | 定价 | 说明 |
+|---|---|---|
+| 学生票 | ¥0 | 现场核验学生证/学籍（不线上上传），H5 选学生票出黄条提示 |
+| 标准票 | ¥510 | 买的多打折：3张9折、5张8折 |
+| 尊享票 | ¥1510 | 标准票权益 + VIP闭门午餐 + 专属参观 + EC9礼盒 |
+| 嘉宾票 | - | 定向邀请，不公开售卖（on_shelf=0） |
+
+折扣口径：**整单付费票张数**（标准+尊享累计）≥5 → 8折、≥3 → 9折；学生票免费不占名额。
+全学生票订单 0 元免支付，审核通过直接确认。
+
+### 6.3 数据与接口增量
+- `ec9_registrations.group_no`；`ec9_orders.group_no / price_detail / discount_rate / pay_token`；`ec9_ticket_types.is_student`
+- `POST /api/registrations/submit-group`（x-verify-token + buyer_phone 比对凭证 HMAC）
+- `POST /api/registrations/group/quote` 实时估价；`GET /api/registrations/group/:groupNo`（管理员 / 购票人凭证 / pay_token 三种鉴权）
+- `POST /api/registrations/group/:groupNo/audit`（管理员，approve/reject，一票否决）
+- `GET  /api/registrations/group-list`（管理员审核工作台数据源，按组聚合）
+- `GET/POST /api/payment/group/:orderNo[/pay|/mock-pay]`（pay_token 免登录支付通道）
+- `/mine` 返回 `group`（成员名单+整单订单）；`markPaid` 遇 group 单自动全员流转+发码+短信
+
+### 6.4 页面变化
+- `profile.html` 重写：动态填报人卡片（首卡=购票人本人手机锁定）、学生票提示、实时费用明细、退款条款
+- `result.html`：按整单实时状态渲染（待审/驳回原因+重提/去支付/全员paid），成员名单
+- `pay.html`：新增短信链接模式（group_no+order_no+pay_token 免登录），按票明细+折扣+合计
+- `eticket.html`：本人签到码 + 整单成员列表（各人状态）
+- 后台新增「报名审核」页（批量勾选 通过/驳回）
+- 整套换肤：深色 → 设计稿蓝 #3056D4（logo mix-blend-mode:screen 融底）
+
+### 6.5 设计稿状态
+MasterGo 已更新为蓝色主题（版本 2026-10-21 17:12），本版 H5 已同步换肤；
+**设计稿未画多人代报表单变体**，多人交互按文字规格实现；设计稿票面仍标 ¥2510 未更新，以昊哥给的票务方案图为准。

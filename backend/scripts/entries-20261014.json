@@ -1,0 +1,26 @@
+{
+  "ec9.order.totalRecords": {
+    "zh-CN": "共 {0} 条记录",
+    "en": "{0} records"
+  },
+  "ec9.order.pageIndicator": {
+    "zh-CN": "第 {0} / {1} 页",
+    "en": "Page {0} / {1}"
+  },
+  "ec9.order.noSlashGuest": {
+    "zh-CN": "订单号 / 参会人",
+    "en": "Order No. / Attendee"
+  },
+  "ec9.filter.startDate": {
+    "zh-CN": "开始日期",
+    "en": "Start date"
+  },
+  "ec9.filter.endDate": {
+    "zh-CN": "结束日期",
+    "en": "End date"
+  },
+  "admin.roleSuperAdmin": {
+    "zh-CN": "系统管理员",
+    "en": "Super Admin"
+  }
+}

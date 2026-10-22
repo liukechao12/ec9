@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>嘉宾邀约签到系统 - 后台管理</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginPage" class="page">
+        <div class="login-container">
+            <div class="login-box">
+                <!-- Logo图标 -->
+                <div class="login-logo">
+                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="32" cy="32" r="32" fill="#155DFC"/>
+                        <path d="M32 16L40 24H36V36H28V24H24L32 16Z" fill="white"/>
+                        <path d="M32 48L24 40H28V28H36V40H40L32 48Z" fill="white"/>
+                    </svg>
+                </div>
+                
+                <!-- 标题区域 -->
+                <div class="login-header">
+                    <h1>嘉宾签到系统</h1>
+                    <p>请登录您的账户</p>
+                </div>
+                
+                <!-- 表单区域 -->
+                <form id="loginForm" class="login-form">
+                    <div class="login-form-group">
+                        <label class="login-label">用户名</label>
+                        <div class="login-input-wrapper">
+                            <svg class="login-input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="7.5" cy="5.83" r="2.5" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M2.5 17.5C2.5 14.17 4.67 11.67 7.5 11.67C10.33 11.67 12.5 14.17 12.5 17.5" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            <input type="text" id="username" class="login-input" required placeholder="请输入用户名">
+                        </div>
+                    </div>
+                    <div class="login-form-group">
+                        <label class="login-label">密码</label>
+                        <div class="login-input-wrapper">
+                            <svg class="login-input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2.5" y="9.17" width="15" height="9.17" rx="1.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M5.83 9.17V5.83C5.83 3.73 7.56 2 9.67 2C11.78 2 13.5 3.73 13.5 5.83V9.17" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            <input type="password" id="password" class="login-input" required placeholder="请输入密码">
+                        </div>
+                    </div>
+                    <button type="submit" class="login-button">登录</button>
+                    <div id="loginError" class="login-error"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主页面 -->
+    <div id="mainPage" class="page hidden">
+        <!-- 顶部标题栏 -->
+        <header class="header">
+            <div class="header-left">
+                <button id="sidebarToggleBtn" class="btn btn-sm btn-outline" onclick="toggleSidebarCollapse()" style="margin-right: 12px;" title="收缩侧边栏">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 4H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M2 8H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M2 12H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <h2 id="pageTitle">控制台</h2>
+            </div>
+            <div class="header-right">
+                <div id="langSwitcher" style="margin-right: 12px;"></div>
+                <div class="user-avatar" id="userAvatar" style="cursor: pointer; position: relative;" onclick="showUserMenu()">
+                    <span id="userInitial">A</span>
+                </div>
+                <span id="userInfo">管理员</span>
+                <div id="userMenu" class="user-menu hidden" style="position: absolute; top: 60px; right: 20px; background: white; border: 1px solid #E5E7EB; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 160px; z-index: 1000;">
+                    <div class="user-menu-item" onclick="showChangePasswordModal()" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #F3F4F6;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 8px; vertical-align: middle;">
+                            <path d="M8 2.67V13.33" stroke="#6B7280" stroke-width="1.33" stroke-linecap="round"/>
+                            <path d="M2.67 8H13.33" stroke="#6B7280" stroke-width="1.33" stroke-linecap="round"/>
+                        </svg>
+                        修改密码
+                    </div>
+                    <div class="user-menu-item" onclick="handleLogout()" style="padding: 12px 16px; cursor: pointer; color: #EF4444;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 8px; vertical-align: middle;">
+                            <path d="M10.67 2.67L13.33 2.67L13.33 13.33L10.67 13.33" stroke="#EF4444" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 10.67L10.67 8L5 5.33" stroke="#EF4444" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 8H10.67" stroke="#EF4444" stroke-width="1.33" stroke-linecap="round"/>
+                        </svg>
+                        退出登录
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <img src="images/logo.svg" alt="Logo" class="logo-icon" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <div class="logo-icon-fallback"></div>
+                <span class="logo-text">签到系统</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2.5 10L10 2.5L17.5 10M10 2.5V17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>控制台</span>
+                </a>
+                <a href="#" class="nav-item" data-page="events">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="2.5" y="3.33" width="15" height="13.33" rx="1.67" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M2.5 8.33H17.5" stroke="currentColor" stroke-width="1.67"/>
+                    </svg>
+                    <span>活动管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="guests">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="7.5" cy="5.83" r="2.5" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M2.5 17.5C2.5 14.17 4.67 11.67 7.5 11.67C10.33 11.67 12.5 14.17 12.5 17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M13.33 11.67L17.5 11.67" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M15.42 9.58L15.42 13.75" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>嘉宾管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="invitations">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2.5 5L10 10L17.5 5M2.5 5L10 10M2.5 5V15L10 10M17.5 5V15L10 10" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>邀约管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="checkins">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M15 2.5L17.5 5L15 7.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M5 2.5L2.5 5L5 7.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2.5 5H17.5" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M5 12.5L2.5 15L5 17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M15 12.5L17.5 15L15 17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2.5 15H17.5" stroke="currentColor" stroke-width="1.67"/>
+                    </svg>
+                    <span>签到管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="sessions">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="2.5" y="3.33" width="15" height="13.33" rx="1.67" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M2.5 7.5H17.5M6.67 2.5V5M13.33 2.5V5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M6.67 11.67H13.33M6.67 14.17H10.83" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>场次管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="ticket-types">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M3.33 7.5V15C3.33 15.83 4 16.67 4.83 16.67H15.83C16.67 16.67 17.5 15.83 17.5 15V7.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2.5 4.17L10 1.67L17.5 4.17V7.5L10 10L2.5 7.5V4.17Z" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M10 10V16.67" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>票种管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="orders">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M4.17 2.5H15.83C16.67 2.5 17.5 3.33 17.5 4.17V15.83C17.5 16.67 16.67 17.5 15.83 17.5H4.17C3.33 17.5 2.5 16.67 2.5 15.83V4.17C2.5 3.33 3.33 2.5 4.17 2.5Z" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M6.67 7.5H13.33M6.67 11.67H13.33M6.67 15H10.83" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>订单管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="reg-audit">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 2.5L16.67 5.83V10C16.67 14.17 13.83 16.79 10 17.5C6.17 16.79 3.33 14.17 3.33 10V5.83L10 2.5Z" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"/>
+                        <path d="M7.08 10L9.17 12.08L13.33 7.92" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>报名审核</span>
+                </a>
+                <a href="#" class="nav-item" data-page="payments">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="2.5" y="5" width="15" height="10" rx="1.67" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M2.5 8.33H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M5.83 12.5H8.33" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>支付流水</span>
+                </a>
+                <a href="#" class="nav-item" data-page="pay-config">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2.5 6.67H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M2.5 13.33H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <circle cx="6.67" cy="6.67" r="2.08" stroke="currentColor" stroke-width="1.67"/>
+                        <circle cx="13.33" cy="13.33" r="2.08" stroke="currentColor" stroke-width="1.67"/>
+                    </svg>
+                    <span data-i18n="ec9.nav.payConfig">支付配置</span>
+                </a>
+                <a href="#" class="nav-item" data-page="statistics">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2.5 15L8.33 9.17L12.5 13.33L17.5 8.33" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12.5 8.33H17.5V13.33" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>统计报表</span>
+                </a>
+                <a href="#" class="nav-item" data-page="bd-management" id="bdManagementNav" style="display: none;">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="6.67" r="2.5" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M3.33 17.5C3.33 14.17 6.17 11.67 10 11.67C13.83 11.67 16.67 14.17 16.67 17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>BD管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="sms">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="2.5" y="3.33" width="15" height="13.33" rx="1.67" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M5 7.5H15" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M5 11.25H11.67" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>短信中心</span>
+                </a>
+                <a href="#" class="nav-item" data-page="sms-config">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="2.5" y="4.17" width="15" height="11.67" rx="1.67" stroke="currentColor" stroke-width="1.67"/>
+                        <path d="M6.67 8.33H13.33" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M6.67 11.67H10" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span data-i18n="ec9.nav.smsConfig">短信配置</span>
+                </a>
+                <a href="#" class="nav-item" data-page="logs">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2.5 3.33H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M2.5 10H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                        <path d="M2.5 16.67H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>操作日志</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="#" class="nav-item" id="logoutBtn">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M13.33 5L17.5 5L17.5 15L13.33 15" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M7.5 13.33L13.33 10L7.5 6.67" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2.5 10H13.33" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                    </svg>
+                    <span>退出登录</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 控制台 -->
+            <div id="dashboard" class="content-page">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-text">
+                                <div class="stat-label">活动总数</div>
+                                <div class="stat-value" id="totalEvents">0</div>
+                                <div class="stat-trend">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 4.67L10.67 4.67L10.67 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M10.67 4.67L8 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M2.67 4.67L2.67 13.33L13.33 13.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span class="trend-text" id="trendEvents">+0 本月</span>
+                                </div>
+                            </div>
+                            <div class="stat-icon-bg stat-icon-blue">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <rect x="3" y="4" width="18" height="16" rx="2" stroke="#155DFC" stroke-width="2"/>
+                                    <path d="M3 8H21" stroke="#155DFC" stroke-width="2"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-text">
+                                <div class="stat-label">嘉宾总数</div>
+                                <div class="stat-value" id="totalGuests">0</div>
+                                <div class="stat-trend">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 4.67L10.67 4.67L10.67 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M10.67 4.67L8 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M2.67 4.67L2.67 13.33L13.33 13.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span class="trend-text" id="trendGuests">+0 本月</span>
+                                </div>
+                            </div>
+                            <div class="stat-icon-bg stat-icon-green">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="9" cy="9" r="4" stroke="#00A63E" stroke-width="2"/>
+                                    <path d="M15 15L21 21" stroke="#00A63E" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-text">
+                                <div class="stat-label">邀约总数</div>
+                                <div class="stat-value" id="totalInvitations">0</div>
+                                <div class="stat-trend">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 4.67L10.67 4.67L10.67 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M10.67 4.67L8 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M2.67 4.67L2.67 13.33L13.33 13.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span class="trend-text" id="trendInvitations">+0 本月</span>
+                                </div>
+                            </div>
+                            <div class="stat-icon-bg stat-icon-purple">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M4 4H20V8L12 14L4 8V4Z" stroke="#9810FA" stroke-width="2" stroke-linejoin="round"/>
+                                    <path d="M4 8L12 14L20 8" stroke="#9810FA" stroke-width="2" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-text">
+                                <div class="stat-label">签到总数</div>
+                                <div class="stat-value" id="totalCheckins">0</div>
+                                <div class="stat-trend">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 4.67L10.67 4.67L10.67 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M10.67 4.67L8 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M2.67 4.67L2.67 13.33L13.33 13.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span class="trend-text" id="trendCheckins">+0 本周</span>
+                                </div>
+                            </div>
+                            <div class="stat-icon-bg stat-icon-gray">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 12L11 14L15 10" stroke="#0A0A0A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <rect x="3" y="4" width="18" height="16" rx="2" stroke="#0A0A0A" stroke-width="2"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recent-events-section">
+                    <div class="section-header">
+                        <h3>近期活动</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="recentEventsTable">
+                            <thead>
+                                <tr>
+                                    <th>活动名称</th>
+                                    <th>状态</th>
+                                    <th>嘉宾数</th>
+                                    <th>签到数</th>
+                                    <th>签到率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentEventsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <div class="action-card" onclick="switchPage('events'); showEventModal();">
+                        <div class="action-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <path d="M16 2.67V29.33" stroke="#155DFC" stroke-width="2.67" stroke-linecap="round"/>
+                                <path d="M2.67 16H29.33" stroke="#155DFC" stroke-width="2.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-content">
+                            <h4>创建活动</h4>
+                            <p>快速创建新的活动</p>
+                        </div>
+                    </div>
+                    <div class="action-card" onclick="switchPage('guests'); showGuestModal();">
+                        <div class="action-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <path d="M16 2.67V29.33" stroke="#00A63E" stroke-width="2.67" stroke-linecap="round"/>
+                                <path d="M2.67 16H29.33" stroke="#00A63E" stroke-width="2.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-content">
+                            <h4>添加嘉宾</h4>
+                            <p>添加新的嘉宾信息</p>
+                        </div>
+                    </div>
+                    <div class="action-card" onclick="switchPage('invitations'); showInvitationModal();">
+                        <div class="action-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <path d="M26.67 8L16 14.67L5.33 8" stroke="#9810FA" stroke-width="2.67" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M5.33 8V24L16 30.67L26.67 24V8" stroke="#9810FA" stroke-width="2.67" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-content">
+                            <h4>发送邀约</h4>
+                            <p>批量发送活动邀约</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 活动管理 -->
+            <div id="events" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showEventModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            创建活动
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="eventSearch" placeholder="搜索活动名称或地点..." class="search-input">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="eventsTable">
+                        <thead>
+                            <tr>
+                                <th>活动名称</th>
+                                <th>日期</th>
+                                <th>地点</th>
+                                <th>状态</th>
+                                <th>嘉宾/签到</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 嘉宾管理 -->
+            <div id="guests" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="showImportModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            导入Excel
+                        </button>
+                        <button class="btn btn-primary" onclick="showGuestModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            添加嘉宾
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="guestSearch" placeholder="搜索嘉宾姓名、公司或职位..." class="search-input" onkeyup="searchGuests()">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">总嘉宾数</div>
+                        <div class="stat-mini-value" id="totalGuestsMini">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">VIP嘉宾</div>
+                        <div class="stat-mini-value" id="vipGuests">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">技术类</div>
+                        <div class="stat-mini-value" id="techGuests">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">高管</div>
+                        <div class="stat-mini-value" id="execGuests">0</div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="guestsTable">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>公司</th>
+                                <th>职位</th>
+                                <th style="width: 150px;">联系方式</th>
+                                <th style="width: 100px;">BD</th>
+                                <th style="min-width: 180px;">标签</th>
+                                <th style="width: 120px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="guestsTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="guestPagination"></div>
+            </div>
+
+            <!-- 邀约管理 -->
+            <div id="invitations" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">总邀约数</div>
+                        <div class="stat-mini-value" id="totalInvitationsMini">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-success">
+                        <div class="stat-mini-label">已接受</div>
+                        <div class="stat-mini-value" id="acceptedInvitations">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-warning">
+                        <div class="stat-mini-label">待回复</div>
+                        <div class="stat-mini-value" id="pendingInvitations">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-warning" style="background: #FEF3C7;">
+                        <div class="stat-mini-label" style="color: #92400E;">待审批</div>
+                        <div class="stat-mini-value" id="pendingApprovalInvitations" style="color: #92400E;">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-danger">
+                        <div class="stat-mini-label">已拒绝</div>
+                        <div class="stat-mini-value" id="rejectedInvitations">0</div>
+                    </div>
+                </div>
+                <div class="page-header">
+                    <div class="header-actions">
+                        <div class="dropdown-wrapper">
+                            <select class="dropdown-select">
+                                <option>全部状态</option>
+                                <option>已接受</option>
+                                <option>待回复</option>
+                                <option>已拒绝</option>
+                            </select>
+                        </div>
+                        <button id="adminCheckinBtn" class="btn btn-primary" onclick="adminCheckinSelectedInvitations()" style="margin-right: 8px; display: none;">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M16.67 5L7.5 14.17L3.33 10" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            签到
+                        </button>
+                        <button class="btn btn-outline" onclick="exportInvitations()" style="margin-right: 8px;">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V12.5M10 2.5L6.67 5.83M10 2.5L13.33 5.83" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M4.17 12.5V14.17C4.17 15.1 4.93 15.83 5.83 15.83H14.17C15.07 15.83 15.83 15.1 15.83 14.17V12.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            导出Excel
+                        </button>
+                        <button class="btn btn-outline" onclick="showInvitationModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            创建邀约
+                        </button>
+                        <button class="btn btn-primary" onclick="showBatchInvitationModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            批量邀约
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="invitationSearch" placeholder="搜索嘉宾、活动或公司..." class="search-input">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <select id="registrationStatusFilter" class="filter-select" style="margin-left: 12px; padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 6px; background: white; font-size: 14px;">
+                            <option value="">全部状态</option>
+                            <option value="0">待回复</option>
+                            <option value="1">待审批</option>
+                            <option value="2">已接受</option>
+                            <option value="3">已拒绝</option>
+                        </select>
+                        <input id="invitationBdFilter" class="filter-select" list="invitationBdFilterList" placeholder="BD负责人（可输入）" style="margin-left: 12px; padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 6px; background: white; font-size: 14px; display: none;" />
+                        <datalist id="invitationBdFilterList"></datalist>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="invitationsTable">
+                        <thead>
+                            <tr>
+                                <th id="invitationSelectHeader" style="width: 44px; display: none; text-align: center;">
+                                    <input id="invitationSelectAll" type="checkbox" onchange="toggleSelectAllInvitations(this.checked)" />
+                                </th>
+                                <th>嘉宾姓名</th>
+                                <th>公司</th>
+                                <th>职位</th>
+                                <th>活动名称</th>
+                                <th>BD联系人</th>
+                                <th>发送时间</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invitationsTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="invitationPagination" style="margin-top: 24px; padding: 16px 0;"></div>
+            </div>
+
+            <!-- 签到管理 -->
+            <div id="checkins" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">总签到数</div>
+                        <div class="stat-mini-value" id="totalCheckinsMini">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-blue">
+                        <div class="stat-mini-label">今日签到</div>
+                        <div class="stat-mini-value" id="todayCheckins">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-success">
+                        <div class="stat-mini-label">本周签到</div>
+                        <div class="stat-mini-value" id="weekCheckins">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-purple">
+                        <div class="stat-mini-label">现场签到</div>
+                        <div class="stat-mini-value" id="onsiteCheckins">0</div>
+                    </div>
+                </div>
+                <div class="page-header">
+                    <div class="header-actions">
+                        <div class="dropdown-wrapper">
+                            <select class="dropdown-select">
+                                <option>全部活动</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M2.5 10L10 2.5L17.5 10" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            导出记录
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="checkinSearch" placeholder="搜索嘉宾、活动或公司..." class="search-input">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="checkinsTable">
+                        <thead>
+                            <tr>
+                                <th>嘉宾姓名</th>
+                                <th>公司</th>
+                                <th>活动名称</th>
+                                <th>签到时间</th>
+                                <th>签到地点</th>
+                                <th>地点类型</th>
+                            </tr>
+                        </thead>
+                        <tbody id="checkinsTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="timeline-section">
+                    <div class="section-header">
+                        <h3>签到时间线</h3>
+                    </div>
+                    <div class="timeline-container" id="checkinTimeline"></div>
+                </div>
+            </div>
+
+            <!-- 统计报表 -->
+            <div id="statistics" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <div class="dropdown-wrapper">
+                            <select id="eventSelect" class="dropdown-select" onchange="loadStatistics()">
+                                <option value="">全部活动</option>
+                            </select>
+                        </div>
+                        <div class="dropdown-wrapper" style="margin-left: 12px;">
+                            <select id="monthSelect" class="dropdown-select" onchange="loadStatistics()">
+                                <option value="">选择月份</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="loadStatistics()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M2.5 10L10 2.5L17.5 10" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            刷新数据
+                        </button>
+                    </div>
+                </div>
+                <div id="statisticsContent"></div>
+            </div>
+
+            <!-- BD管理 -->
+            <div id="bd-management" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="showBdImportModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            导入BD
+                        </button>
+                        <button class="btn btn-primary" onclick="showBdModal()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 2.5V17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                                <path d="M2.5 10H17.5" stroke="white" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                            添加BD
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="bdSearch" placeholder="搜索用户名、姓名、联系方式..." class="search-input">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="bdTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>姓名</th>
+                                <th>联系方式</th>
+                                <th>角色</th>
+                                <th>状态</th>
+                                <th>最后登录</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bdTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="bdPagination"></div>
+            </div>
+
+            <!-- 短信中心 -->
+            <div id="sms" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-outline btn-sm" onclick="loadSmsCenter()">
+                            刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">模板数量</div>
+                        <div class="stat-mini-value" id="smsTemplateCount">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">规则数量</div>
+                        <div class="stat-mini-value" id="smsRuleCount">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">已发送短信</div>
+                        <div class="stat-mini-value" id="smsLogCount">0</div>
+                    </div>
+                </div>
+
+                <div class="sms-tabs">
+                    <button class="sms-tab active" data-tab="sms-templates" onclick="switchSmsTab('sms-templates')">模板配置</button>
+                    <button class="sms-tab" data-tab="sms-rules" onclick="switchSmsTab('sms-rules')">规则配置</button>
+                    <button class="sms-tab" data-tab="sms-logs" onclick="switchSmsTab('sms-logs')">发送日志</button>
+                    <button class="sms-tab" data-tab="sms-manual" onclick="switchSmsTab('sms-manual')">手动发送</button>
+                </div>
+
+                <div id="sms-templates" class="sms-tab-panel">
+                    <div class="page-header" style="margin-top: 16px;">
+                        <div class="header-actions">
+                            <button class="btn btn-primary btn-sm" onclick="createSmsTemplate()">新增模板</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>名称</th>
+                                    <th>类型</th>
+                                    <th>场景</th><th>语言</th>
+                                    <th>阿里模板CODE</th>
+                                    <th>签名</th>
+                                    <th>启用</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="smsTemplateTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sms-rules" class="sms-tab-panel hidden">
+                    <div class="page-header" style="margin-top: 16px;">
+                        <div class="header-actions">
+                            <button class="btn btn-primary btn-sm" onclick="createSmsRule()">新增规则</button>
+                            <button class="btn btn-outline btn-sm" onclick="loadSmsCenter()" title="刷新规则列表">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+                                    <path d="M8 1.33V4.67M8 4.67L5.33 2M8 4.67L10.67 2M8 14.67V11.33M8 11.33L10.67 14M8 11.33L5.33 14M13.33 8C13.33 11 10.67 13.33 8 13.33C5.33 13.33 2.67 11 2.67 8M2.67 8C2.67 5 5.33 2.67 8 2.67C10.67 2.67 13.33 5 13.33 8" stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>名称</th>
+                                    <th>类型</th>
+                                    <th>活动ID</th>
+                                    <th>模板ID</th>
+                                    <th>触发方式</th>
+                                    <th>最大发送次数</th>
+                                    <th>启用</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="smsRuleTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sms-logs" class="sms-tab-panel hidden">
+                    <div class="table-container" style="margin-top: 16px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>类型</th>
+                                    <th>活动ID</th>
+                                    <th>嘉宾ID</th>
+                                    <th>手机号</th>
+                                    <th>场景</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="smsLogTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sms-manual" class="sms-tab-panel hidden">
+                    <div class="modal-body" style="padding: 0; margin-top: 16px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>选择活动 <span class="required">*</span></label>
+                                <select id="smsEventSelect"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>选择嘉宾 <span class="required">*</span></label>
+                                <select id="smsGuestSelect"></select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>指定短信类型（可选）</label>
+                            <input type="text" id="smsMessageTypeInput" placeholder="如 REG_SUCCESS，留空则按所有规则判断">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary btn-sm" onclick="sendSmsByRules()">根据规则发送短信</button>
+                        </div>
+                        <div class="form-group">
+                            <label>发送结果</label>
+                            <div id="smsSendResult" class="sms-send-result">尚未发送</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作日志 -->
+            <div id="logs" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label">总操作数</div>
+                        <div class="stat-mini-value" id="totalLogs">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-success">
+                        <div class="stat-mini-label">成功操作</div>
+                        <div class="stat-mini-value" id="successLogs">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-danger">
+                        <div class="stat-mini-label">失败操作</div>
+                        <div class="stat-mini-value" id="failedLogs">0</div>
+                    </div>
+                    <div class="stat-mini-card stat-mini-blue">
+                        <div class="stat-mini-label">今日操作</div>
+                        <div class="stat-mini-value" id="todayLogs">0</div>
+                    </div>
+                </div>
+                <div class="page-header">
+                    <div class="header-actions">
+                        <div class="dropdown-wrapper">
+                            <select class="dropdown-select">
+                                <option>全部操作</option>
+                                <option>创建活动</option>
+                                <option>添加嘉宾</option>
+                                <option>发送邀约</option>
+                                <option>编辑活动</option>
+                                <option>导入嘉宾</option>
+                                <option>删除嘉宾</option>
+                                <option>签到记录</option>
+                                <option>导出报表</option>
+                                <option>修改嘉宾</option>
+                                <option>重新发送邀约</option>
+                                <option>登录系统</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M2.5 10L10 2.5L17.5 10" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            导出日志
+                        </button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="logSearch" placeholder="搜索操作人、动作或目标..." class="search-input">
+                            <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <circle cx="9.17" cy="9.17" r="6.67" stroke="#99A1AF" stroke-width="1.67"/>
+                                <path d="M15.83 15.83L13.88 13.88" stroke="#99A1AF" stroke-width="1.67" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="logsTable">
+                        <thead>
+                            <tr>
+                                <th>操作人</th>
+                                <th>操作动作</th>
+                                <th>操作目标</th>
+                                <th>操作时间</th>
+                                <th>IP地址</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="timeline-section">
+                    <div class="section-header">
+                        <h3>最近操作时间线</h3>
+                    </div>
+                    <div class="timeline-container" id="logTimeline"></div>
+                </div>
+            </div>
+
+            <!-- ==================== 场次管理（EC9 新增） ==================== -->
+            <div id="sessions" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-outline btn-sm" onclick="loadSessions()"><span data-i18n="ec9.action.refresh">刷新</span></button>
+                        <button class="btn btn-primary btn-sm" onclick="openSessionModal()"><span data-i18n="ec9.session.create">新增场次</span></button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th><span data-i18n="ec9.session.title">场次名称</span></th><th><span data-i18n="ec9.session.start">开始时间</span></th><th><span data-i18n="ec9.session.end">结束时间</span></th>
+                                <th><span data-i18n="ec9.session.location">地点</span></th><th><span data-i18n="ec9.session.capacity">容量</span></th><th><span data-i18n="ec9.field.sold">已售</span></th><th><span data-i18n="ec9.field.locked">锁定</span></th><th><span data-i18n="ec9.field.remaining">剩余</span></th>
+                                <th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.field.sort">排序</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ==================== 票种管理（EC9 新增） ==================== -->
+            <div id="ticket-types" class="content-page hidden">
+                <div class="page-header">
+                    <div class="header-actions">
+                        <button class="btn btn-outline btn-sm" onclick="loadTicketTypes()"><span data-i18n="ec9.action.refresh">刷新</span></button>
+                        <button class="btn btn-primary btn-sm" onclick="openTicketTypeModal()"><span data-i18n="ec9.tt.create">新增票种</span></button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th><span data-i18n="ec9.tt.title">票种名称</span></th><th><span data-i18n="ec9.tt.priceShort">价格</span></th>
+                                <th><span data-i18n="ec9.tt.stockTotal">总库存</span></th><th><span data-i18n="ec9.field.locked">锁定</span></th><th><span data-i18n="ec9.field.sold">已售</span></th><th><span data-i18n="ec9.field.remaining">剩余</span></th>
+                                <th><span data-i18n="ec9.tt.saleEnd">售卖截止</span></th><th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.field.sort">排序</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ticketTypeTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ==================== 订单管理（EC9 新增） ==================== -->
+            <div id="orders" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.order.total">订单总数</span></div>
+                        <div class="stat-mini-value" id="orderStatTotal">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.order.paid">已支付</span></div>
+                        <div class="stat-mini-value" id="orderStatPaid">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.order.pending">待支付</span></div>
+                        <div class="stat-mini-value" id="orderStatPending">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.order.paidAmount">已支付金额</span></div>
+                        <div class="stat-mini-value" id="orderStatAmount">¥0.00</div>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <select id="orderFilterStatus" onchange="loadOrders()">
+                        <option value="">全部状态</option>
+                        <option value="pending">待支付</option>
+                        <option value="paid">已支付</option>
+                        <option value="closed">已关闭</option>
+                        <option value="refunded">已退款</option>
+                    </select>
+                    <input type="text" id="orderFilterKeyword" placeholder="订单号 / 参会人" data-i18n-ph="ec9.order.noSlashGuest" onkeydown="if(event.key==='Enter')loadOrders()">
+                    <input type="date" id="orderFilterStart" title="开始日期" data-i18n-title="ec9.filter.startDate">
+                    <input type="date" id="orderFilterEnd" title="结束日期" data-i18n-title="ec9.filter.endDate">
+                    <button class="btn btn-primary btn-sm" onclick="loadOrders()"><span data-i18n="ec9.action.query">查询</span></button>
+                    <button class="btn btn-outline btn-sm" onclick="resetOrderFilter()"><span data-i18n="ec9.action.reset">重置</span></button>
+                    <button class="btn btn-outline btn-sm" onclick="exportOrdersCsv()"><span data-i18n="ec9.action.export">导出 CSV</span></button>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><span data-i18n="ec9.order.no">订单号</span></th><th><span data-i18n="ec9.order.guest">参会人</span></th><th><span data-i18n="ec9.order.tt">票种</span></th><th><span data-i18n="ec9.order.session">场次</span></th>
+                                <th><span data-i18n="ec9.field.quantity">数量</span></th><th><span data-i18n="ec9.field.amount">金额</span></th><th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.order.createdAt">下单时间</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="orderPagination"></div>
+            </div>
+
+            <!-- ==================== 报名审核（多人代报整单） ==================== -->
+            <div id="reg-audit" class="content-page hidden">
+                <div class="filter-bar">
+                    <select id="regAuditStatus" onchange="loadRegAudit()">
+                        <option value="">全部状态</option>
+                        <option value="submitted">待审核</option>
+                        <option value="approved">已通过·待支付</option>
+                        <option value="paid">已支付</option>
+                        <option value="rejected">已驳回</option>
+                    </select>
+                    <input type="text" id="regAuditKeyword" placeholder="组号 / 姓名 / 手机号" onkeydown="if(event.key==='Enter')loadRegAudit()">
+                    <button class="btn btn-primary btn-sm" onclick="loadRegAudit()">查询</button>
+                    <button class="btn btn-outline btn-sm" onclick="regAuditBulk('approve')">批量通过</button>
+                    <button class="btn btn-outline btn-sm" onclick="regAuditBulk('reject')">批量驳回</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="regAuditCkAll"></th>
+                                <th>组号</th><th>填报人</th><th>购票人手机</th><th>票种</th><th>人数</th><th>状态</th><th>提交时间</th><th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="regAuditBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ==================== 支付流水（EC9 新增） ==================== -->
+            <div id="payments" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.pay.total">流水总数</span></div>
+                        <div class="stat-mini-value" id="payStatTotal">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.pay.success">成功</span></div>
+                        <div class="stat-mini-value" id="payStatSuccess">0</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.pay.successAmount">成功金额</span></div>
+                        <div class="stat-mini-value" id="payStatAmount">¥0.00</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.pay.diff">对账差异</span></div>
+                        <div class="stat-mini-value" id="payStatDiff">0</div>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <select id="payFilterStatus" onchange="loadPayments()">
+                        <option value="">全部状态</option>
+                        <option value="success">成功</option>
+                        <option value="failed">失败</option>
+                        <option value="refunded">已退款</option>
+                    </select>
+                    <input type="text" id="payFilterKeyword" placeholder="商户订单号" onkeydown="if(event.key==='Enter')loadPayments()">
+                    <input type="date" id="payFilterStart" title="开始日期">
+                    <input type="date" id="payFilterEnd" title="结束日期">
+                    <button class="btn btn-primary btn-sm" onclick="loadPayments()"><span data-i18n="ec9.action.query">查询</span></button>
+                    <button class="btn btn-outline btn-sm" onclick="resetPayFilter()"><span data-i18n="ec9.action.reset">重置</span></button>
+                    <button class="btn btn-outline btn-sm" onclick="runReconcile()"><span data-i18n="ec9.pay.reconcile">对账</span></button>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><span data-i18n="ec9.pay.outTradeNo">商户订单号</span></th><th><span data-i18n="ec9.order.guest">参会人</span></th><th><span data-i18n="ec9.field.amount">金额</span></th><th><span data-i18n="ec9.pay.channel">渠道</span></th>
+                                <th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.order.wxTrans">微信交易号</span></th><th><span data-i18n="ec9.order.paidAt">支付时间</span></th><th><span data-i18n="ec9.pay.reconcile">对账</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="paymentPagination"></div>
+            </div>
+
+            <!-- 支付配置（微信支付资质，管理员可改，改完立即生效） -->
+            <div id="pay-config" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.payCfg.currentMode">当前模式</span></div>
+                        <div class="stat-mini-value" id="pcModeText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.payCfg.source">配置来源</span></div>
+                        <div class="stat-mini-value" id="pcSourceText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.payCfg.channelStatus">渠道状态</span></div>
+                        <div class="stat-mini-value" id="pcEnabledText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.payCfg.updatedAt">最近更新</span></div>
+                        <div class="stat-mini-value" id="pcUpdatedText">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container" style="padding: 20px;">
+                    <form id="payConfigForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.mode">运行模式</span></label>
+                                <!-- option 由 JS 按当前语种填充（fillPayConfigForm），避免 HTML 里写死中文 -->
+                                <select id="pcMode" name="mode"></select>
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.payCfg.modeHint">mock 不产生真实交易；客户资质到位后切 real 并填写商户参数</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.enabled">渠道状态</span></label>
+                                <select id="pcEnabled" name="enabled"></select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.appId">公众号 AppID</span></label>
+                                <input type="text" id="pcAppId" name="app_id" data-i18n-ph="ec9.payCfg.appIdPh" placeholder="wx 开头的 AppID">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.payCfg.appIdHint">Native 扫码支付填公众号或小程序的 AppID</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.mchId">商户号</span></label>
+                                <input type="text" id="pcMchId" name="mch_id" data-i18n-ph="ec9.payCfg.mchIdPh" placeholder="微信支付商户号">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.apiKey">API v2 密钥</span></label>
+                                <input type="password" id="pcApiKey" name="api_key" autocomplete="new-password" data-i18n-ph="ec9.payCfg.apiKeyPh" placeholder="留空表示不修改">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;" id="pcApiKeyMask">-</div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.apiV3Key">API v3 密钥（预留）</span></label>
+                                <input type="password" id="pcApiV3Key" name="api_v3_key" autocomplete="new-password" data-i18n-ph="ec9.payCfg.apiKeyPh" placeholder="留空表示不修改">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;" id="pcApiV3KeyMask">-</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.signType">签名类型</span></label>
+                                <select id="pcSignType" name="sign_type">
+                                    <option value="MD5">MD5</option>
+                                    <option value="HMAC-SHA256">HMAC-SHA256</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.certPath">API 证书路径（退款用）</span></label>
+                                <input type="text" id="pcCertPath" name="cert_path" data-i18n-ph="ec9.payCfg.certPathPh" placeholder="apiclient_cert.p12 绝对路径">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.payCfg.certHint">仅退款需要，下单不受影响；留空则退款不可用</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.notifyUrl">支付回调地址</span></label>
+                                <input type="text" id="pcNotifyUrl" name="notify_url" data-i18n-ph="ec9.payCfg.notifyUrlPh" placeholder="/api/payment/notify">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.payCfg.notifyHint">填相对路径会自动拼接站点域名；生产环境必须是 https 且外网可访问</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.refundNotifyUrl">退款回调地址</span></label>
+                                <input type="text" id="pcRefundNotifyUrl" name="refund_notify_url" data-i18n-ph="ec9.payCfg.refundNotifyUrlPh" placeholder="可留空">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.payCfg.expire">订单有效期（分钟）</span></label>
+                                <input type="number" id="pcExpire" name="order_expire_minutes" min="1" max="1440" value="30">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.payCfg.expireHint">超时未支付自动关单并释放库存</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.field.remark">备注</span></label>
+                                <input type="text" id="pcRemark" name="remark" data-i18n-ph="ec9.payCfg.remarkPh" placeholder="选填">
+                            </div>
+                        </div>
+
+                        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="savePayConfig()"><span data-i18n="ec9.payCfg.save">保存并生效</span></button>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="testPayConfig()"><span data-i18n="ec9.payCfg.test">配置自检</span></button>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="loadPayConfig()"><span data-i18n="ec9.payCfg.reload">重新载入</span></button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="pcTestResult" style="margin-top:16px;"></div>
+            </div>
+
+            <!-- 短信配置（通道凭证与验证码参数，管理员可改，改完立即生效） -->
+            <div id="sms-config" class="content-page hidden">
+                <div class="stats-mini">
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.smsCfg.channelStatus">通道状态</span></div>
+                        <div class="stat-mini-value" id="scStatusText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.smsCfg.source">配置来源</span></div>
+                        <div class="stat-mini-value" id="scSourceText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.smsCfg.signName">短信签名</span></div>
+                        <div class="stat-mini-value" id="scSignText">-</div>
+                    </div>
+                    <div class="stat-mini-card">
+                        <div class="stat-mini-label"><span data-i18n="ec9.payCfg.updatedAt">最近更新</span></div>
+                        <div class="stat-mini-value" id="scUpdatedText">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container" style="padding: 20px;">
+                    <form id="smsConfigForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.enabled">通道状态</span></label>
+                                <select id="scEnabled" name="enabled"></select>
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                                    <span data-i18n="ec9.smsCfg.enabledHint">停用时不发真实短信，走本地 mock（开发期可先停用）</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.region">地域</span></label>
+                                <input type="text" id="scRegion" name="region" data-i18n-ph="ec9.smsCfg.regionPh" placeholder="cn-hangzhou">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.akId">AccessKey ID</span></label>
+                                <input type="text" id="scAkId" name="access_key_id" data-i18n-ph="ec9.smsCfg.akIdPh" placeholder="LTAI 开头">
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.akSecret">AccessKey Secret</span></label>
+                                <input type="password" id="scAkSecret" name="access_key_secret" autocomplete="new-password" data-i18n-ph="ec9.payCfg.apiKeyPh" placeholder="留空表示不修改">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;" id="scAkSecretMask">-</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.signName">短信签名</span></label>
+                                <input type="text" id="scSignName" name="sign_name" data-i18n-ph="ec9.smsCfg.signPh" placeholder="需在服务商后台报备通过">
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.verifyTpl">验证码模板 CODE</span></label>
+                                <input type="text" id="scVerifyTpl" name="verify_template_code" data-i18n-ph="ec9.smsCfg.verifyTplPh" placeholder="SMS_ 开头">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.expire">验证码有效期（分钟）</span></label>
+                                <input type="number" id="scExpire" name="code_expire_minutes" min="1" max="60" value="5">
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.resend">重发间隔（秒）</span></label>
+                                <input type="number" id="scResend" name="code_resend_seconds" min="1" value="60">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.dailyLimit">单号码每日上限</span></label>
+                                <input type="number" id="scDaily" name="code_daily_limit" min="1" max="100" value="10">
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.maxAttempts">验证码最大尝试次数</span></label>
+                                <input type="number" id="scAttempts" name="code_max_attempts" min="1" value="5">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.smsCfg.endpoint">Endpoint（可留空）</span></label>
+                                <input type="text" id="scEndpoint" name="endpoint" data-i18n-ph="ec9.smsCfg.endpointPh" placeholder="dysmsapi.aliyuncs.com">
+                            </div>
+                            <div class="form-group">
+                                <label><span data-i18n="ec9.field.remark">备注</span></label>
+                                <input type="text" id="scRemark" name="remark" data-i18n-ph="ec9.payCfg.remarkPh" placeholder="选填">
+                            </div>
+                        </div>
+
+                        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="saveSmsConfig()"><span data-i18n="ec9.payCfg.save">保存并生效</span></button>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="testSmsConfig()"><span data-i18n="ec9.payCfg.test">配置自检</span></button>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="loadSmsConfig()"><span data-i18n="ec9.payCfg.reload">重新载入</span></button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="scTestResult" style="margin-top:16px;"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 模态框容器 -->
+    <div id="modalContainer"></div>
+
+    <!-- 场次模态框（EC9 新增） -->
+    <div id="sessionModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="sessionModalTitle">新增场次</h2>
+                <button class="modal-close" onclick="closeSessionModal()">×</button>
+            </div>
+            <form id="sessionForm" onsubmit="handleSessionSubmit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>场次名称</label>
+                        <input type="text" id="sessionName" name="name" required placeholder="请输入场次名称">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>开始时间</label>
+                            <input type="datetime-local" id="sessionStartTime" name="start_time" required>
+                        </div>
+                        <div class="form-group">
+                            <label>结束时间</label>
+                            <input type="datetime-local" id="sessionEndTime" name="end_time">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>地点</label>
+                            <input type="text" id="sessionLocation" name="location" placeholder="如：深圳国际会展中心">
+                        </div>
+                        <div class="form-group">
+                            <label>容量</label>
+                            <input type="number" id="sessionCapacity" name="capacity" min="0" value="0" placeholder="0 表示不限">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>排序</label>
+                            <input type="number" id="sessionSortOrder" name="sort_order" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select id="sessionStatus" name="status">
+                                <option value="1">启用</option>
+                                <option value="0">停用</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeSessionModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 票种模态框（EC9 新增） -->
+    <div id="ticketTypeModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="ticketTypeModalTitle">新增票种</h2>
+                <button class="modal-close" onclick="closeTicketTypeModal()">×</button>
+            </div>
+            <form id="ticketTypeForm" onsubmit="handleTicketTypeSubmit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>票种名称</label>
+                        <input type="text" id="ttName" name="name" required placeholder="如：早鸟票">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>价格（元）</label>
+                            <input type="number" id="ttPrice" name="price" min="0" step="0.01" required value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>总库存</label>
+                            <input type="number" id="ttStockTotal" name="stock_total" min="0" value="0" placeholder="0 表示不限">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>售卖开始</label>
+                            <input type="datetime-local" id="ttSaleStart" name="sale_start">
+                        </div>
+                        <div class="form-group">
+                            <label>售卖截止</label>
+                            <input type="datetime-local" id="ttSaleEnd" name="sale_end">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>排序</label>
+                            <input type="number" id="ttSortOrder" name="sort_order" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select id="ttStatus" name="status">
+                                <option value="1">上架</option>
+                                <option value="0">下架</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>描述</label>
+                        <textarea id="ttDescription" name="description" rows="2" placeholder="票种说明（选填）"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>多语言名称（选填，留空则与上方一致）</label>
+                        <div class="form-row">
+                            <input type="text" id="ttNameTw" placeholder="繁体中文名称">
+                            <input type="text" id="ttNameEn" placeholder="English name">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeTicketTypeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 订单详情模态框（EC9 新增） -->
+    <div id="orderModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>订单详情</h2>
+                <button class="modal-close" onclick="closeOrderModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="orderDetailBody"></div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>后台备注</label>
+                    <textarea id="orderRemark" rows="3" placeholder="仅后台可见，参会人看不到"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeOrderModal()">关闭</button>
+                <button type="button" class="btn btn-outline" onclick="refreshOrderFromWechat()" title="向微信支付查询该订单的真实状态" data-i18n-title="ec9.order.phWxQuery"><span data-i18n="ec9.order.wxQuery">微信查单</span></button>
+                <button type="button" class="btn btn-primary" onclick="saveOrderRemark()"><span data-i18n="ec9.order.saveRemark">保存备注</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 支付详情模态框（EC9 新增） -->
+    <div id="paymentModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>支付详情</h2>
+                <button class="modal-close" onclick="closePaymentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="paymentDetailBody"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closePaymentModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建活动模态框 -->
+    <div id="eventModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="eventModalTitle">创建活动</h2>
+                <button class="modal-close" onclick="closeEventModal()">×</button>
+            </div>
+            <form id="eventForm" onsubmit="handleEventSubmit(event)">
+                <div class="modal-body">
+                    <!-- 活动名称 -->
+                    <div class="form-group">
+                        <label data-i18n="admin.eventNameLabel"></label>
+                        <input type="text" id="eventName" name="name" required
+                               placeholder="请输入活动名称" data-i18n-ph="admin.eventNamePlaceholder">
+                    </div>
+                    <!-- 活动描述 -->
+                    <div class="form-group">
+                        <label data-i18n="admin.eventDescription"></label>
+                        <textarea id="eventDescription" name="description" rows="3"
+                                  placeholder="请输入活动描述" data-i18n-ph="admin.eventDescPlaceholder"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label data-i18n="admin.startTime"></label>
+                            <input type="datetime-local" id="eventStartTime" name="start_time" required>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="admin.endTime"></label>
+                            <input type="datetime-local" id="eventEndTime" name="end_time" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="admin.eventLocation"></label>
+                        <input type="text" id="eventLocation" name="location"
+                               placeholder="请输入活动地点" data-i18n-ph="admin.eventLocationPlaceholder">
+                    </div>
+
+                    <!-- 多语内容：一个 JSON 字段搞定，加语种不用改表结构 -->
+                    <div class="form-group">
+                        <div class="i18n-panel-head">
+                            <label data-i18n="admin.multilingual"></label>
+                            <button type="button" class="btn-translate-all" id="btnTranslateAll"
+                                    onclick="translateAllFields()"
+                                    data-i18n="admin.autoTranslateAll"></button>
+                        </div>
+                        <div class="i18n-hint" data-i18n="admin.i18nPanelHint"></div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">繁</span>
+                                <b data-i18n="admin.nameTw"></b>
+                                <span class="i18n-lang-state" id="stateNameTw"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="name" onclick="translateField('name')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <input type="text" id="i18nNameTw" placeholder="活动名稱（繁體）"
+                                   data-i18n-ph="admin.eventNameTwPlaceholder">
+                        </div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">EN</span>
+                                <b data-i18n="admin.nameEn"></b>
+                                <span class="i18n-lang-state" id="stateNameEn"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="name" onclick="translateField('name')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <input type="text" id="i18nNameEn" placeholder="Event name (English)"
+                                   data-i18n-ph="admin.eventNameEnPlaceholder">
+                        </div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">繁</span>
+                                <span data-i18n="admin.descTw"></span>
+                                <span class="i18n-lang-state" id="stateDescTw"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="description" onclick="translateField('description')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <textarea id="i18nDescTw" rows="2" placeholder="活動描述（繁體）"
+                                      data-i18n-ph="admin.eventDescTwPlaceholder"></textarea>
+                        </div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">EN</span>
+                                <span data-i18n="admin.descEn"></span>
+                                <span class="i18n-lang-state" id="stateDescEn"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="description" onclick="translateField('description')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <textarea id="i18nDescEn" rows="2" placeholder="Event description (English)"
+                                      data-i18n-ph="admin.eventDescEnPlaceholder"></textarea>
+                        </div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">繁</span>
+                                <span data-i18n="admin.locationTw"></span>
+                                <span class="i18n-lang-state" id="stateLocationTw"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="location" onclick="translateField('location')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <input type="text" id="i18nLocationTw" placeholder="活動地點（繁體）"
+                                   data-i18n-ph="admin.eventLocationTwPlaceholder">
+                        </div>
+
+                        <div class="i18n-lang-block">
+                            <div class="i18n-lang-head">
+                                <span class="i18n-badge">EN</span>
+                                <span data-i18n="admin.locationEn"></span>
+                                <span class="i18n-lang-state" id="stateLocationEn"></span>
+                                <button type="button" class="btn-translate-one"
+                                        data-field="location" onclick="translateField('location')"
+                                        data-i18n="admin.autoTranslate"></button>
+                            </div>
+                            <input type="text" id="i18nLocationEn" placeholder="Venue (English)"
+                                   data-i18n-ph="admin.eventLocationEnPlaceholder">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>绑定页面地址</label>
+                        <input type="text" id="eventPageUrl" name="page_url" placeholder="请输入页面URL（如 /pages/ec8 或 https://...）" data-i18n-ph="admin.pageUrlPlaceholder">
+                        <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">可以是内部地址(如 /pages/ec8)或外部完整URL</div>
+                    </div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="eventStatus" name="status">
+                            <option value="1">进行中</option>
+                            <option value="0">已取消</option>
+                            <option value="2">已结束</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 动态扩展字段 -->
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <label>扩展属性</label>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="addEventExtraField()">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 2.67V13.33" stroke="currentColor" stroke-width="1.33" stroke-linecap="round"/>
+                                    <path d="M2.67 8H13.33" stroke="currentColor" stroke-width="1.33" stroke-linecap="round"/>
+                                </svg>
+                                添加字段
+                            </button>
+                        </div>
+                        <div id="eventExtraFields" class="extra-fields-container"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeEventModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 创建邀约模态框（单个） -->
+    <div id="invitationModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>创建邀约</h2>
+                <button class="modal-close" onclick="closeInvitationModal()">×</button>
+            </div>
+            <form id="invitationForm" onsubmit="handleInvitationSubmit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>选择活动 <span class="required">*</span></label>
+                        <select id="invitationEventId" name="event_id" required>
+                            <option value="">请选择活动</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>选择嘉宾 <span class="required">*</span></label>
+                        <select id="invitationGuestId" name="guest_id" required>
+                            <option value="">请选择嘉宾</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>来源BD</label>
+                        <input type="text" id="invitationSourceBd" name="source_bd" placeholder="选择嘉宾后自动填充（可选）" style="background: #F9FAFB;">
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            提示：选择嘉宾后会自动填充BD信息，如需修改可手动编辑
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeInvitationModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 短信规则配置模态框 -->
+    <div id="smsRuleModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2 id="smsRuleModalTitle">新增短信规则</h2>
+                <button class="modal-close" onclick="closeSmsRuleModal()">×</button>
+            </div>
+            <form id="smsRuleForm" onsubmit="handleSmsRuleSubmit(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="smsRuleId">
+                    <div class="form-group">
+                        <label>规则名称 <span class="required">*</span></label>
+                        <input type="text" id="smsRuleName" required placeholder="例如：活动1-报名成功短信">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>短信类型 <span class="required">*</span></label>
+                            <select id="smsRuleMessageType" required>
+                                <option value="REG_SUCCESS">REG_SUCCESS - 报名成功</option>
+                                <option value="PRE_EVENT_REMINDER">PRE_EVENT_REMINDER - 会前提醒</option>
+                                <option value="EVENT_DAY_REMINDER">EVENT_DAY_REMINDER - 大会当天</option>
+                                <option value="DINNER_REMINDER">DINNER_REMINDER - 晚宴提醒</option>
+                                <option value="HK_TRIP_REMINDER">HK_TRIP_REMINDER - 香港行程</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>触发方式 <span class="required">*</span></label>
+                            <select id="smsRuleTriggerType" required onchange="toggleScheduledTimeInput()">
+                                <option value="STATUS_CHANGE">STATUS_CHANGE - 状态变更</option>
+                                <option value="SCHEDULED">SCHEDULED - 定时任务</option>
+                                <option value="MANUAL">MANUAL - 手动</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="scheduledTimeGroup" style="display: none;">
+                            <label>定时发送时间 <span class="required">*</span></label>
+                            <input type="datetime-local" id="smsRuleScheduledTime" required>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                                设置短信发送的具体日期和时间
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>限定活动（可选，仅针对某个未结束活动生效）</label>
+                            <select id="smsRuleEventId">
+                                <option value="">全部活动（通用规则）</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>模板ID <span class="required">*</span></label>
+                            <input type="number" id="smsRuleTemplateId" required placeholder="对应短信模板ID">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>每个嘉宾在一个活动下最多发送次数</label>
+                            <input type="number" id="smsRuleMaxSendTimes" placeholder="例如：1，留空表示不限制">
+                        </div>
+                        <div class="form-group">
+                            <label>是否启用</label>
+                            <select id="smsRuleEnabled">
+                                <option value="1">启用</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>条件配置（JSON，可选）</label>
+                        <textarea id="smsRuleConditions" rows="4" placeholder='例如：{"from_status":["待确认","已修改","待审核"],"to_status":"报名成功"} 或 {"days_before_event":[3,4,5]}'></textarea>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            不熟悉可先留空，仅使用活动ID和发送次数控制。需要复杂条件时再补充。
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeSmsRuleModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 短信模板配置模态框 -->
+    <div id="smsTemplateModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2 id="smsTemplateModalTitle">新增短信模板</h2>
+                <button class="modal-close" onclick="closeSmsTemplateModal()">×</button>
+            </div>
+            <form id="smsTemplateForm" onsubmit="handleSmsTemplateSubmit(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="smsTemplateId">
+                    <div class="form-group">
+                        <label>模板名称 <span class="required">*</span></label>
+                        <input type="text" id="smsTemplateName" required placeholder="例如：通用报名成功短信">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>短信类型（可自定义） <span class="required">*</span></label>
+                            <input type="text" id="smsTemplateMessageType" required placeholder="例如：REG_SUCCESS 或 VIP_REMINDER">
+                            <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                                可输入任意英文标识，规则配置时使用同样的类型即可。
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>场景 / 活动 <span class="required">*</span></label>
+                            <select id="smsTemplateScene" required>
+                                <option value="COMMON">通用（不关联具体活动）</option>
+                            </select>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                                建议选择对应的活动名称；一个活动可以绑定多条不同类型的短信模板。
+                            </div>
+                <div class="form-group">
+                    <label>语言</label>
+                    <select id="smsTemplateLang">
+                        <option value="zh-CN">简体中文</option>
+                        <option value="zh-TW">繁體中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>阿里云模板 CODE <span class="required">*</span></label>
+                            <input type="text" id="smsTemplateCode" required placeholder="例如：SMS_123456789">
+                        </div>
+                        <div class="form-group">
+                            <label>短信签名 <span class="required">*</span></label>
+                            <input type="text" id="smsTemplateSignName" required placeholder="例如：某某大会">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>参数说明（可选，JSON 数组）</label>
+                        <textarea id="smsTemplateParamsSchema" rows="3" placeholder='例如：["time","place","url"]'></textarea>
+                        <div style="margin-top: 8px; padding: 12px; background: #F0F9FF; border-left: 3px solid #3B82F6; border-radius: 4px; font-size: 12px; color: #1E40AF;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">📋 参数对应关系说明：</div>
+                            <div style="line-height: 1.8;">
+                                <div><strong>time</strong> → 活动时间（自动从活动信息获取）</div>
+                                <div><strong>place</strong> → 活动地点（自动从活动信息获取）</div>
+                                <div><strong>name</strong> → 参会者姓名（自动从嘉宾信息获取）</div>
+                                <div><strong>url</strong> → 邀约链接（自动从邀约信息获取）</div>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #BFDBFE; color: #475569;">
+                                💡 提示：在参数结构数组中填写需要的参数名，系统会自动填充对应的数据。
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>是否启用</label>
+                        <select id="smsTemplateEnabled">
+                            <option value="1">启用</option>
+                            <option value="0">禁用</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeSmsTemplateModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 批量创建邀约模态框 -->
+    <div id="batchInvitationModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>批量创建邀约</h2>
+                <button class="modal-close" onclick="closeBatchInvitationModal()">×</button>
+            </div>
+            <form id="batchInvitationForm" onsubmit="handleBatchInvitationSubmit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>选择活动 <span class="required">*</span></label>
+                        <select id="batchInvitationEventId" name="event_id" required>
+                            <option value="">请选择活动</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>按BD筛选</label>
+                        <select id="batchInvitationBdFilter" name="bd_filter">
+                            <option value="">全部BD</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>选择嘉宾 <span class="required">*</span></label>
+                        <div style="border: 1px solid #D1D5DB; border-radius: 8px; padding: 12px; max-height: 300px; overflow-y: auto; background: #F9FAFB;">
+                            <div id="batchGuestList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #6B7280;">
+                            已选择 <span id="selectedGuestCount">0</span> 位嘉宾
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>来源BD</label>
+                        <input type="text" id="batchInvitationSourceBd" name="source_bd" placeholder="选择嘉宾后自动填充（可选）">
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            提示：选择嘉宾后会自动填充BD信息，如果选择的嘉宾有不同的BD，将使用第一个BD
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeBatchInvitationModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">批量创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 邀约详情模态框 -->
+    <div id="invitationDetailModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>邀约详情</h2>
+                <button class="modal-close" onclick="closeInvitationDetailModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="invitationDetailContent">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeInvitationDetailModal()">关闭</button>
+                <button type="button" class="btn btn-primary" id="sendSmsToInvitationBtn" onclick="sendSmsToInvitation(currentInvitationId)" style="display: none;">发送短信</button>
+                <button type="button" class="btn btn-outline" id="invalidateInvitationBtn" onclick="invalidateInvitation()" style="color: #EF4444; border-color: #EF4444; display: none;">标记为无效</button>
+                <button type="button" class="btn btn-outline" id="validateInvitationBtn" onclick="validateInvitation()" style="color: #10B981; border-color: #10B981; display: none;">标记为有效</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建嘉宾模态框 -->
+    <div id="guestModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="guestModalTitle">添加嘉宾</h2>
+                <button class="modal-close" onclick="closeGuestModal()">×</button>
+            </div>
+            <form id="guestForm" onsubmit="handleGuestSubmit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>姓名 <span class="required">*</span></label>
+                        <input type="text" id="guestName" name="name" required placeholder="请输入姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>手机号 <span class="required" id="phoneRequired">*</span></label>
+                        <input type="tel" id="guestPhone" name="phone" placeholder="请输入11位手机号" maxlength="11" pattern="[0-9]{11}">
+                    </div>
+                    <div class="form-group">
+                        <label>公司/单位</label>
+                        <input type="text" id="guestCompany" name="company" placeholder="请输入公司或单位">
+                    </div>
+                    <div class="form-group">
+                        <label>职位</label>
+                        <input type="text" id="guestPosition" name="position" placeholder="请输入职位">
+                    </div>
+                    <div class="form-group">
+                        <label>BDID</label>
+                        <input type="text" id="guestBdId" name="bd_id" placeholder="请输入BDID">
+                    </div>
+                    <div class="form-group">
+                        <label>标签</label>
+                        <div class="tag-checkbox-group">
+                            <label class="tag-checkbox-item">
+                                <input type="checkbox" name="tags" value="VIP" id="tagVIP" class="tag-checkbox">
+                                <span class="tag-checkbox-label">VIP</span>
+                            </label>
+                            <label class="tag-checkbox-item">
+                                <input type="checkbox" name="tags" value="技术" id="tagTech" class="tag-checkbox">
+                                <span class="tag-checkbox-label">技术</span>
+                            </label>
+                            <label class="tag-checkbox-item">
+                                <input type="checkbox" name="tags" value="高管" id="tagExecutive" class="tag-checkbox">
+                                <span class="tag-checkbox-label">高管</span>
+                            </label>
+                        </div>
+                        <input type="text" id="guestCustomTags" placeholder="输入其他标签，用逗号分隔" style="width: 100%; padding: 8px; border: 1px solid #E5E7EB; border-radius: 6px; margin-top: 8px;">
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <textarea id="guestRemark" name="remark" rows="3" placeholder="请输入备注信息"></textarea>
+                    </div>
+                    
+                    <!-- 动态扩展字段 -->
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <label>扩展属性</label>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="addGuestExtraField()">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 2.67V13.33" stroke="currentColor" stroke-width="1.33" stroke-linecap="round"/>
+                                    <path d="M2.67 8H13.33" stroke="currentColor" stroke-width="1.33" stroke-linecap="round"/>
+                                </svg>
+                                添加字段
+                            </button>
+                        </div>
+                        <div id="guestExtraFields" class="extra-fields-container"></div>
+                    </div>
+                    
+                    <!-- 修改历史（仅编辑模式显示） -->
+                    <div id="guestModificationHistory" class="form-group" style="display: none;">
+                        <label>修改历史</label>
+                        <div id="guestModificationHistoryContent" style="max-height: 200px; overflow-y: auto; border: 1px solid #E5E7EB; border-radius: 6px; padding: 12px; background: #F9FAFB;">
+                            <div style="font-size: 12px; color: #9CA3AF; text-align: center;">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeGuestModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- BD导入模态框 -->
+    <div id="bdImportModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>导入BD用户</h2>
+                <button class="modal-close" onclick="closeBdImportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 20px;">
+                    <p style="color: #6B7280; font-size: 14px; margin-bottom: 12px;">请上传Excel文件，支持格式：.xlsx, .xls</p>
+                    <p style="color: #6B7280; font-size: 13px; margin-bottom: 8px;">Excel格式要求：</p>
+                    <ul style="color: #6B7280; font-size: 13px; margin-left: 20px; line-height: 1.8;">
+                        <li>第一行为表头（列名）</li>
+                        <li>必填列：<strong>用户名</strong>（或 username）</li>
+                        <li>可选列：<strong>密码</strong>（或 password，不填则使用默认密码123456）、<strong>姓名</strong>（或 name）、<strong>联系方式</strong>（或 contact）</li>
+                    </ul>
+                </div>
+                <div class="form-group">
+                    <label>选择Excel文件 <span class="required">*</span></label>
+                    <input type="file" id="bdImportFile" accept=".xlsx,.xls" style="padding: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>默认密码（当Excel中未填写密码时使用）</label>
+                    <input type="text" id="bdDefaultPassword" value="123456" placeholder="默认密码">
+                    <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                        如果Excel中未填写密码列，将使用此默认密码
+                    </div>
+                </div>
+                <div id="bdImportResult" style="display: none; margin-top: 20px; padding: 16px; background: #F9FAFB; border-radius: 8px;">
+                    <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">导入结果</div>
+                    <div id="bdImportResultContent"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeBdImportModal()">取消</button>
+                <button type="button" class="btn btn-primary" onclick="handleBdImport()">开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div id="changePasswordModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>修改密码</h2>
+                <button class="modal-close" onclick="closeChangePasswordModal()">×</button>
+            </div>
+            <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>当前密码 <span class="required">*</span></label>
+                        <input type="password" id="oldPassword" required placeholder="请输入当前密码">
+                    </div>
+                    <div class="form-group">
+                        <label>新密码 <span class="required">*</span></label>
+                        <input type="password" id="newPassword" required placeholder="请输入新密码（至少6位）" minlength="6">
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            密码长度至少6位
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>确认新密码 <span class="required">*</span></label>
+                        <input type="password" id="confirmPassword" required placeholder="请再次输入新密码" minlength="6">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeChangePasswordModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确认修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- BD管理模态框 -->
+    <div id="bdModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="bdModalTitle">添加BD</h2>
+                <button class="modal-close" onclick="closeBdModal()">×</button>
+            </div>
+            <form id="bdForm" onsubmit="handleBdSubmit(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="bdId">
+                    <div class="form-group">
+                        <label>用户名 <span class="required">*</span></label>
+                        <input type="text" id="bdUsername" required placeholder="请输入用户名">
+                    </div>
+                    <div class="form-group">
+                        <label id="bdPasswordLabel">密码 <span class="required">*</span></label>
+                        <input type="password" id="bdPassword" placeholder="请输入密码">
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            编辑时留空则不修改密码
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>姓名</label>
+                        <input type="text" id="bdName" placeholder="请输入姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>联系方式</label>
+                        <input type="text" id="bdContact" placeholder="请输入联系方式（手机号、邮箱等）">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>角色</label>
+                            <select id="bdRole">
+                                <option value="bd">BD</option>
+                                <option value="operator">运营</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select id="bdStatus">
+                                <option value="1">启用</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeBdModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        /* 用户菜单样式 */
+        .user-menu {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            min-width: 160px;
+            z-index: 1000;
+            padding: 4px 0;
+        }
+        .user-menu-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: #364153;
+            transition: background-color 0.2s;
+        }
+        .user-menu-item:hover {
+            background-color: #F9FAFB;
+        }
+        .user-menu-item:not(:last-child) {
+            border-bottom: 1px solid #F3F4F6;
+        }
+        .user-menu-item svg {
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .hidden {
+            display: none !important;
+        }
+
+        /* ===== 业务数据多语输入（活动名称/描述/地点的繁英对照） ===== */
+        .i18n-sub {
+            margin-top: 8px;
+            padding-left: 10px;
+            border-left: 2px solid #E5E7EB;
+            display: flex;
+            gap: 10px;
+        }
+        .i18n-sub-item {
+            flex: 1;
+            min-width: 0;
+        }
+        .i18n-sub-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #6B7280;
+            margin-bottom: 4px;
+        }
+        .i18n-sub-label em {
+            font-style: normal;
+            font-size: 11px;
+            color: #9CA3AF;
+        }
+        .i18n-badge {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: #EFF6FF;
+            color: #155DFC;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.5;
+        }
+        .i18n-sub-item input,
+        .i18n-sub-item textarea {
+            width: 100%;
+            font-size: 13px;
+            padding: 6px 10px;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .i18n-sub-item input:focus,
+        .i18n-sub-item textarea:focus {
+            outline: none;
+            border-color: #155DFC;
+        }
+        .i18n-hint {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin-top: 6px;
+        }
+        @media (max-width: 640px) {
+            .i18n-sub { flex-direction: column; }
+        }
+
+        /* ===== 语言切换器（分段按钮） ===== */
+        #langSwitcher { display: flex; align-items: center; }
+        .i18n-seg {
+            display: inline-flex;
+            background: #F3F4F6;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 2px;
+            gap: 2px;
+        }
+        .i18n-seg-btn {
+            appearance: none;
+            border: none;
+            background: transparent;
+            color: #6B7280;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1;
+            padding: 6px 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background .15s, color .15s, box-shadow .15s;
+            min-width: 34px;
+        }
+        .i18n-seg-btn:hover { color: #111827; background: rgba(255,255,255,.7); }
+        .i18n-seg-btn:focus-visible {
+            outline: 2px solid #155DFC;
+            outline-offset: 1px;
+        }
+        .i18n-seg-btn.active {
+            background: #155DFC;
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(21,93,252,.35);
+        }
+
+        /* ===== 多语面板（一个 JSON 字段） ===== */
+        .i18n-panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px 8px 0 0;
+            border-bottom: none;
+        }
+        .i18n-panel-head label {
+            font-weight: 600;
+            font-size: 14px;
+            margin: 0;
+        }
+        .btn-translate-all {
+            padding: 5px 12px;
+            font-size: 12px;
+            background: #155DFC;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .btn-translate-all:hover { background: #0B4FD1; }
+        .btn-translate-all:disabled,
+        .btn-translate-one:disabled { opacity: .55; cursor: not-allowed; }
+        .i18n-panel-head + .i18n-hint {
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-top: none;
+            padding: 0 12px 8px;
+            margin-top: 0;
+        }
+        .i18n-lang-block {
+            border: 1px solid #E5E7EB;
+            border-top: none;
+            padding: 10px 12px;
+            background: #fff;
+        }
+        .i18n-lang-block:last-child { border-radius: 0 0 8px 8px; }
+        .i18n-lang-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .i18n-lang-head b { font-size: 12px; font-weight: 600; color: #374151; }
+        .i18n-lang-head span:not(.i18n-badge):not(.i18n-lang-state) {
+            font-size: 12px; color: #6B7280;
+        }
+        .i18n-lang-state {
+            font-size: 11px;
+            color: #9CA3AF;
+            flex: 1;
+        }
+        .i18n-lang-state.filled { color: #059669; }
+        .btn-translate-one {
+            padding: 3px 9px;
+            font-size: 11px;
+            background: #fff;
+            color: #155DFC;
+            border: 1px solid #155DFC;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .btn-translate-one:hover { background: #EFF6FF; }
+        .i18n-lang-block input,
+        .i18n-lang-block textarea {
+            width: 100%;
+            font-size: 13px;
+            padding: 7px 10px;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .i18n-lang-block input:focus,
+        .i18n-lang-block textarea:focus { outline: none; border-color: #155DFC; }
+    </style>
+    <script src="/i18n.js?v=20261014.3"></script>
+    <script src="app.js?v=20261022"></script>
+    <!-- EC9 新增模块（场次/票种/订单/支付流水）：必须排在 app.js 之后，依赖其 apiRequest/formatDateTime -->
+    <script src="ec9-modules.js?v=20261014.1"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>地球克隆计划9 · EC9</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet sheet--flush sheet--black">
+    <div class="home-line home-ticker">6651.HK</div>
+
+    <div class="home-line home-label" data-i18n="home_date_label">时间：</div>
+    <div class="home-line home-value home-value-lg" id="evDate">—</div>
+
+    <div class="home-line home-label" data-i18n="home_loc_label">地址：</div>
+    <div class="home-line home-value home-value-lg" id="evLocation">—</div>
+
+    <div style="height:210px"></div>
+
+    <div class="agree-row">
+      <span class="checkbox" id="agreeCk"></span>
+      <span>
+        <span data-i18n="agree_prefix">我已阅读并同意</span>
+        <a href="agreement.html?tab=user&event_id=1&redirect=index.html" data-i18n="user_agreement">《用户协议》</a>
+        <a href="agreement.html?tab=privacy&event_id=1&redirect=index.html" data-i18n="privacy_policy">《隐私政策》</a>
+      </span>
+    </div>
+
+    <div class="btn-skew-wrap">
+      <button class="btn-skew" id="btnRegister" data-i18n="register_now">立即报名</button>
+    </div>
+    <button class="btn-contact" id="btnContact" data-i18n="contact_us">联系我们</button>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), true);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var agreed = false;
+  var ck = document.getElementById("agreeCk");
+  ck.addEventListener("click", function () { agreed = ck.classList.toggle("checked"); });
+
+  document.getElementById("btnContact").addEventListener("click", function () {
+    E.go("agreement.html", { tab: "contact", event_id: eventId, redirect: "index.html" });
+  });
+
+  document.getElementById("btnRegister").addEventListener("click", function () {
+    if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
+    E.go("signup.html", { event_id: eventId });
+  });
+
+  // 拉会议信息
+  E.Api.event(eventId).then(function (d) {
+    var ev = d.event || d;
+    if (ev.name) document.title = ev.name;
+    if (ev.start_time) {
+      var dt = new Date(ev.start_time);
+      document.getElementById("evDate").textContent =
+        dt.getFullYear() + "年" + (dt.getMonth() + 1) + "月" + dt.getDate() + "日";
+    }
+    if (ev.location) document.getElementById("evLocation").textContent = ev.location;
+    E.S.patch({ event_id: eventId, event_name: ev.name || "" });
+  }).catch(function (e) {
+    E.toast(e.message || "活动信息加载失败");
+  });
+})();
+</script>
+</body>
+</html>

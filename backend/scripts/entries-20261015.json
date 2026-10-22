@@ -1,0 +1,19 @@
+{
+  "h5.common.loading": { "zh-CN": "加载中...", "en": "Loading..." },
+  "h5.ticket.title": { "zh-CN": "我的门票", "en": "My Ticket" },
+  "h5.ticket.brand": { "zh-CN": "入场凭证", "en": "Admission Pass" },
+  "h5.ticket.invalid": { "zh-CN": "票码无效或已失效", "en": "Invalid or expired ticket code" },
+  "h5.ticket.contact": { "zh-CN": "请联系主办方重新获取链接", "en": "Please contact the organizer for a new link" },
+  "h5.ticket.guest": { "zh-CN": "嘉宾", "en": "Guest" },
+  "h5.ticket.company": { "zh-CN": "单位", "en": "Company" },
+  "h5.ticket.position": { "zh-CN": "职务", "en": "Title" },
+  "h5.ticket.event": { "zh-CN": "会议", "en": "Event" },
+  "h5.ticket.session": { "zh-CN": "场次", "en": "Session" },
+  "h5.ticket.type": { "zh-CN": "票种", "en": "Ticket Type" },
+  "h5.ticket.time": { "zh-CN": "时间", "en": "Time" },
+  "h5.ticket.location": { "zh-CN": "地点", "en": "Location" },
+  "h5.ticket.codeLabel": { "zh-CN": "票码", "en": "Ticket Code" },
+  "h5.ticket.codeHint": { "zh-CN": "入场时出示此票码", "en": "Show this code at the entrance" },
+  "h5.ticket.valid": { "zh-CN": "有效", "en": "Valid" },
+  "h5.ticket.used": { "zh-CN": "已签到", "en": "Checked in" }
+}

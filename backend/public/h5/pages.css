@@ -1,0 +1,1524 @@
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* 设计稿基准尺寸 */
+    --design-width: 375px;
+    --design-height: 813px;
+    /* 缩放比例，由JavaScript动态设置 */
+    --scale-ratio: 1;
+}
+
+html {
+    /* 防止iOS Safari自动调整字体大小 */
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    overflow-x: hidden;
+    /* 防止iOS Safari的默认边距 */
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: 'HONOR Sans CN', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #000;
+    overflow-x: hidden;
+    overflow-y: auto;
+    width: 100vw;
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
+    /* 防止页面缩放时的抖动 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    position: relative;
+    /* 防止iOS Safari的默认边距 */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 页面容器 - 由JavaScript控制缩放 */
+.page {
+    position: relative;
+    width: 375px;
+    height: 813px;
+    margin: 0;
+    background: #fff;
+    overflow: hidden;
+    display: none !important;
+    /* 缩放原点从左上角开始 */
+    transform-origin: 0 0;
+}
+
+.page.active {
+    display: block !important;
+}
+
+/* ==================== 页面1: 首页 ==================== */
+#page-home {
+    background: #000;
+}
+
+/* 背景地球图 */
+.home-planet {
+    position: absolute;
+    top: -649px;
+    left: -574px;
+    width: 1536px;
+    height: 1536px;
+    pointer-events: none;
+}
+
+/* Logo */
+.home-logo {
+    position: absolute;
+    top: 150px;
+    left: 47px;
+    width: 280px;
+    height: 66.15px;
+    pointer-events: none;
+}
+
+/* 网站地址、时间、地址信息容器 */
+.home-info {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 375px;
+    z-index: 5;
+}
+
+/* 网站地址 - 使用设计图切图，根据Figma精确位置 */
+.home-website-img {
+    position: absolute;
+    top: 240px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 12px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* 时间信息 - 使用设计图切图，根据Figma精确位置 */
+.home-time-img {
+    position: absolute;
+    top: 290px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 109px;
+    height: 37px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* 地址信息 - 使用设计图切图，根据Figma精确位置 */
+.home-location-img {
+    position: absolute;
+    top: 345px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 139px;
+    height: 37px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* 按钮容器 - 根据Figma设计精确位置 */
+.home-btn-wrapper {
+    position: absolute;
+    top: 529px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 210px;
+    height: 58px;
+    /* 去掉缩放动画，保持按钮静止 */
+    transform-origin: center;
+    /* 防止双击选中文字 */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 按钮背景图片 */
+.btn-register-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* 按钮文字图片 - 使用设计图切图 */
+.btn-register-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 124px;
+    height: 23px;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 鼠标悬停效果 */
+.home-btn-wrapper:hover {
+    cursor: pointer;
+}
+
+/* 按下效果 */
+.home-btn-wrapper:active,
+.home-btn-wrapper.pressing {
+    /* 不再缩放或改变亮度，避免按钮“移动”的动态效果 */
+    transform: none;
+    filter: none;
+    opacity: 1;
+}
+
+/* 按钮文字 - 透明按钮用于点击，文字使用SVG图片 */
+.btn-register {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease-out, opacity 0.15s ease-out;
+    /* 防止双击选中文字 */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 2;
+}
+
+/* 悬停时文字效果 */
+.btn-register:hover {
+    /* 去掉悬停动画效果，仅保留点击功能 */
+    opacity: 1;
+}
+
+/* 按下时文字效果 */
+.btn-register:active {
+    transform: none;
+    opacity: 1;
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+    /* 触摸设备上，触摸时立即显示按下效果 */
+    .home-btn-wrapper:active {
+        transform: none;
+    }
+    
+    .btn-register:active {
+        transform: none;
+    }
+}
+
+/* 桌面设备 - 确保悬停效果只在有鼠标的设备上生效 */
+@media (hover: hover) and (pointer: fine) {
+    .home-btn-wrapper:hover {
+        transform: none;
+        filter: none;
+    }
+    
+    .home-btn-wrapper:hover .btn-bg {
+        transform: none;
+        filter: none;
+    }
+    
+    .btn-register:hover {
+        color: rgba(255, 255, 255, 1);
+        text-shadow: none;
+        transform: none;
+    }
+}
+
+/* 用户协议和隐私政策链接容器 - 根据Figma设计精确位置 */
+.legal-links {
+    position: absolute;
+    top: 597px;
+    left: 0;
+    width: 375px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* 间距稍微缩小，让两个链接更靠近一些 */
+    gap: 20px;
+    z-index: 10;
+}
+
+/* 链接包装器 - 根据Figma精确尺寸 */
+.legal-link-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 100px;
+    height: 28px;
+}
+
+/* 链接背景图片 - 使用切图 */
+.legal-link-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* 右侧“隐私政策”背景也整体左移一些，与文字对齐 */
+.legal-link-right .legal-link-bg {
+    left: -8px;
+}
+
+/* 链接文字图片 - 使用设计图切图 */
+.legal-link-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 55px;
+    height: 14px;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 右侧“隐私政策”文字整体稍微左移一点，让间距更紧凑 */
+.legal-link-right .legal-link-text {
+    left: 40%;
+}
+
+/* 法律链接 - 透明按钮用于点击 */
+.legal-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease-out;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    z-index: 2;
+}
+
+.legal-link:active {
+    opacity: 0.7;
+}
+
+/* 桌面设备悬停效果 */
+@media (hover: hover) and (pointer: fine) {
+    .legal-link:hover {
+        opacity: 0.9;
+    }
+}
+
+/* ==================== 页面2: 电子票 ==================== */
+#page-ticket {
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 背景图容器 (375x320) - 限制背景图显示范围 */
+.ticket-bg-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 375px;
+    height: 320px;
+    overflow: hidden;
+}
+
+/* 背景地球图（裁剪显示上半部分） */
+.ticket-planet {
+    position: absolute;
+    top: -254px;
+    left: -93px;
+    width: 574px;
+    height: 574px;
+    pointer-events: none;
+    object-fit: cover;
+}
+
+/* 电子票 Logo (x: 47, y: 50, w: 280, h: 66.15) */
+.ticket-logo {
+    position: absolute;
+    top: 50px;
+    left: 47px;
+    width: 280px;
+    height: 66.15px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* 渐变遮罩 (x: 0, y: 143, w: 375, h: 177) */
+.ticket-gradient-mask {
+    position: absolute;
+    top: 143px;
+    left: 0;
+    width: 375px;
+    height: 177px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 99%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 半透明卡片 (x: 20, y: 150, w: 335, h: 65, opacity: 0.2, borderRadius: 6px) */
+.ticket-semi-card {
+    position: absolute;
+    top: 150px;
+    left: 20px;
+    width: 335px;
+    height: 65px;
+    background: #FFFFFF;
+    opacity: 0.2;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 电子票标题 (x: 39, y: 160, fontSize: 14) */
+.ticket-title {
+    position: absolute;
+    top: 160px;
+    left: 39px;
+    width: 42px;
+    height: 14px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #FFFFFF;
+    text-align: left;
+    z-index: 2;
+}
+
+/* 电子票内容区 (x: 20, y: 184, w: 335, h: 409) - 带打孔效果 */
+.ticket-content {
+    position: absolute;
+    top: 184px;
+    left: 20px;
+    width: 335px;
+    height: 409px;
+    background: #FFFFFF;
+    border-radius: 6.976744175px;
+    z-index: 2;
+    overflow: visible;
+}
+
+/* 打孔效果 - 只有一个圆形缺口在虚线位置 (y: 328) */
+/* 缺口中心应该与虚线中心重合 */
+.ticket-hole {
+    position: absolute;
+    left: -12px; /* 小圆形半径12px，让一半在卡片外形成缺口 */
+    top: 132px; /* 144px - 12px = 132px，让缺口中心在144px（虚线位置） */
+    width: 24px; /* 小圆形24x24px */
+    height: 24px;
+    background: #000; /* 使用黑色，通过mix-blend-mode形成缺口 */
+    border-radius: 50%;
+    mix-blend-mode: destination-out;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* 姓名 (x: 39, y: 216, fontSize: 36) - 相对于页面 */
+.guest-name {
+    position: absolute;
+    top: 32px; /* 216 - 184 = 32 */
+    left: 19px; /* 39 - 20 = 19 */
+    width: 108px;
+    height: 36px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #000000;
+    text-align: left;
+}
+
+/* 座位号 (x: 39, y: 268, fontSize: 18) - 相对于页面 */
+.seat-number {
+    position: absolute;
+    top: 84px; /* 268 - 184 = 84 */
+    left: 19px; /* 39 - 20 = 19 */
+    width: 62px;
+    height: 18px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* VISION 2030 (x: 231.25, y: 243.92) - 相对于页面 */
+.vision-text {
+    position: absolute;
+    top: 59.92px; /* 243.92 - 184 = 59.92 */
+    left: 211.25px; /* 231.25 - 20 = 211.25 */
+    width: 103.75px;
+    height: 13px;
+    font-size: 10px;
+    color: #D8D8D8;
+    text-align: left;
+}
+
+/* 虚线分隔 (x: 29, y: 328) - 相对于页面 */
+.dashed-line {
+    position: absolute;
+    top: 144px; /* 328 - 184 = 144 */
+    left: 9px; /* 29 - 20 = 9 */
+    right: 9px; /* 保持右边距 */
+    height: 0;
+    border-top: 2px dashed #D8D8D8;
+}
+
+/* 会议日程 (x: 40, y: 348, fontSize: 24) - 相对于页面 */
+.agenda-title {
+    position: absolute;
+    top: 164px; /* 348 - 184 = 164 */
+    left: 20px; /* 40 - 20 = 20 */
+    width: 96px;
+    height: 24px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* ==================== 页面3/4: 报名信息/签到信息 ==================== */
+#page-register-info,
+#page-checkin-info {
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 背景区域容器 (375x185) - 限制背景图显示范围 - 仅页面3/4/5/8 */
+#page-register-info .register-header-bg,
+#page-checkin-info .register-header-bg,
+#page-register-form .register-header-bg,
+#page-register-form-2 .register-header-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 375px;
+    height: 185px;
+    overflow: hidden;
+    background: #000;
+}
+
+/* 背景地球图（裁剪显示上半部分） - 仅页面3/4/5/8 */
+#page-register-info .register-planet,
+#page-checkin-info .register-planet,
+#page-register-form .register-planet,
+#page-register-form-2 .register-planet {
+    position: absolute;
+    top: -254px;
+    left: -93px;
+    width: 574px;
+    height: 574px;
+    pointer-events: none;
+    object-fit: cover;
+}
+
+/* 报名页 Logo - 仅页面3/4/5/8 */
+#page-register-info .register-logo,
+#page-checkin-info .register-logo,
+#page-register-form .register-logo,
+#page-register-form-2 .register-logo {
+    position: absolute;
+    top: 50px;
+    left: 47px;
+    width: 280px;
+    height: 66.15px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 白色卡片容器 - 包含所有表单元素 - 仅页面3/4/5/8 */
+#page-register-info .register-form-card,
+#page-checkin-info .register-form-card,
+#page-register-form .register-form-card,
+#page-register-form-2 .register-form-card {
+    position: absolute;
+    top: 165px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #FFFFFF;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    padding-top: 30px;
+    box-sizing: border-box;
+}
+
+/* 报名信息页标题 (相对于白色卡片: x: 139, y: 195, 96x24) - 仅页面3 */
+#page-register-info .register-title {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* 签到信息页标题 (相对于白色卡片: x: 139, y: 195, 96x24) - 仅页面4 */
+#page-checkin-info .register-title {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* 报名信息填写页面的标题也使用相同位置 - 页面5和8 */
+#page-register-form .register-title,
+#page-register-form-2 .register-title {
+    position: absolute;
+    top: 195px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* 手机号标签 (相对于白色卡片: x: 19, y: 96, 48x12) - 仅页面3 */
+#page-register-info .register-label-phone {
+    position: absolute;
+    top: 96px;
+    left: 0;
+    width: 69px;
+    padding-left: 19px;
+    padding-right: 2px;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #5D6762;
+    text-align: right;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* 手机号输入框 (相对于白色卡片: x: 69, y: 83, 286x38) - 仅页面3 */
+#page-register-info .register-input-phone {
+    position: absolute;
+    top: 83px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-info .register-input-phone::placeholder {
+    color: #BEBEBE;
+}
+
+/* 验证码标签 (相对于白色卡片: x: 19, y: 154, 48x12) - 仅页面3 */
+#page-register-info .register-label-code {
+    position: absolute;
+    top: 154px;
+    left: 0;
+    width: 69px;
+    padding-left: 19px;
+    padding-right: 2px;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #5D6762;
+    text-align: right;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* 验证码输入框 (相对于白色卡片: x: 69, y: 141, 184x38) - 仅页面3 */
+#page-register-info .register-input-code {
+    position: absolute;
+    top: 141px;
+    left: 69px;
+    width: 184px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-info .register-input-code::placeholder {
+    color: #BEBEBE;
+}
+
+/* ========== 页面4: 签到信息页面样式 ========== */
+
+/* 手机号标签 (相对于白色卡片: x: 19, y: 96, 48x12) - 仅页面4 */
+#page-checkin-info .register-label-phone {
+    position: absolute;
+    top: 96px;
+    left: 0;
+    width: 69px;
+    padding-left: 19px;
+    padding-right: 2px;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #5D6762;
+    text-align: right;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* 手机号输入框 (相对于白色卡片: x: 69, y: 83, 286x38) - 仅页面4 */
+#page-checkin-info .register-input-phone {
+    position: absolute;
+    top: 83px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-checkin-info .register-input-phone::placeholder {
+    color: #BEBEBE;
+}
+
+/* 验证码标签 (相对于白色卡片: x: 19, y: 154, 48x12) - 仅页面4 */
+#page-checkin-info .register-label-code {
+    position: absolute;
+    top: 154px;
+    left: 0;
+    width: 69px;
+    padding-left: 19px;
+    padding-right: 2px;
+    height: auto;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #5D6762;
+    text-align: right;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* 验证码输入框 (相对于白色卡片: x: 69, y: 141, 184x38) - 仅页面4 */
+#page-checkin-info .register-input-code {
+    position: absolute;
+    top: 141px;
+    left: 69px;
+    width: 184px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-checkin-info .register-input-code::placeholder {
+    color: #BEBEBE;
+}
+
+/* 通用表单标题（用于其他页面） */
+.form-title {
+    position: absolute;
+    top: 195px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* 通用表单组（用于其他页面） */
+.form-group {
+    position: absolute;
+    left: 19px;
+    right: 19px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group label {
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #5D6762;
+    white-space: nowrap;
+    min-width: 48px;
+}
+
+.form-group input {
+    flex: 1;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744175px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+}
+
+.form-group input::placeholder {
+    color: #BEBEBE;
+}
+
+/* 获取验证码按钮 (相对于白色卡片: x: 271, y: 141, 84x38) - 仅页面3/4 */
+#page-register-info .btn-code,
+#page-checkin-info .btn-code {
+    position: absolute;
+    top: 141px;
+    left: 271px;
+    width: 84px;
+    height: 38px;
+    background: #2B77C8;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    box-sizing: border-box;
+}
+
+#page-register-info .btn-code:active,
+#page-checkin-info .btn-code:active {
+    opacity: 0.8;
+}
+
+/* 下一步按钮 (相对于白色卡片: x: 20, y: 239, 335x38) - 仅页面3/4 */
+#page-register-info .btn-submit,
+#page-checkin-info .btn-submit {
+    position: absolute;
+    top: 239px;
+    left: 20px;
+    width: 335px;
+    height: 38px;
+    background: #2B77C8;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    box-sizing: border-box;
+}
+
+#page-register-info .btn-submit:active,
+#page-checkin-info .btn-submit:active {
+    opacity: 0.8;
+}
+
+/* 错误提示 - 仅页面3/4 */
+#page-register-info .error-message,
+#page-checkin-info .error-message {
+    position: absolute;
+    top: 462px;
+    left: 68px;
+    right: 68px;
+    height: 24px;
+    background: #FFE7E7;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #D45861;
+}
+
+/* ==================== 页面5: 报名信息填写 ==================== */
+#page-register-form,
+#page-register-form-2 {
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 报名信息填写页面的表单标签和输入框 - 仅页面5和8 */
+/* 姓名：标签 (x: 20, y: 261, 36x12) */
+#page-register-form .form-label-name,
+#page-register-form-2 .form-label-name {
+    position: absolute;
+    top: 261px;
+    left: 20px;
+    width: 36px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* 姓名：输入框 (x: 69, y: 248, 286x38) */
+#page-register-form .form-input-name,
+#page-register-form-2 .form-input-name {
+    position: absolute;
+    top: 248px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-name::placeholder,
+#page-register-form-2 .form-input-name::placeholder {
+    color: #BEBEBE;
+}
+
+/* 手机：标签 (x: 20, y: 319, 36x12) */
+#page-register-form .form-label-phone,
+#page-register-form-2 .form-label-phone {
+    position: absolute;
+    top: 319px;
+    left: 20px;
+    width: 36px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* 手机：输入框 (x: 69, y: 306, 286x38) */
+#page-register-form .form-input-phone,
+#page-register-form-2 .form-input-phone {
+    position: absolute;
+    top: 306px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-phone::placeholder,
+#page-register-form-2 .form-input-phone::placeholder {
+    color: #BEBEBE;
+}
+
+/* 公司：标签 (x: 20, y: 377, 36x12) */
+#page-register-form .form-label-company,
+#page-register-form-2 .form-label-company {
+    position: absolute;
+    top: 377px;
+    left: 20px;
+    width: 36px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* 公司：输入框 (x: 69, y: 364, 286x38) */
+#page-register-form .form-input-company,
+#page-register-form-2 .form-input-company {
+    position: absolute;
+    top: 364px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-company::placeholder,
+#page-register-form-2 .form-input-company::placeholder {
+    color: #BEBEBE;
+}
+
+/* 职务：标签 (x: 20, y: 435, 36x12) */
+#page-register-form .form-label-position,
+#page-register-form-2 .form-label-position {
+    position: absolute;
+    top: 435px;
+    left: 20px;
+    width: 36px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: center;
+}
+
+/* 职务：输入框 (x: 69, y: 422, 286x38) */
+#page-register-form .form-input-position,
+#page-register-form-2 .form-input-position {
+    position: absolute;
+    top: 422px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-position::placeholder,
+#page-register-form-2 .form-input-position::placeholder {
+    color: #BEBEBE;
+}
+
+/* 邀请人：标签 (x: 19, y: 493, 48x12) */
+#page-register-form .form-label-inviter,
+#page-register-form-2 .form-label-inviter {
+    position: absolute;
+    top: 493px;
+    left: 19px;
+    width: 48px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* 邀请人：输入框 (x: 69, y: 480, 286x38) */
+#page-register-form .form-input-inviter,
+#page-register-form-2 .form-input-inviter {
+    position: absolute;
+    top: 480px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-inviter::placeholder,
+#page-register-form-2 .form-input-inviter::placeholder {
+    color: #BEBEBE;
+}
+
+/* 住宿选择标签 - 第一个 (x: 19, y: 538, 137x12) - 仅页面5 */
+#page-register-form .form-hotel-label-1 {
+    position: absolute;
+    top: 538px;
+    left: 19px;
+    width: 137px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* 住宿选择标签 - 第二个 (x: 19, y: 570, 137x12) - 仅页面5 */
+#page-register-form .form-hotel-label-2 {
+    position: absolute;
+    top: 570px;
+    left: 19px;
+    width: 137px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* 单选按钮选项 - 第一个"是" (x: 243, y: 538, 按钮12x12, 文字在 x: 262) - 仅页面5 */
+#page-register-form .radio-option-yes-1 {
+    position: absolute;
+    top: 538px;
+    left: 243px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 262 - 243 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+/* 单选按钮选项 - 第一个"否" (x: 309, y: 538, 按钮12x12, 文字在 x: 328) - 仅页面5 */
+#page-register-form .radio-option-no-1 {
+    position: absolute;
+    top: 538px;
+    left: 309px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 328 - 309 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+/* 单选按钮选项 - 第二个"是" (x: 243, y: 570, 按钮12x12, 文字在 x: 262) - 仅页面5 */
+#page-register-form .radio-option-yes-2 {
+    position: absolute;
+    top: 570px;
+    left: 243px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 262 - 243 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+/* 单选按钮选项 - 第二个"否" (x: 309, y: 570, 按钮12x12, 文字在 x: 328) - 仅页面5 */
+#page-register-form .radio-option-no-2 {
+    position: absolute;
+    top: 570px;
+    left: 309px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 328 - 309 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+#page-register-form .radio-option-yes-1 input[type="radio"],
+#page-register-form .radio-option-no-1 input[type="radio"],
+#page-register-form .radio-option-yes-2 input[type="radio"],
+#page-register-form .radio-option-no-2 input[type="radio"] {
+    width: 12px;
+    height: 12px;
+    border: 0.8782201409339905px solid #A4A4A4;
+    border-radius: 7.025761127471924px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: #D8D8D8;
+    position: relative;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+#page-register-form .radio-option-yes-1 input[type="radio"]:checked,
+#page-register-form .radio-option-no-1 input[type="radio"]:checked,
+#page-register-form .radio-option-yes-2 input[type="radio"]:checked,
+#page-register-form .radio-option-no-2 input[type="radio"]:checked {
+    background: #2B77C8;
+    border-color: #2B77C8;
+}
+
+#page-register-form .radio-option-yes-1 input[type="radio"]:checked::after,
+#page-register-form .radio-option-no-1 input[type="radio"]:checked::after,
+#page-register-form .radio-option-yes-2 input[type="radio"]:checked::after,
+#page-register-form .radio-option-no-2 input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
+}
+
+#page-register-form .radio-option-yes-1 span,
+#page-register-form .radio-option-no-1 span,
+#page-register-form .radio-option-yes-2 span,
+#page-register-form .radio-option-no-2 span {
+    line-height: 1em;
+    width: 12px;
+    height: 12px;
+}
+
+/* ========== 报名信息填写2页面专用样式 ========== */
+
+/* 住宿选择标签 - 仅12月30日 (x: 19, y: 551, 137x12) - 仅页面8 */
+#page-register-form-2 .form-hotel-label-2-only {
+    position: absolute;
+    top: 551px;
+    left: 19px;
+    width: 137px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* 单选按钮选项 - 仅12月30日"是" (x: 243, y: 551, 按钮12x12, 文字在 x: 262) - 仅页面8 */
+#page-register-form-2 .radio-option-yes-2-only {
+    position: absolute;
+    top: 551px;
+    left: 243px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 262 - 243 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+/* 单选按钮选项 - 仅12月30日"否" (x: 309, y: 551, 按钮12x12, 文字在 x: 328) - 仅页面8 */
+#page-register-form-2 .radio-option-no-2-only {
+    position: absolute;
+    top: 551px;
+    left: 309px;
+    display: flex;
+    align-items: center;
+    gap: 19px; /* 328 - 309 = 19 */
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #5D6762;
+    cursor: pointer;
+}
+
+#page-register-form-2 .radio-option-yes-2-only input[type="radio"],
+#page-register-form-2 .radio-option-no-2-only input[type="radio"] {
+    width: 12px;
+    height: 12px;
+    border: 0.8782201409339905px solid #A4A4A4;
+    border-radius: 7.025761127471924px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: #D8D8D8;
+    position: relative;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+#page-register-form-2 .radio-option-yes-2-only input[type="radio"]:checked,
+#page-register-form-2 .radio-option-no-2-only input[type="radio"]:checked {
+    background: #2B77C8;
+    border-color: #2B77C8;
+}
+
+#page-register-form-2 .radio-option-yes-2-only input[type="radio"]:checked::after,
+#page-register-form-2 .radio-option-no-2-only input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
+}
+
+#page-register-form-2 .radio-option-yes-2-only span,
+#page-register-form-2 .radio-option-no-2-only span {
+    line-height: 1em;
+    width: 12px;
+    height: 12px;
+}
+
+/* 温馨提示 (x: 19, y: 585, 290x13) - 仅页面8 */
+#page-register-form-2 .form-tip-message {
+    position: absolute;
+    top: 585px;
+    left: 19px;
+    width: 290px;
+    height: 13px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 8.782201766967773px;
+    font-weight: 700;
+    line-height: 1.3999999565633157em;
+    color: #6E6E6E;
+    text-align: left;
+}
+
+/* 下一步按钮 (x: 20, y: 627, 335x38) - 仅页面5和8 */
+#page-register-form .btn-submit-form,
+#page-register-form-2 .btn-submit-form {
+    position: absolute;
+    top: 627px;
+    left: 20px;
+    width: 335px;
+    height: 38px;
+    background: #2B77C8;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    box-sizing: border-box;
+}
+
+#page-register-form .btn-submit-form:active,
+#page-register-form-2 .btn-submit-form:active {
+    opacity: 0.8;
+}
+
+/* 错误提示 (x: 68, y: 685, 240x24) - 仅页面5和8 */
+#page-register-form .form-error-message,
+#page-register-form-2 .form-error-message {
+    position: absolute;
+    top: 685px;
+    left: 68px;
+    width: 240px;
+    height: 24px;
+    background: #FFE7E7;
+    border-radius: 20px;
+    font-family: 'Alibaba PuHuiTi 3.0', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1em;
+    color: #D45861;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* ==================== 页面6/7: 成功/待审核 ==================== */
+#page-success,
+#page-pending {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.success-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 812px;
+    height: 100vh;
+    padding: 420px 24px 120px;
+    box-sizing: border-box;
+    /* 暂无单独成功页切图，使用待审核同款背景保证统一视觉 */
+    background: #FFFFFF url('images/success-screen.svg') center top / cover no-repeat;
+}
+
+.success-title {
+    font-size: 36px;
+    font-weight: 700;
+    color: #5D6762;
+    margin-bottom: 48px;
+}
+
+.btn-back-home {
+    width: 335px;
+    height: 38px;
+    background: #2B77C8;
+    border: none;
+    border-radius: 7px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 8px 16px rgba(120, 190, 45, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-back-home:active {
+    transform: translateY(1px);
+    box-shadow: 0 6px 12px rgba(120, 190, 45, 0.2);
+}
+
+/* 待审核页面（按设计稿还原） */
+#page-pending {
+    background: #FFFFFF;
+    overflow: hidden;
+}
+
+.pending-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 812px;
+    height: 100vh;
+    padding: 420px 24px 120px;
+    box-sizing: border-box;
+    /* 背景使用从 Figma 导出的整屏切图 */
+    background: #FFFFFF url('images/pending-screen.svg') center top / cover no-repeat;
+    overflow: hidden;
+}
+
+.pending-title {
+    font-size: 36px;
+    font-weight: 700;
+    color: #5D6762;
+    margin-bottom: 64px;
+    text-align: center;
+}
+
+.pending-btn {
+    width: 335px;
+    height: 38px;
+    border: none;
+    border-radius: 7px;
+    background: #2B77C8;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 16px rgba(120, 190, 45, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pending-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 6px 12px rgba(120, 190, 45, 0.2);
+}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="signup_title">报名信息</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet">
+    <div class="page-title" data-i18n="signup_title">报名信息</div>
+
+    <div class="form-row">
+      <div class="form-label"><span data-i18n="phone">手机号：</span></div>
+      <div class="form-field">
+        <input class="input" id="fPhone" type="tel" maxlength="11" inputmode="numeric" data-i18n="phone_ph">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><span data-i18n="code">验证码：</span></div>
+      <div class="form-field">
+        <input class="input" id="fCode" type="tel" maxlength="6" inputmode="numeric" data-i18n="code_ph">
+        <button class="btn-code" id="btnCode" data-i18n="get_code">获取验证码</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btnNext" data-i18n="next">下一步</button>
+    <div class="error-pill hidden" id="errPill"></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+
+  document.getElementById("btnCode").addEventListener("click", function () {
+    var phone = document.getElementById("fPhone").value.trim();
+    if (!/^1[3-9]\d{9}$/.test(phone)) { E.errPill(E.t("err_phone")); return; }
+    E.Api.sendCode(phone).then(function () {
+      E.codeCountdown(document.getElementById("btnCode"));
+      E.toast(E.t("code_sent"));
+    }).catch(function (e) { E.errPill(e.message); });
+  });
+
+  document.getElementById("btnNext").addEventListener("click", function () {
+    var phone = document.getElementById("fPhone").value.trim();
+    var code = document.getElementById("fCode").value.trim();
+    if (!/^1[3-9]\d{9}$/.test(phone)) { E.errPill(E.t("err_phone")); return; }
+    if (!code) { E.errPill(E.t("err_code")); return; }
+
+    E.Api.verifyCode(phone, code).then(function (d) {
+      E.S.token = d.verification_token || "";
+      E.S.phone = phone;
+      E.S.patch({ event_id: eventId });
+
+      var back = E.param("redirect", "");
+      var regId = E.param("reg_id", "");
+      // 凭证失效后重新验证：直接回原页面
+      if (back) { E.go(back, { event_id: eventId, reg_id: regId }); return; }
+
+      // 已报名用户按状态分流，避免重复报名
+      E.Api.mine(eventId).then(function (m) {
+        if (m && m.registered) {
+          E.S.patch({
+            reg_id: m.registration_id,
+            ticket: { id: m.ticket_type_id, name: m.ticket_name, price: m.price },
+            name: m.name, company: m.company, position: m.position, focus: m.focus,
+            order_no: m.order_no, paid: m.paid, checkin_code: m.checkin_code
+          });
+          if (m.paid) return E.go("eticket.html", { event_id: eventId, reg_id: m.registration_id });
+          if (m.status === "rejected") return E.go("result.html", { event_id: eventId, status: "rejected", reg_id: m.registration_id });
+          if (m.status === "approved") return E.go("pay.html", { event_id: eventId, reg_id: m.registration_id });
+          return E.go("result.html", { event_id: eventId, status: "pending", reg_id: m.registration_id });
+        }
+        E.go("profile.html", { event_id: eventId });
+      }).catch(function () { E.go("profile.html", { event_id: eventId }); });
+    }).catch(function (e) { E.errPill(e.message); });
+  });
+})();
+</script>
+</body>
+</html>

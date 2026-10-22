@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="ticket_title">门票类型</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" class="tk-page">
+  <div class="tk-title" data-i18n="ticket_title">门票类型</div>
+
+  <div class="tk-cards" id="tkCards"></div>
+
+  <div class="tk-panel">
+    <div class="tk-tabs">
+      <div class="tk-tab active" data-tab="ben" data-i18n="tab_benefits">门票权益</div>
+      <div class="tk-tab" data-tab="agenda" data-i18n="tab_agenda">论坛议程</div>
+    </div>
+    <div class="tk-cols" id="tkCols"></div>
+    <div class="tk-agenda hidden" id="tkAgenda" data-i18n="agenda_content"></div>
+  </div>
+
+  <div class="tk-fee" id="tkFee"></div>
+  <div class="tk-student-tip hidden" id="tkStudentTip"></div>
+
+  <div class="tk-agree-row">
+    <span class="checkbox" id="agreeCk"></span>
+    <span>
+      <span data-i18n="agree_prefix">我已阅读并同意</span>
+      <a href="agreement.html?tab=user&event_id=1" data-i18n="user_agreement">《用户协议》</a>
+      <a href="agreement.html?tab=privacy&event_id=1" data-i18n="privacy_policy">《隐私政策》</a>
+    </span>
+  </div>
+
+  <button class="btn-primary tk-submit" id="btnSubmit" data-i18n="tk_submit">提交</button>
+  <div class="refund-note" data-i18n="tk_refund"></div>
+  <div class="error-pill hidden" id="errPill"></div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var tickets = [];
+  var members = (E.S.data && E.S.data.draft_members) || [];
+  var selectedId = 0;
+  var agreed = false;
+
+  if (!E.S.token || !E.S.phone) { E.go("signup.html", { event_id: eventId }); return; }
+
+  // 协议链接带上来源（从协议页返回回到选票现场）
+  var selfUrl = location.pathname.split("/").pop() + location.search;
+  Array.prototype.forEach.call(document.querySelectorAll('a[href^="agreement.html"]'), function (a) {
+    var base = a.getAttribute("href");
+    a.setAttribute("href", base + (base.indexOf("?") > -1 ? "&" : "?") + "redirect=" + encodeURIComponent(selfUrl));
+  });
+
+  document.getElementById("agreeCk").addEventListener("click", function () {
+    agreed = this.classList.toggle("checked");
+  });
+
+  /* ---------- 工具 ---------- */
+  function ticketById(id) {
+    for (var i = 0; i < tickets.length; i++) if (tickets[i].id === Number(id)) return tickets[i];
+    return null;
+  }
+  function priceText(tk) {
+    return Number(tk.price) === 0 ? E.t("tk_free") : String(Math.round(Number(tk.price)));
+  }
+  function benefitsOf(tk) {
+    var n = String(tk.name || "");
+    if (/尊享|VIP|Premium/i.test(n)) return E.t("ben_vip").split("\n");
+    if (/学生|Student/i.test(n)) return E.t("ben_student").split("\n");
+    return E.t("ben_std").split("\n");
+  }
+  function barClass(i) { return "tk-bar g" + (i + 1); }
+
+  /* ---------- 票卡 ---------- */
+  function cardHtml(tk, i) {
+    var free = Number(tk.price) === 0;
+    return '<div class="tk-card" data-tid="' + tk.id + '">' +
+      '<div class="tk-main">' +
+        '<div class="tk-tline">' +
+          '<div class="tk-date">' + E.esc(E.t("year")) + '<br>' + E.esc(E.t("date_short")) + '</div>' +
+          '<div class="tk-tickets">' + E.esc(E.t("tickets")) + '</div>' +
+        '</div>' +
+        '<img class="tk-photo" src="img/tk_photo.png" alt="">' +
+        '<div class="tk-bl">' +
+          '<div class="tk-city">' + E.esc(E.t("city")) + '</div>' +
+          '<div class="tk-venue">' + E.esc(E.t("venue")) + '</div>' +
+        '</div>' +
+        '<div class="tk-br">' + E.esc(E.t("slogan1")) + '<br>' + E.esc(E.t("slogan2")) + '</div>' +
+      '</div>' +
+      '<div class="tk-perf"></div>' +
+      '<div class="tk-stub">' +
+        '<div class="tk-s-top">TICKETS</div>' +
+        '<div class="tk-s-name">' + E.esc(tk.name) + '</div>' +
+        '<div class="tk-s-cur' + (free ? " free" : "") + '">' + (free ? "FREE" : "¥") + '</div>' +
+        '<div class="tk-s-val' + (free ? " free" : "") + '">' +
+          (free ? E.esc(E.t("tk_free")) : E.esc(priceText(tk))) + '</div>' +
+      '</div>' +
+      '<div class="' + barClass(i) + '"></div>' +
+    '</div>';
+  }
+
+  function renderCards() {
+    var box = document.getElementById("tkCards");
+    box.innerHTML = tickets.map(cardHtml).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".tk-card"), function (el) {
+      el.addEventListener("click", function () { select(Number(el.getAttribute("data-tid"))); });
+    });
+  }
+
+  /* ---------- 权益面板 ---------- */
+  function renderCols() {
+    var box = document.getElementById("tkCols");
+    box.innerHTML = tickets.map(function (tk) {
+      var lis = benefitsOf(tk).map(function (b) { return '<li>' + E.esc(b) + '</li>'; }).join("");
+      return '<div class="tk-col" data-cid="' + tk.id + '">' +
+        '<div class="tk-col-h">' + E.esc(tk.name) + '</div>' +
+        '<ul class="tk-ben">' + lis + '</ul>' +
+      '</div>';
+    }).join("");
+  }
+
+  function select(id) {
+    selectedId = id;
+    Array.prototype.forEach.call(document.querySelectorAll(".tk-card"), function (el) {
+      el.classList.toggle("selected", Number(el.getAttribute("data-tid")) === id);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".tk-col"), function (el) {
+      el.classList.toggle("active", Number(el.getAttribute("data-cid")) === id);
+    });
+    var tk = ticketById(id);
+    var tip = document.getElementById("tkStudentTip");
+    if (tk && /学生|Student/i.test(String(tk.name))) {
+      tip.textContent = E.t("student_tip"); tip.classList.remove("hidden");
+    } else { tip.classList.add("hidden"); }
+    renderFee();
+  }
+
+  /* ---------- 费用（口径同后端 calcDiscount：邀约/免费不计入付费票，3张9折 5张8折） ---------- */
+  function renderFee() {
+    var tk = ticketById(selectedId);
+    var box = document.getElementById("tkFee");
+    if (!tk || !members.length) { box.textContent = ""; return; }
+    var paid = 0, free = 0, raw = 0;
+    members.forEach(function (m) {
+      if (m.is_invited) return;
+      if (Number(tk.price) === 0) free++; else { paid++; raw += Number(tk.price); }
+    });
+    var rate = paid >= 5 ? 0.8 : (paid >= 3 ? 0.9 : 1.0);
+    var total = Math.round(raw * rate * 100) / 100;
+    box.textContent = E.t("tk_fee_line")
+      .replace("{n}", members.length)
+      .replace("{ticket}", tk.name)
+      .replace("{amt}", total.toFixed(2)) + (rate < 1 ? "（" + (rate * 10) + "折）" : "");
+  }
+
+  /* ---------- tab ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".tk-tab"), function (el) {
+    el.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tk-tab"), function (x) { x.classList.remove("active"); });
+      el.classList.add("active");
+      var ben = el.getAttribute("data-tab") === "ben";
+      document.getElementById("tkCols").classList.toggle("hidden", !ben);
+      document.getElementById("tkAgenda").classList.toggle("hidden", ben);
+    });
+  });
+
+  /* ---------- 加载 ---------- */
+  Promise.all([E.Api.event(eventId), E.Api.tickets(eventId)]).then(function (res) {
+    var list = res[1].ticket_types || res[1].list || res[1] || [];
+    tickets = list.filter(function (t) { return t.on_shelf === undefined || t.on_shelf == 1; });
+    tickets.sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+    if (!tickets.length) { E.errPill("票种加载失败"); return; }
+    renderCards(); renderCols();
+    var def = tickets.filter(function (t) { return Number(t.price) > 0; })[0] || tickets[0];
+    select(def.id);
+    E.applyLang();
+  }).catch(function (e) { E.errPill(e.message || "票种加载失败"); });
+
+  /* ---------- 提交 ---------- */
+  document.getElementById("btnSubmit").addEventListener("click", function () {
+    E.errPill("");
+    if (!members.length) { E.errPill(E.t("err_required")); E.go("profile.html", { event_id: eventId }); return; }
+    if (!selectedId) { E.toast(E.t("ticket_title")); return; }
+    if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
+    var btn = this; btn.disabled = true;
+    E.Api.submitGroup({
+      event_id: Number(eventId),
+      buyer_phone: E.S.phone,
+      members: members.map(function (m) {
+        return {
+          name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
+          company: String(m.company || "").trim(), position: String(m.position || "").trim(),
+          inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
+          session_id: Number(m.session_id) || 0, ticket_type_id: Number(selectedId)
+        };
+      })
+    }).then(function (d) {
+      E.S.patch({ group_no: d.group_no, quote: d.quote, draft_members: null });
+      E.go("result.html", { event_id: eventId, group_no: d.group_no, status: "pending" });
+    }).catch(function (e) {
+      btn.disabled = false;
+      E.errPill(e.message || E.t("err_submit"));
+    });
+  });
+})();
+</script>
+</body>
+</html>

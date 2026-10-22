@@ -355,18 +355,23 @@ select.input.filled { color: #1D2129; }
 /* 退款提示 */
 .refund-tip { font-size: 11px; color: #86909C; margin-top: 22px; line-height: 1.6; }
 
-/* ---------- 状态结果页 ---------- */
-.result-page { text-align: center; padding-top: 8px; }
-.result-icon { width: 62%; max-width: 260px; margin: 20px auto 0; }
-.result-icon img { width: 100%; display: block; }
-.result-title { font-size: 34px; color: var(--title-gray); font-weight: 600; margin-top: 34px; letter-spacing: 1px; }
+/* ---------- 状态结果页（设计稿：图标区 y234 Ø252，标题字形带 y553 h34，按钮 y697） ---------- */
+.result-page { text-align: center; padding-top: 26px; }
+.result-icon { width: 252px; height: 252px; max-width: 252px; margin: 22px auto 0; }
+.result-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.result-title { font-size: 34px; color: var(--title-gray); font-weight: 600; margin-top: 81px; letter-spacing: 1px; }
 .result-sub { font-size: 13px; color: #86909C; margin-top: 12px; }
+.result-page .btn-primary { margin-top: 106px; }
+.result-page .btn-primary + .btn-primary { margin-top: 12px; }
 
-/* ---------- 电子票 ---------- */
-.eticket-wrap { background: var(--brand-blue); padding: 26px 12px 30px; min-height: 100vh; position: relative; }
+/* ---------- 电子票（设计稿：蓝底品牌区+白卡 y193 浮起，行距40，状态值大字） ---------- */
+.eticket-wrap { background: var(--brand-blue); padding: 0 12px 30px; min-height: 100vh; position: relative; }
+#app.eticket-wrap .btn-primary { margin-top: 12px; }
+#app.eticket-wrap div > .btn-primary:first-child { margin-top: 18px; }
 .eticket {
   background: #fff; border-radius: 18px; overflow: hidden;
   box-shadow: 0 4px 20px rgba(0,0,0,.35); position: relative;
+  margin-top: 28px;
 }
 .eticket-head { padding: 22px 20px 14px; display: flex; justify-content: space-between; }
 .eticket-name { font-size: 30px; font-weight: 800; }
@@ -382,9 +387,10 @@ select.input.filled { color: #1D2129; }
 .eticket-head-wrap::after { right: -10px; }
 .eticket-body { padding: 16px 20px 0; }
 .et-row { display: flex; margin-bottom: 12px; font-size: 13px; }
+.eticket .et-row { margin-bottom: 22px; }
 .et-row .k { width: 76px; color: var(--label-gray); flex-shrink: 0; }
 .et-row .v { color: #1D2129; font-weight: 500; }
-.et-row .v.hl { color: var(--blue); font-size: 18px; font-weight: 700; }
+.eticket .et-row .v.hl { color: var(--blue); font-size: 22px; font-weight: 700; }
 .et-tabs { display: flex; margin-top: 14px; border-bottom: 1px solid var(--divider); }
 .et-tab {
   flex: 1; text-align: center; padding: 12px 0; font-size: 15px;
@@ -447,11 +453,12 @@ select.input.filled { color: #1D2129; }
 .qr-item span { font-size: 11.5px; color: #4E5969; }
 .follow-tip { text-align: center; font-size: 12.5px; color: #4E5969; margin-top: 22px; }
 
-/* ---------- 开发票页 ---------- */
-.invoice-page { text-align: center; padding-top: 10px; }
-.invoice-tip { font-size: 13.5px; color: #4E5969; margin: 6px 0 24px; }
-.qr-big { width: 68%; max-width: 250px; margin: 0 auto; background: #fff; border-radius: 14px; padding: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+/* ---------- 开发票页（设计稿：提示 y206，二维码区 287px y251-528，按钮 y697） ---------- */
+.invoice-page { text-align: center; padding-top: 38px; }
+.invoice-tip { font-size: 13px; color: #4E5969; margin: 0 0 30px; }
+.qr-big { width: 307px; max-width: none; margin: 0 auto; background: #fff; border-radius: 14px; padding: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
 .qr-big img { width: 100%; display: block; }
+.invoice-page .btn-primary { margin-top: 169px; }
 
 /* ---------- Toast ---------- */
 .ec9-toast {
@@ -563,4 +570,110 @@ select.input.filled { color: #1D2129; }
 .invited-tip {
   background: #E8FFEA; border: 1px solid #9FE3A8; color: #008A20;
   border-radius: 8px; font-size: 12px; line-height: 1.6; padding: 8px 10px; margin: 8px 0;
+}
+
+/* ============================================================
+   门票类型页（设计稿「票选择」375x1115）
+   灰底 #EDEDED，无品牌头；标题 y70-92 / 三卡 y114-541 / 权益面板
+   y562-889 / 协议 y950-963 / 提交按钮 y984-1021 / 退款说明 y1061-1069
+   ============================================================ */
+#app.tk-page { background: #EDEDED; min-height: 100vh; padding: 69px 0 30px; }
+#app.tk-page .tk-title {
+  text-align: center; font-size: 24px; line-height: 1; font-weight: 600;
+  color: var(--title-gray); margin: 0 0 21px;
+}
+
+/* ---------- 票卡：335x136，圆角 20，白卡 + 虚线撕口 + 副券 + 右侧色条 ---------- */
+.tk-cards { margin: 0 20px; }
+.tk-card {
+  position: relative; display: flex; height: 136px; margin-bottom: 10px;
+  background: #fff; border-radius: 20px; overflow: hidden; cursor: pointer;
+}
+.tk-card.selected { box-shadow: 0 0 0 2px var(--btn-blue); }
+.tk-main { position: relative; width: 242px; flex: none; }
+.tk-tline {
+  position: absolute; left: 8px; right: 16px; top: 8px;
+  display: flex; justify-content: space-between; align-items: flex-start; color: #1D2129;
+}
+.tk-date { font-size: 10px; font-weight: 800; line-height: 1.2; }
+.tk-tickets { font-size: 9px; font-weight: 800; letter-spacing: .6px; }
+.tk-photo {
+  position: absolute; left: 37px; top: 27px; width: 180px; height: 75px;
+  border-radius: 37.5px; object-fit: cover; display: block;
+}
+.tk-bl { position: absolute; left: 8px; top: 93px; color: #1D2129; }
+.tk-city { font-size: 14px; font-weight: 700; line-height: 1.1; }
+.tk-venue { font-size: 14px; line-height: 1.2; margin-top: 3px; }
+.tk-br {
+  position: absolute; right: 12px; top: 106px; text-align: right;
+  color: #1D2129; font-size: 8px; line-height: 1.35; letter-spacing: .2px;
+}
+.tk-perf { width: 2px; flex: none; border-left: 2px dashed #E5E6EB; }
+/* 副券：TICKETS / 票种名 / 价格符号 / 价格数字（设计稿实测坐标） */
+.tk-stub { position: relative; width: 69px; flex: none; }
+.tk-s-top {
+  position: absolute; left: 9px; top: 11px; font-size: 11px; font-weight: 800;
+  letter-spacing: .9px; color: #000; line-height: 1; white-space: nowrap;
+}
+.tk-s-name {
+  position: absolute; left: 9px; top: 27px; font-size: 17px; font-weight: 700;
+  color: #000; line-height: 1; white-space: nowrap; letter-spacing: 0;
+}
+.tk-s-cur {
+  position: absolute; left: 9px; top: 88px; font-size: 14px; font-weight: 800;
+  color: #E54A55; line-height: 1; white-space: nowrap;
+}
+.tk-s-val {
+  position: absolute; left: 9px; top: 106px; font-size: 18px; font-weight: 800;
+  color: #E54A55; line-height: 1; white-space: nowrap; letter-spacing: 0;
+}
+.tk-s-cur.free, .tk-s-val.free { color: #83B931; }
+.tk-bar { width: 20px; flex: none; }
+.tk-bar.g1 { background: #83B931; }
+.tk-bar.g2 { background: #3056D4; }
+.tk-bar.g3 { background: linear-gradient(180deg, #5B3200 0%, #EB870E 100%); }
+
+/* ---------- 权益 / 议程面板：335x328，圆角 8 ---------- */
+.tk-panel {
+  margin: 21px 20px 0; background: #fff; border-radius: 8px;
+  padding: 20px 20px 14px; min-height: 328px;
+}
+.tk-tabs { display: flex; height: 32px; }
+.tk-tab {
+  flex: 1; text-align: center; font-size: 13px; font-weight: 600;
+  color: var(--title-gray); position: relative; padding-top: 2px;
+}
+.tk-tab.active { color: #000; }
+.tk-tab.active::after {
+  content: ""; position: absolute; left: 0; bottom: 0;
+  width: 148px; height: 3px; background: var(--btn-blue); border-radius: 2px;
+}
+.tk-cols { display: flex; margin-top: 16px; }
+.tk-col { flex: 1; text-align: center; }
+.tk-col-h { font-size: 14px; font-weight: 700; color: #383838; line-height: 1; }
+.tk-col.active .tk-col-h::after {
+  content: ""; display: block; width: 98px; height: 5px;
+  background: #3056D4; border-radius: 3px; margin: 8px auto 0;
+}
+.tk-ben { margin-top: 15px; list-style: none; padding: 0; }
+.tk-ben li { font-size: 10px; line-height: 12px; color: #1D2129; margin-bottom: 21px; }
+.tk-agenda { margin-top: 18px; font-size: 10px; line-height: 20px; color: #1D2129; white-space: pre-line; }
+
+/* ---------- 协议 / 提交 / 退款说明 ---------- */
+#app.tk-page .tk-agree-row {
+  display: flex; align-items: center; gap: 8px;
+  margin: 24px 20px 0; font-size: 13px; color: #6E6E6E;
+}
+#app.tk-page .tk-agree-row a { color: var(--blue); text-decoration: none; }
+#app.tk-page .checkbox { width: 12px; height: 12px; border-color: #C9CDD4; }
+#app.tk-page .checkbox.checked::after { left: 3px; top: .5px; width: 3px; height: 6px; }
+#app.tk-page .tk-fee {
+  margin: 14px 20px 0; text-align: center; font-size: 12px; color: #4E5969; line-height: 1.3;
+}
+#app.tk-page .tk-submit { width: calc(100% - 40px); margin: 21px 20px 0; }
+#app.tk-page .refund-note {
+  margin: 36px 23px 0; font-size: 10px; line-height: 1.4; color: #6E6E6E;
+}
+#app.tk-page .tk-student-tip {
+  margin: 12px 20px 0; font-size: 11px; line-height: 1.6; color: #8A6D3B;
 }

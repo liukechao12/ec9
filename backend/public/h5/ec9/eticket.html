@@ -8,7 +8,7 @@
 </head>
 <body>
 <div id="app" class="eticket-wrap">
-  <div id="header" style="display:none"></div>
+  <div id="header"></div>
 
   <div class="eticket">
     <div class="eticket-head-wrap">
@@ -43,8 +43,8 @@
   </div>
 
   <div style="text-align:center;margin-top:18px">
-    <button class="btn-primary" id="btnCheckin" style="background:#2A2A2C" data-i18n="go_checkin">去签到</button>
-    <button class="btn-primary" id="btnHome" style="background:#2A2A2C" data-i18n="back_home">回到首页</button>
+    <button class="btn-primary" id="btnCheckin" data-i18n="go_checkin">去签到</button>
+    <button class="btn-primary" id="btnHome" data-i18n="back_home">回到首页</button>
   </div>
 </div>
 
@@ -56,12 +56,8 @@
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var d = E.S.data;
 
-  // 语言切换（黑底页手动挂载）
-  var wrap = document.getElementById("app");
-  var holder = document.createElement("div");
-  wrap.appendChild(holder);
-  E.mountHeader(holder, false);
-  document.querySelector(".brand").style.background = "transparent";
+  // 品牌 header（设计稿：蓝底品牌区 + 白卡浮起）
+  E.mountHeader(document.getElementById("header"), false);
 
   document.getElementById("tkName").textContent = d.name || "—";
   document.getElementById("tkPhone").textContent = E.S.phone || "—";

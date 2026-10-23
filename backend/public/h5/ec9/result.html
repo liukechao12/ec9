@@ -129,10 +129,67 @@
   }
 
   var payTokenParam = E.param("pay_token", "");
+
+  function showStatus(st) {
+    var c = REG[st] || REG.pending;
+    document.getElementById("resIcon").src = "assets/" + c.icon;
+    document.getElementById("resTitle").textContent = E.t(c.title);
+    if (c.sub) {
+      var sub = document.getElementById("resSub");
+      sub.textContent = E.t(c.sub); sub.classList.remove("hidden");
+    }
+  }
+
+  /* ---------- 单人（reg_id）：以服务端真实状态为准 ----------
+     旧链接里的 status 只是提交那一刻的猜测值，后台审核通过后
+     再打开会一直显示「等待审核」，所以一律实时查 mine 覆盖。 */
+  function renderSingle(st, m) {
+    var price = Number((m && m.price) || 0);
+    var rid = regId || (m && m.registration_id) || "";
+
+    // 审核通过 + 要掏钱 → 进「待付款」页（金额 + 支付按钮）
+    if (st === "approved" && price > 0) {
+      E.go("pending_pay.html", { event_id: eventId, reg_id: rid });
+      return;
+    }
+    showStatus(st);
+    if (st === "paid" || (st === "approved" && price === 0)) {
+      // 已支付 / 免费票 → 报名成功，看电子票
+      if (st === "approved") showStatus("approved");
+      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId, reg_id: rid }); });
+      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    } else if (st === "rejected") {
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+      setSecond(E.t("re_edit"), function () { E.go("profile.html", { event_id: eventId }); });
+      if (m && m.reject_reason) {
+        var sub = document.getElementById("resSub");
+        sub.textContent = m.reject_reason; sub.classList.remove("hidden");
+      }
+    } else {
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+    }
+  }
+
+  function loadSingleRealtime() {
+    // 没凭证就只能按 URL 猜；有凭证一律查真实状态
+    if (!E.S.token) { showStatus(status); renderSingle(status, null); return; }
+    E.Api.mine(eventId).then(function (m) {
+      if (!m || !m.registered) { showStatus(status); renderSingle(status, null); return; }
+      // 属于某个整单 → 交给整单逻辑（人数、折扣、待付款都按整单口径）
+      if (m.group && m.group.group_no) {
+        E.go("result.html", { event_id: eventId, group_no: m.group.group_no, pay_token: payTokenParam });
+        return;
+      }
+      showStatus(m.status);
+      renderSingle(m.status, m);
+    }).catch(function () { showStatus(status); renderSingle(status, null); });
+  }
+
   if (groupNo) {
     E.Api.groupInfo(groupNo, payTokenParam).then(function (g) {
       // 以服务端真实状态覆盖 URL 里的 status 猜测
       var regs = g.registrations || [];
+      var order = g.order;
       var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
       var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
       var anyApproved = regs.some(function (r) { return r.status === "approved"; });
@@ -162,19 +219,12 @@
     // 签到结果：回首页 / 看电子票
     setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     setSecond(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId }); });
-  } else if (status === "approved" || status === "paid") {
-    // 审核通过 → 去支付；已支付 → 看电子票
-    if (status === "paid") {
-      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId, reg_id: regId }); });
-    } else {
-      setMain(E.t("go_pay"), function () { E.go("pay.html", { event_id: eventId, reg_id: regId }); });
-    }
-    setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+  } else if (regId) {
+    loadSingleRealtime();
   } else {
+    // 没有任何凭据：只能按 URL 显示
+    showStatus(status === "paid" ? "paid" : (status === "rejected" ? "rejected" : "pending"));
     setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
-    if (status === "rejected") {
-      setSecond(E.t("re_edit"), function () { E.go("profile.html", { event_id: eventId }); });
-    }
   }
 })();
 </script>

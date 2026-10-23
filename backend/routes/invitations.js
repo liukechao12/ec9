@@ -8,6 +8,7 @@ const { authenticate } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
 const { decryptPhone } = require('../utils/phoneCrypto');
 const XLSX = require('xlsx');
+const groupOrderService = require('../services/groupOrderService');
 
 // 生成邀请码
 function generateInviteCode() {
@@ -193,7 +194,7 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
       });
     }
 
-    const { remark } = req.body || {};
+    const { remark, need_pay } = req.body || {};
     const invitation = await Invitation.findByPk(req.params.id);
 
     if (!invitation) {
@@ -202,6 +203,11 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
         message: '邀约不存在'
       });
     }
+
+    // 手动报名成功时同样允许改「是否需要付款」；不传沿用原值
+    const needPay2 = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
+      : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
+        : (Number(invitation.need_pay) === 0 ? 0 : 1);
 
     if (invitation.is_valid === 0 || invitation.is_valid === false) {
       return res.status(400).json({
@@ -222,11 +228,24 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
       registration_time: new Date(),
       approval_time: new Date(),
       approval_by: req.user.username,
-      approval_remark: remark || '管理员手动设置报名成功'
+      approval_remark: remark || '管理员手动设置报名成功',
+      need_pay: needPay2
     });
 
     // 同步报名记录状态（建单前置）
     await syncRegistrationApproved(invitation.id, invitation.event_id, invitation.guest_id);
+
+    // 报名成功 → 补单（免票出票 / 需付款建待支付单）
+    let orderInfo = null;
+    try {
+      const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
+      for (const reg of regs) {
+        const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+        if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+      }
+    } catch (e) {
+      console.error('[手动报名成功] 建单异常（不阻塞）：', e.message);
+    }
 
     await invitation.reload({
       include: [
@@ -243,8 +262,9 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
 
     res.json({
       code: 200,
-      message: '已手动设置为报名成功',
-      data: invitation
+      message: orderInfo && orderInfo.free ? '已设为报名成功（免票，已自动出票）' : '已手动设置为报名成功',
+      data: invitation,
+      order: orderInfo
     });
   } catch (error) {
     res.status(500).json({
@@ -252,6 +272,51 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
       message: '操作失败',
       error: error.message
     });
+  }
+});
+
+/**
+ * PUT /api/invitations/:id/need-pay   管理员改「是否需要付款」
+ * body: { need_pay: 0|1 }
+ * 已报名且已建待支付单的情况下改成免票 → 原单作废并直接出票
+ */
+router.put('/:id/need-pay', authenticate, operationLog('invitations', '修改邀约是否需付款'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可以修改' });
+    }
+    const raw = req.body ? req.body.need_pay : undefined;
+    const needPay = (raw === 0 || raw === '0' || raw === false) ? 0 : 1;
+    const invitation = await Invitation.findByPk(req.params.id);
+    if (!invitation) return res.status(404).json({ code: 404, message: '邀约不存在' });
+
+    await invitation.update({ need_pay: needPay });
+    console.log(`[邀约] #${invitation.id} need_pay → ${needPay}（${needPay ? '需付款' : '免票'}），操作人 ${req.user.username}`);
+
+    // 已报名（registration_status=2）的邀约：立即把新口径落到订单上
+    let orderInfo = null;
+    if (Number(invitation.registration_status) === 2) {
+      try {
+        const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
+        for (const reg of regs) {
+          const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+          if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+          if (r && !r.ok && !r.skipped) console.warn('[改付款口径] 同步订单失败：', r.error);
+        }
+      } catch (e) {
+        console.error('[改付款口径] 同步订单异常（不阻塞）：', e.message);
+      }
+    }
+
+    await invitation.reload();
+    res.json({
+      code: 200,
+      message: needPay ? '已设为需付款' : '已设为免票',
+      data: invitation,
+      order: orderInfo
+    });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '操作失败', error: error.message });
   }
 });
 
@@ -356,6 +421,7 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
         活动名称: inv.event?.name || '',
         活动地点: inv.event?.location || '',
         报名状态: statusTextMap[inv.registration_status] || inv.registration_status || '',
+        是否需付款: Number(inv.need_pay) === 0 ? '免票' : '需付款',
         邀约码: inv.invite_code || '',
         住宿分配: accommodation,
         座位分配: seats,
@@ -792,12 +858,15 @@ router.get('/code/:code', async (req, res) => {
 // 创建邀请（需要认证）
 router.post('/', authenticate, operationLog('invitations', '创建邀约'), async (req, res) => {
   try {
-    let { event_id, guest_id, source_bd, created_by } = req.body;
+    let { event_id, guest_id, source_bd, created_by, need_pay } = req.body;
     
     // BD用户创建邀约时，自动设置source_bd为自己
     if (req.user.role === 'bd') {
       source_bd = req.user.username;
     }
+
+    // 是否需要付款：新建邀约默认「需付款(1)」，管理员可在审批时改成免票(0)
+    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
     
     // 检查该嘉宾在该活动是否已有邀约记录（无论状态，只要is_valid=1）
     const existingInvitation = await Invitation.findOne({
@@ -852,6 +921,7 @@ router.post('/', authenticate, operationLog('invitations', '创建邀约'), asyn
       source_bd,
       invite_url,
       created_by,
+      need_pay: needPay,
       registration_status: 0,  // 待回复（后台创建的都是待回复）
       is_valid: 1
     });
@@ -884,12 +954,15 @@ router.post('/', authenticate, operationLog('invitations', '创建邀约'), asyn
 // 批量创建邀请（需要认证）
 router.post('/batch', authenticate, operationLog('invitations', '批量创建邀约'), async (req, res) => {
   try {
-    let { event_id, guest_ids, source_bd, created_by } = req.body;
+    let { event_id, guest_ids, source_bd, created_by, need_pay } = req.body;
     
     // BD用户批量创建邀约时，自动设置source_bd为自己
     if (req.user.role === 'bd') {
       source_bd = req.user.username;
     }
+
+    // 批量创建同样默认「需付款」，管理员可后续逐条改免票
+    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
     
     if (!Array.isArray(guest_ids) || guest_ids.length === 0) {
       return res.status(400).json({
@@ -951,6 +1024,7 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
         source_bd,
         invite_url,
         created_by,
+        need_pay: needPay,
         registration_status: 0,
         is_valid: 1
       });
@@ -1169,7 +1243,7 @@ router.post('/:id/approve', authenticate, operationLog('invitations', '批准邀
       });
     }
     
-    const { remark } = req.body;
+    const { remark, need_pay } = req.body;
     const invitation = await Invitation.findByPk(req.params.id);
     
     if (!invitation) {
@@ -1187,14 +1261,19 @@ router.post('/:id/approve', authenticate, operationLog('invitations', '批准邀
     }
     
     const fromStatus = invitation.registration_status;
-    
+    // 审批时管理员可改「是否需要付款」；不传则沿用邀约原值（默认需付款）
+    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
+      : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
+        : (Number(invitation.need_pay) === 0 ? 0 : 1);
+
     // 更新状态（只使用 registration_status）
     await invitation.update({
       registration_status: 2,  // 已接受
       approval_time: new Date(),
       approval_by: req.user.username,
       approval_remark: remark || null,
-      registration_time: new Date()
+      registration_time: new Date(),
+      need_pay: needPay
     });
     
     // 触发报名成功短信（根据活动选择模板：业绩说明会用 22，其他按活动ID映射）
@@ -1239,12 +1318,33 @@ router.post('/:id/approve', authenticate, operationLog('invitations', '批准邀
     // 审批通过 → 报名记录置为 approved（建单前置条件）
     await syncRegistrationApproved(invitation.id, invitation.event_id, invitation.guest_id);
 
+    // 报名成功后补齐订单：免票的自动出票；需付款的建待支付单（购票人短信带付款链接）
+    let orderInfo = null;
+    try {
+      const regs = await Registration.findAll({
+        where: { invitation_id: invitation.id },
+        order: [['id', 'DESC']]
+      });
+      const fallback = regs.length ? [] : await Registration.findAll({
+        where: { event_id: invitation.event_id, guest_id: invitation.guest_id },
+        order: [['id', 'DESC']]
+      });
+      for (const reg of regs.concat(fallback)) {
+        const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+        if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+        if (r && !r.ok && !r.skipped) console.warn('[审批通过] 建单失败：', r.error);
+      }
+    } catch (e) {
+      console.error('[审批通过] 建单异常（不阻塞审批）：', e.message);
+    }
+
     await invitation.reload();
     
     res.json({
       code: 200,
-      message: '审批通过',
-      data: invitation
+      message: orderInfo && orderInfo.free ? '审批通过（免票，已自动出票）' : '审批通过',
+      data: invitation,
+      order: orderInfo
     });
   } catch (error) {
     res.status(500).json({

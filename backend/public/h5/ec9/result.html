@@ -72,7 +72,9 @@
     var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
     var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
     var anyApproved = regs.some(function (r) { return r.status === "approved"; });
-    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited; });
+    // 「报名成功」只在不用掏钱（全员免票/¥0 票种，或订单已支付）时才算真正完成
+    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited; })
+      && (!order || Number(order.final_amount) === 0 || order.status === 'paid');
 
     var html = '<div class="group-tip ' + (allPaid ? 'ok' : (anyRejected ? 'warn' : 'info')) + '" style="margin-top:14px">';
     if (autoApproved) html = '<div class="group-tip ok" style="margin-top:14px">' + E.t("auto_approved_tip") + '</div>';
@@ -92,8 +94,8 @@
       var stTxt = r.status === 'paid' ? E.t("st_paid") : (r.status === 'approved' ? E.t("st_approved") :
                   (r.status === 'rejected' ? E.t("result_rejected") : E.t("result_pending")));
       html += '<div class="fee-row"><span>' + E.esc(r.name || '') +
-        (r.is_invited ? '<span class="mc-tag">' + E.t("invited_tag") + '</span>' : '') +
-        '<span class="mc-tag">' + E.esc(r.ticket_name || '') + (r.is_invited ? ' ¥0' : (r.is_student ? ' ¥0' : ' ¥' + r.price)) + '</span></span>' +
+        (r.is_invited ? '<span class="mc-tag">' + E.t(r.need_pay === false ? "invited_tag" : "invited_tag_pay") + '</span>' : '') +
+        '<span class="mc-tag">' + E.esc(r.ticket_name || '') + ' ¥' + (r.payable_price != null ? Number(r.payable_price) : (r.is_student ? 0 : Number(r.price || 0))) + '</span></span>' +
         '<span>' + stTxt + '</span></div>';
     });
     if (order && !allPaid) {

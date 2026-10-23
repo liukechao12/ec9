@@ -142,18 +142,56 @@ async function findInvited(phones, eventId) {
   for (const inv of genuine) {
     const hmac = gid2phone.get(inv.guest_id);
     const phone = hmac2phone.get(hmac);
-    if (phone) map.set(phone, { invitation_id: inv.id, source_bd: inv.source_bd || '' });
+    if (phone) map.set(phone, {
+      invitation_id: inv.id,
+      source_bd: inv.source_bd || '',
+      need_pay: Number(inv.need_pay) !== 0      // 空值兼容：NULL 视为需付款
+    });
+  }
+  return map;
+}
+
+/** 取邀约的「是否需要付款」（缺省 1 = 需付款） */
+const needPayOf = (inv) => (inv == null ? true : Number(inv.need_pay) !== 0);
+
+/**
+ * 按 guest_id 查邀约（审核期用：管理员可能刚刚在邀约管理里改过 need_pay，
+ * 这里重新读库，保证审批时的计价跟管理员最新设置一致）
+ * @returns {Promise<Map<number, {invitation_id:number, need_pay:boolean}>>}
+ */
+async function findInvitedByGuestIds(guestIds, eventId) {
+  const map = new Map();
+  const ids = (guestIds || []).filter(Boolean).map(Number);
+  if (!ids.length) return map;
+  const invs = await Invitation.findAll({
+    where: { event_id: eventId, guest_id: { [Op.in]: ids }, is_valid: 1 }
+  });
+  // 审核期口径放宽：报名时自动生成的「待审批」邀约，一旦被管理员批准（registration_status=2）
+  // 就是一条真邀约，它上面的 need_pay 要参与计价（管理员批准时选了免票，这里就得免票）
+  const genuine = invs.filter(inv =>
+    !(inv.extra_fields && inv.extra_fields.auto_created) || Number(inv.registration_status) === 2);
+  for (const inv of genuine) {
+    if (!map.has(inv.guest_id)) {
+      map.set(inv.guest_id, { invitation_id: inv.id, need_pay: needPayOf(inv) });
+    }
   }
   return map;
 }
 
 /**
  * 纯估价（无副作用）：H5 提交前实时显示
- * 免费口径：学生票（¥0）**与邀约名单内的人**（免票），均不计入付费张数
- * @param {Array<{ticket_type_id:number, is_invited?:boolean}>} members
+ *
+ * 免费口径（2026-10-23 修订，按昊哥要求）：
+ *   ① 票种本身 ¥0（学生票 / 免费票）        → 永远免票
+ *   ② 邀约名单内 + 邀约标记 need_pay=0（免票）→ 免票
+ *   ③ 邀约名单内 + need_pay=1（默认需付款）   → 照票种价付费
+ *   ④ 不在邀约名单                          → 照票种价付费（并走审批）
+ * 即：是否免票由「邀约上的 need_pay」决定，不再由「是否在名单内」一刀切。
+ * @param {Array<{ticket_type_id:number, phone?:string, guest_id?:number, is_invited?:boolean, need_pay?:boolean}>} members
  */
 async function quoteGroup(eventId, members) {
   const invited = await findInvited(members.map(m => m.phone).filter(Boolean), eventId);
+  const invitedByGuest = await findInvitedByGuestIds(members.map(m => m.guest_id), eventId);
   const ticketIds = [...new Set(members.map(m => Number(m.ticket_type_id)).filter(Boolean))];
   const tickets = await TicketType.findAll({ where: { id: { [Op.in]: ticketIds } } });
   const tmap = new Map(tickets.map(t => [t.id, t]));
@@ -164,14 +202,28 @@ async function quoteGroup(eventId, members) {
     const tt = tmap.get(Number(m.ticket_type_id));
     if (!tt) return { ok: false, error: `票种不存在：${m.ticket_type_id}` };
     if (tt.on_shelf != 1) return { ok: false, error: `票种已下架：${tt.name}` };
-    const isInvited = !!(m.is_invited || (m.phone && invited.has(String(m.phone))));
-    const isFree = isInvited || Number(tt.price) === 0;
-    if (!isInvited && !(Number(tt.price) === 0)) { paidCount++; rawTotal += Number(tt.price); }
+
+    // 命中邀约（手机号 / guest_id / 调用方显式传入，三种口径任一）
+    const byPhone = m.phone ? invited.get(String(m.phone)) : null;
+    const byGuest = m.guest_id ? invitedByGuest.get(Number(m.guest_id)) : null;
+    const isInvited = !!m.is_invited || !!byPhone || !!byGuest;
+    // 需付款优先级：调用方显式 need_pay > 邀约记录 > 默认需付款
+    let needPay = true;
+    if (typeof m.need_pay === 'boolean') needPay = m.need_pay;
+    else if (m.need_pay != null) needPay = Number(m.need_pay) !== 0;
+    else if (byPhone) needPay = byPhone.need_pay;
+    else if (byGuest) needPay = byGuest.need_pay;
+
+    const price = Number(tt.price) || 0;
+    const isFree = !needPay || price === 0;   // 免票标记 OR ¥0 票种
+    const payable = isFree ? 0 : price;
+    if (!isFree) { paidCount++; rawTotal += payable; }
     items.push({
       ticket_type_id: tt.id, ticket_name: tt.name,
-      price: isInvited ? 0 : Number(tt.price),
+      price: payable,
       is_free: isFree,
       is_invited: isInvited,
+      need_pay: !isFree,
       is_student: Number(tt.is_student) === 1
     });
   }
@@ -257,13 +309,15 @@ async function createGroup({ buyerPhone, eventId, members }) {
     }
 
     const isInvited = invitedMap.has(phone);
+    // 邀约是否在名单内决定「免不免审」；是否掏钱由邀约上的 need_pay 决定（默认 1 需付款）
+    const invNeedPay = isInvited ? invitedMap.get(phone).need_pay : true;
     // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
     const invId = await syncInvitationOnRegister({
       eventId, guestId: guest.id, isInvited,
       invitationId: isInvited ? invitedMap.get(phone).invitation_id : null,
       at: now
     });
-    // 邀约名单内：免审核直接通过 + 免票（audit_exempt 标记，驳回重提时仍免审）
+    // 邀约名单内：免审核直接通过（audit_exempt 标记，驳回重提时仍免审）
     const reg = await Registration.create({
       event_id: eventId,
       session_id: Number(m.session_id) || 0,
@@ -281,7 +335,8 @@ async function createGroup({ buyerPhone, eventId, members }) {
         submitter_phone: buyerPhone,
         is_buyer: phone === String(buyerPhone),
         is_invited: isInvited,
-        audit_exempt: isInvited
+        audit_exempt: isInvited,
+        need_pay: invNeedPay
       }
     });
     created.push({
@@ -292,20 +347,36 @@ async function createGroup({ buyerPhone, eventId, members }) {
       ticket_type_id: Number(m.ticket_type_id),
       is_buyer: phone === String(buyerPhone),
       is_invited: isInvited,
+      need_pay: invNeedPay,
       status: reg.status
     });
   }
 
-  // 邀约名单内的人免票：重新估价（此时 is_invited 已落库，用手机号二次确认）
-  const finalQuote = await quoteGroup(eventId, created.map(c => ({ phone: c.phone, ticket_type_id: c.ticket_type_id, is_invited: c.is_invited })));
+  // 二次估价（此时 is_invited / need_pay 已落库，手机号 + guest_id 双重确认）
+  const finalQuote = await quoteGroup(eventId, created.map(c => ({
+    phone: c.phone, guest_id: c.guest_id, ticket_type_id: c.ticket_type_id,
+    is_invited: c.is_invited, need_pay: c.need_pay
+  })));
   if (!finalQuote.ok) return finalQuote;
 
-  // 整单无付费票（全员邀约 / 全员学生票）→ 自动确认：免审核、免支付，直接出票
+  // 整单无付费票（全员免票邀约 / 全员免费票）→ 自动确认：免审核、免支付，直接出票
   if (Number(finalQuote.final_amount) === 0) {
     const auto = await autoConfirmFreeGroup({ groupNo, eventId, quote: finalQuote, buyerPhone });
     return {
       ok: true, group_no: groupNo, quote: finalQuote, registrations: created,
       auto_approved: true, paid: auto.ok, pay_url: null, order: auto.order || null
+    };
+  }
+
+  // 全员在邀约名单内（不需要审批）但有人要付款 → 报名已成功，直接建待支付单，进入付款
+  const needAudit = created.filter(c => !c.is_invited);
+  if (!needAudit.length) {
+    const ord = await createGroupOrder({ groupNo, eventId, quote: finalQuote, buyerPhone });
+    if (!ord.ok) return ord;
+    return {
+      ok: true, group_no: groupNo, quote: finalQuote, registrations: created,
+      auto_approved: true, paid: false, pending_payment: true,
+      order: ord.order, pay_url: ord.pay_url
     };
   }
 
@@ -386,10 +457,18 @@ async function auditGroup({ groupNo, action, reason, operator }) {
   const needAudit = regs.filter(r => !isExempt(r));
   const bad = needAudit.filter(r => !['submitted', 'pending_audit', 'rejected'].includes(r.status));
   if (bad.length) return { ok: false, error: `整单存在不可审核的记录（${bad[0].status}），请刷新` };
-  if (!needAudit.length) return { ok: false, error: '本单全员在邀约名单内，已自动通过，无需审核' };
+  if (!needAudit.length) {
+    // 全员邀约：提交时已直接报名成功。若他们要付款，订单在提交时就建好了，这里回传即可
+    if (g.order && g.order.status === ORDER_STATUS.PENDING_PAYMENT) {
+      return {
+        ok: true, action: 'approved', group_no: groupNo, already: true,
+        order: { order_no: g.order.order_no, final_amount: Number(g.order.final_amount), pay_token: g.order.pay_token },
+        pay_url: payUrlOf(groupNo, g.order.order_no, g.order.pay_token)
+      };
+    }
+    return { ok: false, error: '本单全员在邀约名单内，已自动通过，无需审核' };
+  }
 
-  const event = await Event.findByPk(event_id);
-  const eventName = event ? event.name : 'EC9 大会';
   const buyerPhone = (regs.find(r => r.extra_fields && r.extra_fields.is_buyer) || regs[0]).extra_fields.submitter_phone;
 
   if (action === 'reject') {
@@ -410,7 +489,6 @@ async function auditGroup({ groupNo, action, reason, operator }) {
   if (action !== 'approve') return { ok: false, error: 'action 必须是 approve/reject' };
 
   // approve：需审成员 approved（邀约成员早已 approved）→ 建单锁库存
-  const members = [];
   for (const r of needAudit) {
     r.status = REG_STATUS.APPROVED;
     r.audited_at = new Date();
@@ -418,24 +496,59 @@ async function auditGroup({ groupNo, action, reason, operator }) {
     await r.save();
     await syncInvitationOnAudit(r, 'approve', r.audited_at);    // 邀约表 → 已报名(2)
   }
-  for (const r of regs) {
-    members.push({
-      registration_id: r.id, guest_id: r.guest_id,
-      ticket_type_id: r.ticket_type_id, session_id: r.session_id
-    });
-  }
 
-  // 计价：邀约名单内的人免票（传 is_invited 让 quoteGroup 排除）
+  // 计价：按邀约上的 need_pay 决定谁掏钱（管理员可能刚在邀约管理里改过，故重新读库）
   const quote = await quoteGroup(event_id, regs.map(r => ({
     ticket_type_id: r.ticket_type_id,
+    guest_id: r.guest_id,
     is_invited: !!(r.extra_fields && r.extra_fields.is_invited)
   })));
   if (!quote.ok) return quote;
 
+  const ord = await createGroupOrder({ groupNo, eventId: event_id, quote, buyerPhone, remark: `多人代报 ${regs.length} 人` });
+  if (!ord.ok) return ord;
+  return { ok: true, action: 'approved', group_no: groupNo, order: ord.order, pay_url: ord.pay_url };
+}
+
+/**
+ * 为整单建「待支付」订单（锁库存 + 购票人付款链接短信）
+ * 幂等：该团已有待支付单时直接复用，不重复建单
+ * @param {Object} p
+ * @param {string} p.groupNo
+ * @param {number} p.eventId
+ * @param {Object} p.quote  quoteGroup 结果（items 与 regs 同序）
+ * @param {string} [p.buyerPhone]
+ * @param {string} [p.remark]
+ */
+async function createGroupOrder({ groupNo, eventId, quote, buyerPhone, remark }) {
+  const g = await getGroup(groupNo);
+  if (!g.ok) return g;
+  const { registrations: regs } = g;
+  const buyerReg = g.buyer;
+  const phone = buyerPhone || (buyerReg && buyerReg.extra_fields ? buyerReg.extra_fields.submitter_phone : null);
+
+  // 已有待支付单 → 直接复用（管理员重复点通过 / 提交时已建过单）
+  const exist = await Order.findOne({
+    where: { group_no: groupNo, status: ORDER_STATUS.PENDING_PAYMENT },
+    order: [['id', 'DESC']]
+  });
+  if (exist) {
+    return {
+      ok: true, reused: true,
+      order: { order_no: exist.order_no, final_amount: Number(exist.final_amount), pay_token: exist.pay_token },
+      pay_url: payUrlOf(groupNo, exist.order_no, exist.pay_token)
+    };
+  }
+
+  const members = regs.map(r => ({
+    registration_id: r.id, guest_id: r.guest_id,
+    ticket_type_id: r.ticket_type_id, session_id: r.session_id
+  }));
+
   // 按票种锁库存（邀约免票 / 学生免费票不占库存）
   const perType = new Map();
-  members.forEach(m => {
-    const it = quote.items.find(x => x.ticket_type_id === m.ticket_type_id) || {};
+  members.forEach((m, i) => {
+    const it = quote.items[i] || {};
     if (it.is_free) return;
     perType.set(m.ticket_type_id, (perType.get(m.ticket_type_id) || 0) + 1);
   });
@@ -447,14 +560,15 @@ async function auditGroup({ groupNo, action, reason, operator }) {
     }
   }
 
-  const buyerReg = g.buyer;
+  const event = await Event.findByPk(eventId);
+  const eventName = event ? event.name : 'EC9 大会';
   const orderNo = 'EC9' + Date.now() + String(orderSeq++).padStart(2, '0');
   const payToken = genPayToken();
   const order = await Order.create({
     order_no: orderNo,
     registration_id: buyerReg.id,
     guest_id: buyerReg.guest_id,
-    event_id,
+    event_id: eventId,
     session_id: buyerReg.session_id || 0,
     ticket_type_id: buyerReg.ticket_type_id || 0,
     quantity: regs.length,
@@ -481,7 +595,7 @@ async function auditGroup({ groupNo, action, reason, operator }) {
     }),
     discount_rate: quote.discount_rate,
     pay_token: payToken,
-    remark: `多人代报 ${regs.length} 人`
+    remark: remark || `多人代报 ${regs.length} 人`
   });
 
   for (const [ttId, n] of perType) {
@@ -490,23 +604,71 @@ async function auditGroup({ groupNo, action, reason, operator }) {
   }
 
   // 购票人短信：含付款链接
-  const payUrl = `${(config.frontend || {}).baseUrl || ''}/h5/ec9/pay.html?group_no=${groupNo}&order_no=${orderNo}&pay_token=${payToken}`;
-  try {
-    await sendBusinessSms(buyerPhone, 'AUDIT_APPROVED_PAY', {
-      event: eventName, count: regs.length,
-      amount: quote.final_amount.toFixed(2),
-      url: payUrl
-    }, 'zh-CN');
-  } catch (e) { console.warn('[auditGroup] 购票人短信失败（不阻塞）:', e.message); }
+  const payUrl = payUrlOf(groupNo, orderNo, payToken);
+  if (phone) {
+    try {
+      await sendBusinessSms(phone, 'AUDIT_APPROVED_PAY', {
+        event: eventName, count: regs.length,
+        amount: quote.final_amount.toFixed(2),
+        url: payUrl
+      }, 'zh-CN');
+    } catch (e) { console.warn('[createGroupOrder] 购票人短信失败（不阻塞）:', e.message); }
+  }
 
   return {
-    ok: true, action: 'approved', group_no: groupNo,
+    ok: true, group_no: groupNo,
     order: { order_no: orderNo, final_amount: quote.final_amount, pay_token: payToken },
     pay_url: payUrl
   };
 }
 
 let orderSeq = 0;
+
+/** 付款链接（免登录 pay_token） */
+function payUrlOf(groupNo, orderNo, payToken) {
+  return `${(config.frontend || {}).baseUrl || ''}/h5/ec9/pay.html?group_no=${groupNo}&order_no=${orderNo}&pay_token=${payToken}`;
+}
+
+/**
+ * 管理员在「邀约管理」里批准/手动报名成功后调用：
+ * 该报名所在的整单若全员已通过，就补建订单 —— 免票的直接出票，需付款的建待支付单。
+ * 幂等：已有待支付单则直接复用。
+ * @param {Object} reg Registration 实例
+ */
+async function ensureGroupOrderAfterApprove(reg) {
+  if (!reg || !reg.group_no) return { ok: false, skipped: true, error: '非团报（group）记录，跳过建单' };
+  const groupNo = reg.group_no;
+  const g = await getGroup(groupNo);
+  if (!g.ok) return g;
+  const regs = g.registrations;
+  const notReady = regs.filter(r => !['approved', 'paid'].includes(r.status));
+  if (notReady.length) {
+    return { ok: false, skipped: true, error: `团内还有 ${notReady.length} 人未通过审核，暂不建单` };
+  }
+
+  // 重新计价（管理员可能在邀约管理里刚把某人改成免票，这里读最新 need_pay）
+  const quote = await quoteGroup(g.event_id, regs.map(r => ({
+    ticket_type_id: r.ticket_type_id,
+    guest_id: r.guest_id,
+    is_invited: !!(r.extra_fields && r.extra_fields.is_invited)
+  })));
+  if (!quote.ok) return quote;
+
+  // 管理员改成免票 → 原有待支付单作废（关单 + 释放锁库存），直接出票
+  if (Number(quote.final_amount) === 0) {
+    if (g.order && g.order.status === ORDER_STATUS.PENDING_PAYMENT) {
+      await releaseGroupStock(g.order);
+      await g.order.update({ status: ORDER_STATUS.CLOSED, remark: '管理员改为免票，原待支付单作废' });
+      console.log(`[ensureGroupOrder] 邀约改免票 → 待支付单 ${g.order.order_no} 已作废`);
+    }
+    const auto = await autoConfirmFreeGroup({ groupNo, eventId: g.event_id, quote, buyerPhone: null });
+    return { ok: true, free: true, group_no: groupNo, paid: auto.ok, order: auto.order || null, pay_url: null };
+  }
+
+  const ord = await createGroupOrder({ groupNo, eventId: g.event_id, quote, buyerPhone: null, remark: `邀约审批通过 ${regs.length} 人` });
+  if (!ord.ok) return ord;
+  return { ok: true, free: false, group_no: groupNo, paid: false, order: ord.order, pay_url: ord.pay_url };
+}
 
 /**
  * group 订单支付成功：全员 paid + 每人入场码 + 全员短信
@@ -587,6 +749,7 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 }
 
 module.exports = {
-  calcDiscount, quoteGroup, createGroup, getGroup, auditGroup, findInvited,
+  calcDiscount, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds,
+  createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
   markGroupPaid, sendGroupPaidSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

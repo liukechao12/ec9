@@ -1066,22 +1066,38 @@ router.get('/group/:groupNo', async (req, res) => {
         if (!chk.ok) return res.status(401).json({ code: 401, message: chk.error });
       }
     }
+    const pdMap = new Map();
+    (g.order && Array.isArray(g.order.price_detail) ? g.order.price_detail : []).forEach(d => {
+      pdMap.set(Number(d.registration_id), d);
+    });
     res.json({
       code: 0, message: 'ok',
       data: {
         group_no: req.params.groupNo,
         event_id: g.event_id,
-        registrations: g.registrations.map(r => ({
+        registrations: g.registrations.map(r => {
+          const ef = r.extra_fields || {};
+          const tt = r.ticketType;
+          const ttPrice = Number(tt && tt.price) || 0;
+          const isStudent = Number(tt && tt.is_student) === 1;
+          // 实际应付口径：有订单看 price_detail（邀约免票/免费票=0）；没订单按提交时快照推算
+          const pd = pdMap.get(r.id);
+          const needPay = pd ? !pd.is_free : (ef.need_pay === false ? false : !(isStudent || ttPrice === 0));
+          const payable = pd ? Number(pd.price || 0) : (needPay ? ttPrice : 0);
+          return {
           registration_id: r.id, status: r.status, reject_reason: r.reject_reason,
-          is_invited: !!(r.extra_fields && r.extra_fields.is_invited),
-          audit_exempt: !!(r.extra_fields && r.extra_fields.audit_exempt),
+          is_invited: !!ef.is_invited,
+          audit_exempt: !!ef.audit_exempt,
+          need_pay: !!needPay,
+          payable_price: payable,
           name: r.guest ? r.guest.name : null, company: r.guest ? r.guest.company : null,
           position: r.guest ? r.guest.position : null,
           ticket_name: r.ticketType ? r.ticketType.name : null,
           price: r.ticketType ? Number(r.ticketType.price) : null,
           is_student: r.ticketType ? Number(r.ticketType.is_student) === 1 : false,
-          focus: r.focus, is_buyer: !!(r.extra_fields && r.extra_fields.is_buyer)
-        })),
+          focus: r.focus, is_buyer: !!ef.is_buyer
+          };
+        }),
         order: g.order ? {
           order_no: g.order.order_no, status: g.order.status,
           total_amount: Number(g.order.total_amount),
@@ -1193,7 +1209,8 @@ router.get('/group-list', authenticate, async (req, res) => {
 
 /**
  * POST /api/registrations/check-invited
- * 批量判断手机号是否在邀约名单内（名单内的人免审核、免票）
+ * 批量判断手机号是否在邀约名单内（名单内的人免审核；是否掏钱看邀约上的 need_pay）
+ * 返回 invited{phone:bool} 与 need_pay{phone:bool}
  * 需要 x-verify-token，防匿名枚举；单次最多 10 个（与单次代报上限一致）
  */
 router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
@@ -1204,9 +1221,14 @@ router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
     }
     if (phones.length > 10) return res.status(400).json({ code: 400, message: '单次最多查询 10 个手机号' });
     const map = await groupOrderService.findInvited(phones.map(String), Number(event_id) || 1);
-    const invited = {};
-    for (const p of phones) invited[String(p)] = map.has(String(p));
-    res.json({ code: 0, message: 'ok', data: { invited } });
+    const invited = {}, needPay = {};
+    for (const p of phones) {
+      const hit = map.get(String(p));
+      invited[String(p)] = !!hit;
+      // 名单内：按邀约上的 need_pay 决定要不要掏钱；不在名单：需付款（且要审批）
+      needPay[String(p)] = hit ? !!hit.need_pay : true;
+    }
+    res.json({ code: 0, message: 'ok', data: { invited, need_pay: needPay } });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }

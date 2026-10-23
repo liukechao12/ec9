@@ -1444,6 +1444,9 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                         <span class="status-badge ${getInvitationStatusClass(registrationStatus, isValid)}">${getInvitationStatusText(registrationStatus, isValid)}</span>
                     </td>
                     <td>
+                        ${renderNeedPayCell(inv)}
+                    </td>
+                    <td>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-sm btn-outline" onclick="viewInvitation(${inv.id})">详情</button>
                             ${registrationStatus === 1 ? `
@@ -1493,7 +1496,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
     } catch (error) {
         console.error('加载邀约列表失败:', error);
         const tbody = document.getElementById('invitationsTableBody');
-        const colspan = (currentUser && currentUser.role === 'admin') ? 9 : 8;
+        const colspan = (currentUser && currentUser.role === 'admin') ? 10 : 9;   // 含新增的「付款」列
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 40px; color: #EF4444;">${window.t('admin.loadFailedWith', [error.message || window.t('admin.unknownError')])}<br><button onclick="loadInvitations()" style="margin-top: 10px; padding: 8px 16px; background: #155DFC; color: white; border: none; border-radius: 6px; cursor: pointer;">重试</button></td></tr>`;
     }
 }
@@ -3703,11 +3706,14 @@ async function handleInvitationSubmit(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
+    const needPaySel = document.getElementById('invitationNeedPay');
     const data = {
         event_id: parseInt(formData.get('event_id')),
         guest_id: parseInt(formData.get('guest_id')),
         source_bd: formData.get('source_bd') || null,
-        created_by: currentUser?.username || 'admin'
+        created_by: currentUser?.username || 'admin',
+        // 新建邀约默认「需付款」；管理员可选免票
+        need_pay: needPaySel ? (parseInt(needPaySel.value, 10) === 0 ? 0 : 1) : 1
     };
     
     try {
@@ -3749,11 +3755,13 @@ async function handleBatchInvitationSubmit(e) {
         return;
     }
     
+    const batchNeedPaySel = document.getElementById('batchInvitationNeedPay');
     const data = {
         event_id: eventId,
         guest_ids: guestIds,
         source_bd: sourceBd,
-        created_by: currentUser?.username || 'admin'
+        created_by: currentUser?.username || 'admin',
+        need_pay: batchNeedPaySel ? (parseInt(batchNeedPaySel.value, 10) === 0 ? 0 : 1) : 1
     };
     
     try {
@@ -4009,6 +4017,10 @@ async function viewInvitation(id) {
                     <div>
                         <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">报名状态</div>
                         <div><span class="status-badge ${getInvitationStatusClass(invitation.registration_status, invitation.is_valid)}">${getInvitationStatusText(invitation.registration_status, invitation.is_valid)}</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">是否需要付款</div>
+                        <div>${renderNeedPayCell(invitation)}</div>
                     </div>
                 </div>
                 
@@ -4601,26 +4613,98 @@ async function markInvitationRegistered(id) {
     }
 }
 
-// 批准邀约
-async function approveInvitation(id) {
-    if (!confirm('确定要批准该邀约吗？')) {
+// 邀约「是否需要付款」单元格（管理员可直接切换）
+function renderNeedPayCell(inv) {
+    const needPay = Number(inv.need_pay) !== 0;
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    const badge = needPay
+        ? '<span class="status-badge" style="background:#FEF3C7;color:#92400E;">需付款</span>'
+        : '<span class="status-badge" style="background:#DCFCE7;color:#166534;">免票</span>';
+    const toggle = isAdmin
+        ? `<button class="btn btn-sm btn-outline" style="margin-left:6px;padding:2px 8px;" onclick="toggleInvitationNeedPay(${inv.id}, ${needPay ? 1 : 0})" title="${needPay ? '改为免票' : '改为需付款'}">${needPay ? '改免票' : '改需付款'}</button>`
+        : '';
+    return badge + toggle;
+}
+
+// 管理员改邀约是否需付款
+async function toggleInvitationNeedPay(id, current) {
+    const to = Number(current) !== 0 ? 0 : 1;
+    if (!confirm(to === 0 ? '确定把该邀约改成「免票」吗？已建的待支付单会作废并直接出票。' : '确定把该邀约改成「需付款」吗？')) {
         return;
     }
-    
-    const remark = prompt('请输入审批备注（可选）：');
-    
     try {
-        await apiRequest(`/invitations/${id}/approve`, {
-            method: 'POST',
-            body: JSON.stringify({ remark: remark || '' })
+        const res = await apiRequest(`/invitations/${id}/need-pay`, {
+            method: 'PUT',
+            body: JSON.stringify({ need_pay: to })
         });
-        alert('邀约已批准');
+        alert(res.message || '已更新');
         loadInvitations();
-        if (currentInvitationId === id) {
-            viewInvitation(id); // 刷新详情
-        }
     } catch (error) {
         alert('操作失败: ' + (error.message || '未知错误'));
+    }
+}
+
+// 批准邀约（可同时决定是否需要付款）
+let pendingApproveInvitationId = null;
+
+async function approveInvitation(id) {
+    // 预填邀约当前的付款口径
+    let currentNeedPay = 1;
+    try {
+        const d = await apiRequest(`/invitations/${id}`);
+        currentNeedPay = Number(d?.data?.need_pay) !== 0 ? 1 : 0;
+    } catch (e) { /* 读不到就用默认「需付款」 */ }
+
+    pendingApproveInvitationId = id;
+    const modal = document.getElementById('invApproveModal');
+    if (!modal) {   // 兜底：没有弹窗时退回原来的 prompt 流程
+        if (!confirm('确定要批准该邀约吗？')) return;
+        const remark = prompt('请输入审批备注（可选）：');
+        try {
+            await apiRequest(`/invitations/${id}/approve`, {
+                method: 'POST', body: JSON.stringify({ remark: remark || '' })
+            });
+            alert('邀约已批准'); loadInvitations();
+        } catch (error) { alert('操作失败: ' + (error.message || '未知错误')); }
+        return;
+    }
+    document.getElementById('invApproveNeedPay').value = String(currentNeedPay);
+    document.getElementById('invApproveRemark').value = '';
+    const okBtn = document.getElementById('invApproveOk');
+    okBtn.onclick = submitApproveInvitation;
+    modal.classList.remove('hidden');
+}
+
+function closeInvApproveModal() {
+    const modal = document.getElementById('invApproveModal');
+    if (modal) modal.classList.add('hidden');
+    pendingApproveInvitationId = null;
+}
+
+async function submitApproveInvitation() {
+    const id = pendingApproveInvitationId;
+    if (!id) return;
+    const needPay = parseInt(document.getElementById('invApproveNeedPay').value, 10) || 0;
+    const remark = (document.getElementById('invApproveRemark').value || '').trim();
+    const btn = document.getElementById('invApproveOk');
+    btn.disabled = true;
+    try {
+        const res = await apiRequest(`/invitations/${id}/approve`, {
+            method: 'POST',
+            body: JSON.stringify({ remark: remark, need_pay: needPay })
+        });
+        closeInvApproveModal();
+        let msg = res.message || '邀约已批准';
+        const ord = res.order;
+        if (ord && ord.free) msg += '\n（免票，已自动出票）';
+        else if (ord && ord.order) msg += `\n已生成待支付订单 ${ord.order.order_no}，金额 ¥${Number(ord.order.final_amount).toFixed(2)}，付款链接已短信通知购票人`;
+        alert(msg);
+        loadInvitations();
+        if (currentInvitationId === id) viewInvitation(id);
+    } catch (error) {
+        alert('操作失败: ' + (error.message || '未知错误'));
+    } finally {
+        btn.disabled = false;
     }
 }
 

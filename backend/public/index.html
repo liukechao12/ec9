@@ -595,6 +595,7 @@
                                 <th>BD联系人</th>
                                 <th>发送时间</th>
                                 <th>状态</th>
+                                <th>付款</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -1711,12 +1712,52 @@
                             提示：选择嘉宾后会自动填充BD信息，如需修改可手动编辑
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label>是否需要付款</label>
+                        <select id="invitationNeedPay" name="need_pay">
+                            <option value="1" selected>需付款（默认）</option>
+                            <option value="0">免票</option>
+                        </select>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            默认需付款：该嘉宾报名成功后仍需购票付款。选「免票」则报名成功即出票，不产生订单。管理员审批时仍可修改。
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeInvitationModal()">取消</button>
                     <button type="submit" class="btn btn-primary">创建</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 审批邀约模态框（可改是否需要付款） -->
+    <div id="invApproveModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 460px;">
+            <div class="modal-header">
+                <h2>批准邀约</h2>
+                <button class="modal-close" onclick="closeInvApproveModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>是否需要付款</label>
+                    <select id="invApproveNeedPay">
+                        <option value="1">需付款（报名成功后去付款）</option>
+                        <option value="0">免票（报名成功即出票）</option>
+                    </select>
+                    <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                        票种本身 ¥0（学生票/免费票）无论选什么都免票
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>审批备注（可选）</label>
+                    <textarea id="invApproveRemark" rows="3" placeholder="例如：BD 确认免票" style="width: 100%; padding: 8px; border: 1px solid #D1D5DB; border-radius: 6px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeInvApproveModal()">取消</button>
+                <button type="button" class="btn btn-primary" id="invApproveOk">确认批准</button>
+            </div>
         </div>
     </div>
 
@@ -1919,6 +1960,16 @@
                         <input type="text" id="batchInvitationSourceBd" name="source_bd" placeholder="选择嘉宾后自动填充（可选）">
                         <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
                             提示：选择嘉宾后会自动填充BD信息，如果选择的嘉宾有不同的BD，将使用第一个BD
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>是否需要付款</label>
+                        <select id="batchInvitationNeedPay" name="need_pay">
+                            <option value="1" selected>需付款（默认）</option>
+                            <option value="0">免票</option>
+                        </select>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            批量创建默认「需付款」；可在列表中逐条改成免票
                         </div>
                     </div>
                 </div>

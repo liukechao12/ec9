@@ -446,6 +446,8 @@ Object.assign(I18N["zh-CN"], {
   group_members_box: "填报人",
   invited_tag: "邀约嘉宾·免票",
   invited_tip: "该手机号在邀约名单内，免审核、免票，提交后直接出票",
+  invited_tag_pay: "邀约嘉宾·需付款",
+  invited_tip_pay: "该手机号在邀约名单内，免审核，报名成功后需付款购票",
   invited_free_row: "邀约嘉宾免票",
   auto_approved_tip: "全员在邀约名单内（或免费票），已自动通过并出票，各填报人凭本人手机签到",
   audit_exempt_tag: "免审"
@@ -483,6 +485,8 @@ Object.assign(I18N["zh-Hant"], {
   group_members_box: "填報人",
   invited_tag: "邀約嘉賓·免票",
   invited_tip: "該手機號在邀約名單內，免審核、免票，提交後直接出票",
+  invited_tag_pay: "邀約嘉賓·需付款",
+  invited_tip_pay: "該手機號在邀約名單內，免審核，報名成功後需付款購票",
   invited_free_row: "邀約嘉賓免票",
   auto_approved_tip: "全員在邀約名單內（或免費票），已自動通過並出票，各填報人憑本人手機簽到",
   audit_exempt_tag: "免審"
@@ -520,6 +524,8 @@ Object.assign(I18N["en"], {
   group_members_box: "Attendees",
   invited_tag: "Invited guest · Free",
   invited_tip: "This number is on the invitation list: no review, free of charge, ticket issued upon submission",
+  invited_tag_pay: "Invited guest · Paid",
+  invited_tip_pay: "This number is on the invitation list: no review, but payment is required after registration",
   invited_free_row: "Invited guest - free",
   auto_approved_tip: "All attendees are invited (or free tickets). Approved and issued automatically. Each attendee checks in with their own phone.",
   audit_exempt_tag: "Exempt"

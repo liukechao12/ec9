@@ -101,13 +101,18 @@
   }
 
   /* 邀约名单：命中的人免审核、免票（提交时后端同样判定，这里是给用户即时反馈） */
-  var invitedSet = {};
+  var invitedSet = {}, needPaySet = {};
   function checkInvited() {
     var phones = members.map(function (x) { return x.phone; }).filter(function (p) { return /^1[3-9]\d{9}$/.test(p); });
     if (!phones.length) { renderInvitedTips(); return; }
     E.Api.checkInvited(phones, Number(eventId)).then(function (d) {
       invitedSet = (d && d.invited) || {};
-      members.forEach(function (m) { m.is_invited = !!invitedSet[m.phone]; });
+      needPaySet = (d && d.need_pay) || {};
+      members.forEach(function (m) {
+        m.is_invited = !!invitedSet[m.phone];
+        // 邀约名单内是否要掏钱，由邀约上的 need_pay 决定（默认需付款）
+        m.need_pay = m.is_invited ? (needPaySet[m.phone] !== false) : true;
+      });
       renderInvitedTips();
     }).catch(function () { /* 查询失败不阻塞填写，后端提交时会再判一次 */ });
   }
@@ -119,10 +124,11 @@
       var tip = card.querySelector(".invited-tip");
       if (!tip) return;
       if (m && m.is_invited) {
-        tip.textContent = E.t("invited_tip");
+        var free = m.need_pay === false;
+        tip.textContent = free ? E.t("invited_tip") : E.t("invited_tip_pay");
         tip.classList.remove("hidden");
         var tag = card.querySelector(".mc-tag");
-        if (tag) tag.textContent = E.t("invited_tag");
+        if (tag) tag.textContent = free ? E.t("invited_tag") : E.t("invited_tag_pay");
       } else {
         tip.classList.add("hidden");
       }

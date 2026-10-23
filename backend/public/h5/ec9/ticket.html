@@ -149,7 +149,8 @@
     if (!tk || !members.length) { box.textContent = ""; return; }
     var paid = 0, free = 0, raw = 0;
     members.forEach(function (m) {
-      if (m.is_invited) return;
+      // 邀约名单内 + 邀约标记免票 → 免票；其余（含需付款的邀约嘉宾）按票种价计
+      if (m.is_invited && m.need_pay === false) { free++; return; }
       if (Number(tk.price) === 0) free++; else { paid++; raw += Number(tk.price); }
     });
     var rate = paid >= 5 ? 0.8 : (paid >= 3 ? 0.9 : 1.0);

@@ -158,16 +158,33 @@
   }
 
   /* ---------- 品牌头 ----------
-     1) banner 内的主标题 / 英文标语 / 中文标语在设计稿里是「转曲的艺术字」，
-        真字体无法复现字形，已随 img/signup_bg.png 切片输出，这里不再渲染文字；
-     2) 设计稿页面内没有语言切换入口（右上角无地球图标），故不再输出切换器，
-        多语言改由链接参数 ?lang=en / ?lang=zh-Hant 切换。 */
+     banner 内的主标题 / 英文标语 / 中文标语在设计稿里是「转曲的艺术字」，
+     真字体无法复现字形，已随 img/signup_bg.png 切片输出，这里不再渲染文字；
+     语言切换器不属于设计稿 1:1 还原范围，但属于产品功能入口，予以保留。 */
+  var LANGS = ["zh-CN", "en", "zh-Hant"];
+  var LANG_LABELS = { "zh-CN": "简体", "en": "English", "zh-Hant": "繁體" };
+
   function header(tall) {
-    return '<div class="brand' + (tall ? " brand--tall" : "") + '"></div>';
+    return '<div class="brand' + (tall ? " brand--tall" : "") + '"></div>' +
+      '<div class="lang-switch" id="langBtn">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6">' +
+      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 4 5.6 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.6-4-9s1.2-6.4 4-9z"/></svg>' +
+      '<span>' + LANG_LABELS[S.lang] + '</span></div>' +
+      '<div class="lang-menu hidden" id="langMenu">' +
+      LANGS.map(function (l) { return '<div data-lang="' + l + '">' + LANG_LABELS[l] + '</div>'; }).join("") +
+      '</div>';
   }
 
   function mountHeader(container, tall) {
     container.innerHTML = header(tall);
+    var btn = document.getElementById("langBtn");
+    var menu = document.getElementById("langMenu");
+    if (!btn || !menu) return;
+    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("hidden"); });
+    menu.querySelectorAll("[data-lang]").forEach(function (el) {
+      el.addEventListener("click", function () { S.lang = el.dataset.lang; location.reload(); });
+    });
+    document.addEventListener("click", function () { menu.classList.add("hidden"); }, { once: true });
   }
 
   /* ---------- URL ---------- */

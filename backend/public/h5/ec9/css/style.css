@@ -51,6 +51,40 @@ html, body {
   position: relative;
   overflow: hidden;
 }
+/* ---------- 语言切换（产品功能入口，设计稿未画；坐标贴设计稿风格） ---------- */
+.lang-switch {
+  position: absolute;
+  top: 52px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 30;
+  user-select: none;
+}
+.lang-switch .globe { width: 20px; height: 20px; border: 1.6px solid #fff; border-radius: 50%; position: relative; display: inline-block; }
+.lang-switch .globe::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  border-left-color: transparent; border-right-color: transparent;
+  border: 1.6px solid #fff; clip-path: inset(0 22% 0 22%);
+}
+.lang-menu {
+  position: absolute;
+  top: 84px;
+  right: 16px;
+  background: #2743A8;
+  border-radius: 10px;
+  padding: 6px 0;
+  min-width: 128px;
+  z-index: 40;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+}
+.lang-menu div { color: #fff; font-size: 15px; padding: 12px 20px; cursor: pointer; }
+.lang-menu div:hover { background: rgba(255, 255, 255, .08); }
+
 /* ---------- 白色内容卡（设计稿：sheet 顶 164，上移 20 压住蓝块底，圆角内露出蓝色） ---------- */
 .sheet {
   background: var(--white);
@@ -235,6 +269,14 @@ select.input.filled { color: #1D2129; }
   border-bottom: 1.6px solid var(--blue); transform: rotate(45deg);
 }
 
+/* 首页语言切换：挂到 .home-stage 内，贴设计稿坐标（图标 x286 y45 20×20） */
+#app.home .lang-switch { top: 45px; left: 286px; right: auto; font-size: 13.5px; gap: 12px; }
+#app.home .lang-menu {
+  top: 77px; left: 275px; right: auto; min-width: 0; width: 80px;
+  background: #213A8D; border-radius: 8px; padding: 0;
+}
+#app.home .lang-menu div { font-size: 14px; line-height: 14px; padding: 12px 0 12px 17px; }
+
 /* 首页底部联系我们按钮（设计稿切图：浅蓝平行四边形 + 真文字） */
 #app.home .btn-contact {
   position: absolute; left: 130px; top: 733px;
@@ -357,6 +399,7 @@ select.input.filled { color: #1D2129; }
 /* ---------- 协议页（设计稿：蓝底白卡深色字） ---------- */
 #app.agree-page { background: var(--brand-blue); }
 .agree-page .brand::before { display: none; }
+.agree-page .lang-switch { top: 24px; }
 .agree-page { min-height: 100vh; padding: 64px 12px 30px; position: relative; }
 .agree-page .back-btn { color: #4E5969; }
 .agree-page .back-btn:active { color: #1D2129; }

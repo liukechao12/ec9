@@ -48,7 +48,14 @@
   var E = window.EC9;
   E.mountHeader(document.getElementById("header"), true);
 
-  /* 设计稿无页面内语言切换入口，多语言改由 ?lang=en / ?lang=zh-Hant 链接参数切换 */
+  /* 语言切换挂到 375px 舞台内：贴设计稿坐标（#app 在宽屏下有 480px 居中，挂在 header 会偏出舞台） */
+  (function () {
+    var stage = document.getElementById("homeStage");
+    var btn = document.getElementById("langBtn");
+    var menu = document.getElementById("langMenu");
+    if (stage && btn) stage.appendChild(btn);
+    if (stage && menu) stage.appendChild(menu);
+  })();
 
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var agreed = false;

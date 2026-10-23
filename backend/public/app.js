@@ -1179,15 +1179,226 @@ let invitationBdFilterOptions = [];
 let invitationSourceBdOptions = [];
 
 let selectedInvitationIds = new Set();
+// 记住每条勾选邀约的报名状态：批量通过只吃「待审批(1)」，代签到只吃「已报名(2)」
+let selectedInvitationStatus = new Map();
+let currentBatchNo = '';          // 当前打开的批次号
+let invTab = 'list';              // 邀约管理：list=按人看 / batch=按批次审
 
 function resetInvitationSelectionUI() {
     selectedInvitationIds = new Set();
+    selectedInvitationStatus = new Map();
     const selectAll = document.getElementById('invitationSelectAll');
     if (selectAll) {
         selectAll.checked = false;
         selectAll.indeterminate = false;
     }
     updateAdminCheckinButtonState();
+    updateInvBulkAuditButtons();
+}
+
+/** 批量通过/驳回按钮：有勾选就亮，并提示本批次可审条数 */
+function updateInvBulkAuditButtons() {
+    const pay = pendingSelectedIds();
+    const ap = document.getElementById('invBulkApproveBtn');
+    const rj = document.getElementById('invBulkRejectBtn');
+    if (ap) {
+        ap.disabled = pay.length === 0;
+        ap.style.opacity = ap.disabled ? '0.5' : '1';
+        ap.style.cursor = ap.disabled ? 'not-allowed' : 'pointer';
+        ap.textContent = pay.length ? `批量通过(${pay.length})` : '批量通过';
+    }
+    if (rj) {
+        rj.disabled = pay.length === 0;
+        rj.style.opacity = rj.disabled ? '0.5' : '1';
+        rj.style.cursor = rj.disabled ? 'not-allowed' : 'pointer';
+        rj.textContent = pay.length ? `批量驳回(${pay.length})` : '批量驳回';
+    }
+}
+
+/** 已勾选且状态为「待审批(1)」的邀约 id */
+function pendingSelectedIds() {
+    return Array.from(selectedInvitationIds).filter(id => selectedInvitationStatus.get(id) === 1);
+}
+
+/* ==================================================================
+   邀约管理：按人看 / 按批次审
+   ================================================================== */
+function switchInvTab(tab) {
+    invTab = tab === 'batch' ? 'batch' : 'list';
+    const lw = document.getElementById('invListWrap');
+    const bw = document.getElementById('invBatchWrap');
+    const tl = document.getElementById('invTabList');
+    const tb = document.getElementById('invTabBatch');
+    if (lw) lw.classList.toggle('hidden', invTab !== 'list');
+    if (bw) bw.classList.toggle('hidden', invTab !== 'batch');
+    if (tl) { tl.className = invTab === 'list' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline'; }
+    if (tb) { tb.className = invTab === 'batch' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline'; }
+    if (invTab === 'list') loadInvitations();
+    else loadInvitationBatches();
+}
+
+async function loadInvitationBatches() {
+    const body = document.getElementById('invBatchBody');
+    const empty = document.getElementById('invBatchEmpty');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#6B7280;">加载中...</td></tr>';
+    try {
+        const onlyPending = document.getElementById('invBatchOnlyPending')?.checked;
+        const res = await apiRequest(`/invitations/batches${onlyPending ? '?only_pending=1' : ''}`);
+        const list = (res && res.data && res.data.list) || [];
+        if (!list.length) {
+            body.innerHTML = '';
+            if (empty) empty.classList.remove('hidden');
+            return;
+        }
+        if (empty) empty.classList.add('hidden');
+        const srcText = r => r.from_registration ? '报名提交' : '后台添加';
+        body.innerHTML = list.map(r => {
+            const canAudit = Number(r.pending) > 0;
+            return `<tr>
+                <td>
+                    <div style="font-family:monospace;font-size:12px;" title="${r.batch_no}">${r.batch_no}</div>
+                    <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:${r.from_registration ? '#DBEAFE' : '#F3F4F6'};color:${r.from_registration ? '#155DFC' : '#4B5563'};white-space:nowrap;">${srcText(r)}</span>
+                </td>
+                <td style="white-space:nowrap;">${r.event_name || '-'}</td>
+                <td style="white-space:nowrap;">${r.source_bd || '-'}</td>
+                <td style="text-align:center;">${r.total}</td>
+                <td style="color:${Number(r.pending) ? '#D97706' : '#6B7280'};font-weight:${Number(r.pending) ? '600' : '400'};text-align:center;">${r.pending}</td>
+                <td style="color:#00B42A;text-align:center;">${r.approved}</td>
+                <td style="color:#EF4444;text-align:center;">${r.rejected}</td>
+                <td style="white-space:nowrap;">${formatDateShort(r.created_at)}</td>
+                <td style="white-space:nowrap;">
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-sm btn-outline" onclick="viewBatch('${r.batch_no}')">查看</button>
+                        ${canAudit ? `
+                        <button class="btn btn-sm btn-primary" onclick="auditBatch('${r.batch_no}','approve')">整批通过</button>
+                        <button class="btn btn-sm btn-outline" onclick="auditBatch('${r.batch_no}','reject')">整批驳回</button>` : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:#EF4444;">加载失败：${e.message || ''}</td></tr>`;
+    }
+}
+
+async function viewBatch(batchNo) {
+    const modal = document.getElementById('batchDetailModal');
+    const bodyEl = document.getElementById('batchDetailBody');
+    const sumEl = document.getElementById('batchDetailSummary');
+    const titleEl = document.getElementById('batchDetailTitle');
+    const orderEl = document.getElementById('batchDetailOrder');
+    if (!modal || !bodyEl) return;
+    currentBatchNo = batchNo;
+    if (titleEl) titleEl.textContent = '批次详情 · ' + batchNo;
+    bodyEl.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#6B7280;">加载中...</td></tr>';
+    modal.classList.remove('hidden');
+    try {
+        const res = await apiRequest(`/invitations/batches/${encodeURIComponent(batchNo)}`);
+        const d = res && res.data;
+        if (!d) throw new Error('批次不存在');
+        const stText = s => ({ 0: '待回复', 1: '待审批', 2: '已报名', 3: '已拒绝' })[s] || s;
+        if (sumEl) {
+            sumEl.innerHTML = `共 <b>${d.total}</b> 人 · 待审批 <b style="color:#D97706">${d.pending}</b> · 已通过 <b style="color:#00B42A">${d.approved}</b> · 已驳回 <b style="color:#EF4444">${d.rejected}</b> · BD：${d.source_bd || '-'} · 创建：${formatDateShort(d.created_at)}`;
+        }
+        bodyEl.innerHTML = (d.list || []).map(x => `<tr>
+            <td>${x.name || '-'}</td>
+            <td>${x.company || '-'}</td>
+            <td>${x.position || '-'}</td>
+            <td style="font-family:monospace;font-size:12px">${x.phone || '-'}</td>
+            <td>${x.ticket_name || (x.registration_id ? '-' : '未报名')}</td>
+            <td>${x.ticket_price == null ? '-' : '¥' + Number(x.ticket_price).toFixed(2)}</td>
+            <td>${x.need_pay ? '<span style="color:#D97706">需付款</span>' : '<span style="color:#00B42A">免票</span>'}</td>
+            <td>${stText(x.registration_status)}</td>
+            <td style="max-width:160px" title="${x.approval_remark || ''}">${x.approval_remark || '-'}</td>
+        </tr>`).join('');
+        if (orderEl) {
+            orderEl.innerHTML = d.order
+                ? `本批订单：<b style="font-family:monospace">${d.order.order_no}</b> · 金额 <b>¥${Number(d.order.final_amount).toFixed(2)}</b>· ${d.order.discount_rate < 1 ? (Number(d.order.discount_rate) * 10).toFixed(1) + '折 · ' : ''}状态 ${d.order.status}`
+                : '<span style="color:#6B7280">本批暂无订单（全员免票或未审核）</span>';
+        }
+    } catch (e) {
+        bodyEl.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:#EF4444;">加载失败：${e.message || ''}</td></tr>`;
+    }
+}
+
+function closeBatchDetailModal() {
+    const modal = document.getElementById('batchDetailModal');
+    if (modal) modal.classList.add('hidden');
+    currentBatchNo = '';
+}
+
+async function auditCurrentBatch(action) {
+    if (!currentBatchNo) return;
+    await auditBatch(currentBatchNo, action, true);
+}
+
+async function auditBatch(batchNo, action, fromModal) {
+    let remark = '';
+    let needPay = undefined;
+    if (fromModal) {
+        const rEl = document.getElementById('batchAuditRemark');
+        const pEl = document.getElementById('batchAuditNeedPay');
+        remark = (rEl && rEl.value || '').trim();
+        needPay = pEl && pEl.value !== '' ? parseInt(pEl.value, 10) : undefined;
+    }
+    if (action === 'reject') {
+        remark = remark || prompt('整批驳回原因（这批人全部驳回）：');
+        if (!remark) return;
+    }
+    const tip = action === 'approve'
+        ? `确认整批通过？这批人将全部通过审核（要付款的会立即生成待支付订单并发付款短信）。`
+        : `确认整批驳回？这批人将全部被驳回。`;
+    if (!confirm(tip)) return;
+    try {
+        const body = { action };
+        if (remark) body.remark = remark;
+        if (needPay !== undefined) body.need_pay = needPay;
+        const res = await apiRequest(`/invitations/batches/${encodeURIComponent(batchNo)}/audit`, {
+            method: 'POST', body: JSON.stringify(body)
+        });
+        alert(res.message || '操作完成');
+        if (fromModal) {
+            closeBatchDetailModal();
+            const rEl = document.getElementById('batchAuditRemark');
+            if (rEl) rEl.value = '';
+        }
+        loadInvitationBatches();
+        loadInvitations();
+    } catch (e) {
+        alert('操作失败: ' + (e.message || '未知错误'));
+    }
+}
+
+/** 名单页：勾选多条 → 批量通过 / 批量驳回（可跨批次） */
+async function bulkAuditSelected(action) {
+    if (!currentUser || currentUser.role !== 'admin') {
+        alert('权限不足，仅管理员可以审批');
+        return;
+    }
+    const ids = pendingSelectedIds();
+    if (!ids.length) {
+        alert('请先勾选「待审批」状态的邀约（已通过/已拒绝的不会重复处理）');
+        return;
+    }
+    let remark = '';
+    if (action === 'reject') {
+        remark = prompt(`批量驳回 ${ids.length} 人，请填写原因：`);
+        if (!remark) return;
+    }
+    if (!confirm(`确认批量${action === 'approve' ? '通过' : '驳回'} ${ids.length} 条邀约？`)) return;
+    try {
+        const res = await apiRequest('/invitations/bulk-audit', {
+            method: 'POST',
+            body: JSON.stringify({ ids, action, remark })
+        });
+        alert(res.message || '操作完成');
+        resetInvitationSelectionUI();
+        loadInvitations();
+        if (invTab === 'batch') loadInvitationBatches();
+    } catch (e) {
+        alert('操作失败: ' + (e.message || '未知错误'));
+    }
 }
 
 function updateAdminCheckinButtonState() {
@@ -1198,7 +1409,7 @@ function updateAdminCheckinButtonState() {
     btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
 }
 
-function toggleInvitationSelection(invitationId, checked) {
+function toggleInvitationSelection(invitationId, checked, registrationStatus) {
     if (!currentUser || currentUser.role !== 'admin') {
         return;
     }
@@ -1208,8 +1419,12 @@ function toggleInvitationSelection(invitationId, checked) {
     }
     if (checked) {
         selectedInvitationIds.add(id);
+        if (registrationStatus !== undefined && registrationStatus !== null) {
+            selectedInvitationStatus.set(id, parseInt(registrationStatus));
+        }
     } else {
         selectedInvitationIds.delete(id);
+        selectedInvitationStatus.delete(id);
     }
 
     const selectable = Array.from(document.querySelectorAll('#invitationsTableBody .invitation-select')).filter(el => !el.disabled);
@@ -1232,6 +1447,7 @@ function toggleInvitationSelection(invitationId, checked) {
     }
 
     updateAdminCheckinButtonState();
+    updateInvBulkAuditButtons();
 }
 
 function toggleSelectAllInvitations(checked) {
@@ -1245,8 +1461,10 @@ function toggleSelectAllInvitations(checked) {
         if (Number.isFinite(id) && id > 0) {
             if (checked) {
                 selectedInvitationIds.add(id);
+                if (cb.dataset.st !== undefined) selectedInvitationStatus.set(id, parseInt(cb.dataset.st));
             } else {
                 selectedInvitationIds.delete(id);
+                selectedInvitationStatus.delete(id);
             }
         }
     });
@@ -1256,6 +1474,7 @@ function toggleSelectAllInvitations(checked) {
         selectAll.indeterminate = false;
     }
     updateAdminCheckinButtonState();
+    updateInvBulkAuditButtons();
 }
 
 async function adminCheckinSelectedInvitations() {
@@ -1264,9 +1483,10 @@ async function adminCheckinSelectedInvitations() {
         return;
     }
 
-    const ids = Array.from(selectedInvitationIds);
+    // 勾选框已放开（待审批也能勾），这里只吃「已报名(2)」的，避免误签未通过的人
+    const ids = Array.from(selectedInvitationIds).filter(id => selectedInvitationStatus.get(id) === 2);
     if (ids.length === 0) {
-        alert('请先勾选要签到的邀约');
+        alert('请先勾选「已报名」状态的邀约（待审批的必须先审批通过才能签到）');
         return;
     }
 
@@ -1395,23 +1615,19 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                     }
                 }
                 
+                // 勾选框放开：只屏蔽「已无效」的行。
+                // 待审批 / 已报名都能勾：批量通过只吃待审批的，代签到只吃已报名的，各取所需。
                 let selectDisabled = false;
                 let selectTitle = '';
                 if (isValid === 0 || isValid === false) {
                     selectDisabled = true;
                     selectTitle = '邀约已无效';
-                } else if (registrationStatus !== 2) {
-                    selectDisabled = true;
-                    selectTitle = '未接受邀约，不能签到';
-                } else if (isCheckedIn) {
-                    selectDisabled = true;
-                    selectTitle = '已签到';
                 }
 
                 tr.innerHTML = `
                     ${isAdmin ? `
                     <td style="text-align: center;">
-                        <input class="invitation-select" type="checkbox" data-id="${inv.id}" ${selectDisabled ? 'disabled' : ''} ${selectTitle ? `title=\"${selectTitle}\"` : ''} onchange="toggleInvitationSelection(${inv.id}, this.checked)" />
+                        <input class="invitation-select" type="checkbox" data-id="${inv.id}" data-st="${registrationStatus}" ${selectDisabled ? 'disabled' : ''} ${selectTitle ? `title=\"${selectTitle}\"` : ''} onchange="toggleInvitationSelection(${inv.id}, this.checked, ${registrationStatus})" />
                     </td>
                     ` : ''}
                     <td>
@@ -1493,6 +1709,14 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
         
         // 渲染分页
         renderInvitationPagination(data.data?.total || 0, data.data?.page || page, data.data?.pageSize || pageSize);
+
+        // 翻页/筛选后清空勾选（避免跨页残留），并按角色显示批量审核按钮
+        resetInvitationSelectionUI();
+        const showBulk = !!(currentUser && currentUser.role === 'admin');
+        const ap = document.getElementById('invBulkApproveBtn');
+        const rj = document.getElementById('invBulkRejectBtn');
+        if (ap) ap.style.display = showBulk ? '' : 'none';
+        if (rj) rj.style.display = showBulk ? '' : 'none';
     } catch (error) {
         console.error('加载邀约列表失败:', error);
         const tbody = document.getElementById('invitationsTableBody');
@@ -3777,7 +4001,9 @@ async function handleBatchInvitationSubmit(e) {
         const result = await response.json();
         
         if (result.code === 201) {
-            alert(`批量创建成功！已创建 ${result.data.created} 个邀约，共 ${result.data.total} 个。${result.data.message}`);
+            const bn = result.data && result.data.batch_no;
+            alert(`批量创建成功！已创建 ${result.data.created} 个邀约，共 ${result.data.total} 个。${result.data.message}`
+                + (bn ? `\n\n批次号：${bn}\n可在「按批次审核」里整批通过/驳回。` : ''));
             closeBatchInvitationModal();
             loadInvitations();
         } else {

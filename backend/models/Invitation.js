@@ -17,6 +17,11 @@ const Invitation = sequelize.define('Invitation', {
   // 管理员在审批（批准/手动报名成功）时可改成 0，改后该邀约人报名即出票、不产生订单。
   need_pay: { type: DataTypes.TINYINT, defaultValue: 1, comment: '1 需付款 0 免票（管理员审批时可改）' },
   is_valid: { type: DataTypes.TINYINT, defaultValue: 1 },
+  // 批次号：一次添加多人 / 一次提交多人 = 同一批，可整批审核
+  //   · 后台批量创建 → B + 时间戳 + 随机串
+  //   · 非邀约人团单报名自动生成 → 直接用 group_no（一次提交多人天然就是一批）
+  //   · 单条创建 → NULL（不属于任何批次）
+  batch_no: { type: DataTypes.STRING(64), comment: '批次号：同一次添加/提交的多人共享，用于整批审核' },
   extra_fields: DataTypes.JSON
 }, {
   tableName: 'ec9_invitations',

@@ -56,7 +56,7 @@ function genInviteCode() {
  *   不在邀约名单  → 新建一条邀约，状态「待审批(1)」，管理员在邀约管理里审批
  * registration_status 语义（models/Invitation.js）：0 未报名 1 待审批 2 已报名 3 已拒绝
  */
-async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitationId, at }) {
+async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitationId, at, groupNo }) {
   try {
     if (isInvited && invitationId) {
       const inv = await Invitation.findByPk(invitationId);
@@ -80,6 +80,7 @@ async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitatio
       }
     }
     // 不在邀约名单：建一条待审批的邀约记录（幂等：同一活动+嘉宾只建一条）
+    // batch_no = 团单号：一次提交多人 ⇒ 同 group_no ⇒ 天然一批，后台可整批审核
     let inv = await Invitation.findOne({ where: { event_id: eventId, guest_id: guestId } });
     if (!inv) {
       let code = genInviteCode();
@@ -92,11 +93,15 @@ async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitatio
         registration_time: at,
         is_valid: 1,
         need_pay: 1,              // 非邀约人：需付款购票
+        batch_no: groupNo || null,
         extra_fields: { auto_created: true }   // 标记：本条由「非邀约人报名」自动生成
       });
     } else if (inv.registration_status !== 2) {
-      // 未被审批通过过的，重提时回到待审批
-      await inv.update({ registration_status: 1, registration_time: at });
+      // 未被审批通过过的，重提时回到待审批（同时刷新批次号，保证同团单仍是一批）
+      await inv.update({
+        registration_status: 1, registration_time: at,
+        ...(groupNo ? { batch_no: groupNo } : {})
+      });
     }
     return inv.id;
   } catch (e) {
@@ -356,7 +361,7 @@ async function createGroup({ buyerPhone, eventId, members }) {
     const effTicketId = isInvited && stdTicketId ? stdTicketId : (Number(m.ticket_type_id) || 0);
     // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
     const invId = await syncInvitationOnRegister({
-      eventId, guestId: guest.id, isInvited,
+      eventId, guestId: guest.id, isInvited, groupNo,
       invitationId: isInvited ? invitedMap.get(phone).invitation_id : null,
       at: now
     });

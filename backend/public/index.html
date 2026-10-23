@@ -165,7 +165,8 @@
                     </svg>
                     <span>订单管理</span>
                 </a>
-                <a href="#" class="nav-item" data-page="reg-audit">
+                <!-- 审核已统一收敛到「邀约管理 → 按批次审核 / 勾选批量」；接口保留，去掉 display:none 即可恢复 -->
+                <a href="#" class="nav-item" data-page="reg-audit" style="display: none;">
                     <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path d="M10 2.5L16.67 5.83V10C16.67 14.17 13.83 16.79 10 17.5C6.17 16.79 3.33 14.17 3.33 10V5.83L10 2.5Z" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"/>
                         <path d="M7.08 10L9.17 12.08L13.33 7.92" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
@@ -524,8 +525,19 @@
                         <div class="stat-mini-value" id="rejectedInvitations">0</div>
                     </div>
                 </div>
+                <!-- 审核入口已统一收敛到邀约管理：按人看 / 按批次看（一次添加多人 = 一批，可整批审） -->
+                <div id="invTabBar" style="display:flex; gap:8px; align-items:center; margin: 16px 0 4px; border-bottom: 1px solid #E5E7EB;">
+                    <button id="invTabList" class="btn btn-sm btn-primary" style="width:auto; padding:8px 18px; white-space:nowrap;" onclick="switchInvTab('list')">按人查看</button>
+                    <button id="invTabBatch" class="btn btn-sm btn-outline" style="width:auto; padding:8px 18px; white-space:nowrap;" onclick="switchInvTab('batch')">按批次审核</button>
+                    <span style="align-self:center; margin-left:8px; font-size:12px; color:#6B7280; white-space:nowrap;">
+                        一次批量创建 / 一次提交多人 = 同一批，可整批一起通过或驳回
+                    </span>
+                </div>
+                <div id="invListWrap">
                 <div class="page-header">
                     <div class="header-actions">
+                        <button id="invBulkApproveBtn" class="btn btn-primary btn-sm" onclick="bulkAuditSelected('approve')" style="margin-right: 8px; display: none;">批量通过</button>
+                        <button id="invBulkRejectBtn" class="btn btn-outline btn-sm" onclick="bulkAuditSelected('reject')" style="margin-right: 8px; display: none;">批量驳回</button>
                         <div class="dropdown-wrapper">
                             <select class="dropdown-select">
                                 <option>全部状态</option>
@@ -603,6 +615,37 @@
                     </table>
                 </div>
                 <div id="invitationPagination" style="margin-top: 24px; padding: 16px 0;"></div>
+                </div><!-- /invListWrap -->
+
+                <!-- ==================== 按批次审核（一次添加多人 = 一批） ==================== -->
+                <div id="invBatchWrap" class="hidden">
+                    <div class="filter-bar" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin: 16px 0;">
+                        <label style="font-size:14px; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                            <input type="checkbox" id="invBatchOnlyPending" checked onchange="loadInvitationBatches()"> 只看待处理的批次
+                        </label>
+                        <button class="btn btn-primary btn-sm" style="width:auto; padding:8px 18px;" onclick="loadInvitationBatches()">刷新</button>
+                        <span style="font-size:12px; color:#6B7280;">整批通过 = 这批人全部通过；整批驳回 = 这批人全部驳回（只有这两种结果）</span>
+                    </div>
+                    <div class="table-container" style="overflow-x:auto;">
+                        <table style="min-width:960px;">
+                            <thead>
+                                <tr>
+                                    <th>批次号</th>
+                                    <th>活动</th>
+                                    <th>BD</th>
+                                    <th>人数</th>
+                                    <th>待审批</th>
+                                    <th>已通过</th>
+                                    <th>已驳回</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invBatchBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="invBatchEmpty" class="hidden" style="padding:40px; text-align:center; color:#6B7280;">暂无批次数据</div>
+                </div>
             </div>
 
             <!-- 签到管理 -->
@@ -1757,6 +1800,54 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeInvApproveModal()">取消</button>
                 <button type="button" class="btn btn-primary" id="invApproveOk">确认批准</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批次详情：这批有谁、各自票种/是否付款/状态，可整批通过或整批驳回 -->
+    <div id="batchDetailModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 960px;">
+            <div class="modal-header">
+                <h3 id="batchDetailTitle">批次详情</h3>
+                <button class="modal-close" onclick="closeBatchDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="batchDetailSummary" style="margin-bottom: 16px; padding: 12px 16px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 13px; color: #374151;"></div>
+                <div class="table-container" style="max-height: 46vh; overflow: auto;">
+                    <table style="min-width:760px;">
+                        <thead>
+                            <tr>
+                                <th style="white-space:nowrap;">姓名</th>
+                                <th style="white-space:nowrap;">公司</th>
+                                <th style="white-space:nowrap;">职位</th>
+                                <th style="white-space:nowrap;">手机号</th>
+                                <th style="white-space:nowrap;">票种</th>
+                                <th style="white-space:nowrap;">票价</th>
+                                <th style="white-space:nowrap;">是否付款</th>
+                                <th style="white-space:nowrap;">状态</th>
+                                <th style="white-space:nowrap;">备注</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchDetailBody"></tbody>
+                    </table>
+                </div>
+                <div id="batchDetailOrder" style="margin-top: 12px; font-size: 13px; color: #374151;"></div>
+                <div id="batchAuditBar" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #E5E7EB; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                    <div>
+                        <label style="display:block; font-size:12px; color:#6B7280; margin-bottom:6px;">整批设置为</label>
+                        <select id="batchAuditNeedPay" style="padding:8px 12px; border:1px solid #D1D5DB; border-radius:6px; font-size:14px;">
+                            <option value="">沿用各自原值（邀约默认免票）</option>
+                            <option value="0">全部免票</option>
+                            <option value="1">全部需付款</option>
+                        </select>
+                    </div>
+                    <div style="flex:1; min-width: 220px;">
+                        <label style="display:block; font-size:12px; color:#6B7280; margin-bottom:6px;">审批备注（驳回时必填）</label>
+                        <input type="text" id="batchAuditRemark" placeholder="可留空" style="width:100%; padding:8px 12px; border:1px solid #D1D5DB; border-radius:6px; font-size:14px;">
+                    </div>
+                    <button class="btn btn-primary" style="width:auto; padding:9px 22px; white-space:nowrap;" onclick="auditCurrentBatch('approve')">整批通过</button>
+                    <button class="btn btn-outline" style="width:auto; padding:9px 22px; white-space:nowrap;" onclick="auditCurrentBatch('reject')">整批驳回</button>
+                </div>
             </div>
         </div>
     </div>

@@ -42,6 +42,95 @@ async function syncRegistrationApproved(invitationId, eventId, guestId) {
   }
 }
 
+/**
+ * 审批核心：通过一条邀约
+ * 供「单条批准 / 勾选批量 / 整批通过」三种入口复用，保证行为完全一致：
+ *   状态 → 已报名(2)；同步报名记录 approved；免票自动出票、需付款建待支付单。
+ * @param {object} invitation 邀约实例
+ * @param {object} user 当前管理员 { username }
+ * @param {{remark?:string, need_pay?:number|boolean, lang?:string}} opts
+ *        need_pay 不传时沿用邀约原值（邀约缺省免票）
+ * @returns {Promise<{ok:boolean, error?:string, free?:boolean, order?:object}>}
+ */
+async function approveInvitationCore(invitation, user, opts = {}) {
+  const { remark, need_pay, lang } = opts || {};
+  if (!invitation) return { ok: false, error: '邀约不存在' };
+  if (Number(invitation.registration_status) === 2) return { ok: false, error: '该邀约已通过审批' };
+
+  // 管理员可改「是否需要付款」；不传沿用邀约原值（缺省按邀约免票）
+  const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
+    : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
+      : (Number(invitation.need_pay) === 1 ? 1 : 0);
+
+  await invitation.update({
+    registration_status: 2,  // 已接受
+    approval_time: new Date(),
+    approval_by: user.username,
+    approval_remark: remark || null,
+    registration_time: new Date(),
+    need_pay: needPay
+  });
+
+  // 报名成功短信（按「业务类型+场景+语种」选模板，失败不阻塞审批）
+  try {
+    const { SmsService } = require('../services/SmsService');
+    const event = await Event.findByPk(invitation.event_id);
+    let sceneHint = null;
+    if (event && event.page_url && String(event.page_url).includes('performance')) sceneHint = 'PERFORMANCE';
+    const result = await SmsService.sendByBusinessType(
+      SmsService.MESSAGE_TYPES.REG_SUCCESS,
+      { guestId: invitation.guest_id, eventId: invitation.event_id, invitationId: invitation.id, lang: lang || null },
+      sceneHint
+    );
+    if (!(result && result.success)) {
+      console.warn(`[审批通过] 报名成功短信未送出，邀约 ${invitation.id}：${(result && (result.error || result.errorMessage)) || '未知错误'}`);
+    }
+  } catch (e) {
+    console.error('[审批通过] 触发报名成功短信异常:', e.message);
+  }
+
+  // 报名记录置 approved（建单前置条件）
+  await syncRegistrationApproved(invitation.id, invitation.event_id, invitation.guest_id);
+
+  // 报名成功后补齐订单：免票自动出票；需付款建待支付单（购票人短信带付款链接）
+  let orderInfo = null;
+  try {
+    const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
+    const fallback = regs.length ? [] : await Registration.findAll({
+      where: { event_id: invitation.event_id, guest_id: invitation.guest_id },
+      order: [['id', 'DESC']]
+    });
+    for (const reg of regs.concat(fallback)) {
+      const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+      if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+      if (r && !r.ok && !r.skipped) console.warn('[审批通过] 建单失败：', r.error);
+    }
+  } catch (e) {
+    console.error('[审批通过] 建单异常（不阻塞审批）：', e.message);
+  }
+
+  await invitation.reload();
+  return { ok: true, free: !!(orderInfo && orderInfo.free), order: orderInfo };
+}
+
+/**
+ * 审批核心：驳回一条邀约
+ * @returns {Promise<{ok:boolean, error?:string}>}
+ */
+async function rejectInvitationCore(invitation, user, opts = {}) {
+  const { remark } = opts || {};
+  if (!invitation) return { ok: false, error: '邀约不存在' };
+  if (Number(invitation.registration_status) === 3) return { ok: false, error: '该邀约已被拒绝' };
+  await invitation.update({
+    registration_status: 3,  // 已拒绝
+    approval_time: new Date(),
+    approval_by: user.username,
+    approval_remark: remark || null
+  });
+  await invitation.reload();
+  return { ok: true };
+}
+
 // 根据活动信息生成邀约链接
 function buildInviteUrl(event, inviteCode) {
   const config = require('../config');
@@ -66,12 +155,13 @@ function buildInviteUrl(event, inviteCode) {
 // 获取所有邀请（需要认证）
 router.get('/', authenticate, operationLog('invitations', '获取邀约列表'), async (req, res) => {
   try {
-    const { page = 1, pageSize = 10, event_id, guest_id, registration_status, is_valid, search, source_bd } = req.query;
+    const { page = 1, pageSize = 10, event_id, guest_id, registration_status, is_valid, search, source_bd, batch_no } = req.query;
     const offset = (page - 1) * pageSize;
     
     const where = {};
     if (event_id) where.event_id = event_id;
     if (guest_id) where.guest_id = guest_id;
+    if (batch_no) where.batch_no = String(batch_no).trim();   // 只看该批次（从批次详情跳过来时用）
     if (registration_status !== undefined) where.registration_status = registration_status;
     if (is_valid !== undefined) where.is_valid = is_valid;
 
@@ -964,6 +1054,9 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
 
     // 批量创建同样默认「免票」（邀约嘉宾不掏钱），管理员可后续逐条改成需付款
     const needPay = (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1 : 0;
+
+    // 一次添加多人 = 同一批：整批可在「批次」视图里一起审核
+    const batchNo = 'B' + Date.now() + crypto.randomBytes(3).toString('hex').toUpperCase();
     
     if (!Array.isArray(guest_ids) || guest_ids.length === 0) {
       return res.status(400).json({
@@ -1026,6 +1119,7 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
         invite_url,
         created_by,
         need_pay: needPay,
+        batch_no: batchNo,
         registration_status: 0,
         is_valid: 1
       });
@@ -1056,6 +1150,7 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
       data: {
         created: created.length,
         total: guest_ids.length,
+        batch_no: batchNo,
         message: '二维码正在生成中，请稍后刷新查看'
       }
     });
@@ -1246,106 +1341,24 @@ router.post('/:id/approve', authenticate, operationLog('invitations', '批准邀
     
     const { remark, need_pay } = req.body;
     const invitation = await Invitation.findByPk(req.params.id);
-    
+
     if (!invitation) {
       return res.status(404).json({
         code: 404,
         message: '邀约不存在'
       });
     }
-    
-    if (invitation.registration_status === 2) {
-      return res.status(400).json({
-        code: 400,
-        message: '该邀约已通过审批'
-      });
-    }
-    
-    const fromStatus = invitation.registration_status;
-    // 审批时管理员可改「是否需要付款」；不传则沿用邀约原值（默认需付款）
-    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
-      : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
-        : (Number(invitation.need_pay) === 1 ? 1 : 0);   // 不传沿用原值；缺省按「邀约免票」
 
-    // 更新状态（只使用 registration_status）
-    await invitation.update({
-      registration_status: 2,  // 已接受
-      approval_time: new Date(),
-      approval_by: req.user.username,
-      approval_remark: remark || null,
-      registration_time: new Date(),
-      need_pay: needPay
-    });
-    
-    // 触发报名成功短信（根据活动选择模板：业绩说明会用 22，其他按活动ID映射）
-    try {
-      const { SmsService } = require('../services/SmsService');
-      const { Event } = require('../models');
+    const smsLang = (req.body && req.body.lang) ? req.body.lang
+      : (req.headers && req.headers['accept-language'] ? String(req.headers['accept-language']).slice(0, 5) : null);
+    const r = await approveInvitationCore(invitation, req.user, { remark, need_pay, lang: smsLang });
+    if (!r.ok) return res.status(400).json({ code: 400, message: r.error });
 
-      // 审批通过 = 嘉宾取得报名资格，发「报名成功」短信
-      // ⚠️ 原实现硬编码模板 ID（活动 1→12、2→13，业绩说明会→22），
-      //    那样锁死了语种 —— 英文环境也会发中文模板。
-      //    现改为按「业务类型 + 场景 + 语种」查表，三语自动选对应模板。
-      let sceneHint = null;
-      const event = await Event.findByPk(invitation.event_id);
-      if (event && event.page_url && String(event.page_url).includes('performance')) {
-        sceneHint = 'PERFORMANCE';
-      }
-      const smsLang = req.body && req.body.lang ? req.body.lang
-        : (req.headers && req.headers['accept-language'] ? String(req.headers['accept-language']).slice(0, 5) : null);
-      console.log(`[审批通过] 发送报名成功短信，邀约ID: ${invitation.id}, 活动ID: ${invitation.event_id}, 语种: ${smsLang || '默认'}`);
-
-      const result = await SmsService.sendByBusinessType(
-        SmsService.MESSAGE_TYPES.REG_SUCCESS,
-        {
-          guestId: invitation.guest_id,
-          eventId: invitation.event_id,
-          invitationId: invitation.id,
-          lang: smsLang
-        },
-        sceneHint
-      );
-
-      if (result && result.success) {
-        console.log(`[审批通过] 报名成功短信发送成功，邀约ID: ${invitation.id}`);
-      } else {
-        console.error(`[审批通过] 报名成功短信发送失败，邀约ID: ${invitation.id}, 错误: ${result?.error || result?.errorMessage || '未知错误'}`);
-      }
-    } catch (e) {
-      console.error('[审批通过] 触发报名成功短信异常:', e);
-      console.error('[审批通过] 错误堆栈:', e.stack);
-    }
-
-    // 审批通过 → 报名记录置为 approved（建单前置条件）
-    await syncRegistrationApproved(invitation.id, invitation.event_id, invitation.guest_id);
-
-    // 报名成功后补齐订单：免票的自动出票；需付款的建待支付单（购票人短信带付款链接）
-    let orderInfo = null;
-    try {
-      const regs = await Registration.findAll({
-        where: { invitation_id: invitation.id },
-        order: [['id', 'DESC']]
-      });
-      const fallback = regs.length ? [] : await Registration.findAll({
-        where: { event_id: invitation.event_id, guest_id: invitation.guest_id },
-        order: [['id', 'DESC']]
-      });
-      for (const reg of regs.concat(fallback)) {
-        const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
-        if (r && r.ok && !r.skipped) { orderInfo = r; break; }
-        if (r && !r.ok && !r.skipped) console.warn('[审批通过] 建单失败：', r.error);
-      }
-    } catch (e) {
-      console.error('[审批通过] 建单异常（不阻塞审批）：', e.message);
-    }
-
-    await invitation.reload();
-    
     res.json({
       code: 200,
-      message: orderInfo && orderInfo.free ? '审批通过（免票，已自动出票）' : '审批通过',
+      message: r.free ? '审批通过（免票，已自动出票）' : '审批通过',
       data: invitation,
-      order: orderInfo
+      order: r.order
     });
   } catch (error) {
     res.status(500).json({
@@ -1376,31 +1389,17 @@ router.post('/:id/reject', authenticate, operationLog('invitations', '拒绝邀�
     }
     
     const invitation = await Invitation.findByPk(req.params.id);
-    
+
     if (!invitation) {
       return res.status(404).json({
         code: 404,
         message: '邀约不存在'
       });
     }
-    
-    if (invitation.registration_status === 3) {
-      return res.status(400).json({
-        code: 400,
-        message: '该邀约已被拒绝'
-      });
-    }
-    
-    // 更新状态（只使用 registration_status）
-    await invitation.update({
-      registration_status: 3,  // 已拒绝
-      approval_time: new Date(),
-      approval_by: req.user.username,
-      approval_remark: remark
-    });
-    
-    await invitation.reload();
-    
+
+    const r = await rejectInvitationCore(invitation, req.user, { remark });
+    if (!r.ok) return res.status(400).json({ code: 400, message: r.error });
+
     res.json({
       code: 200,
       message: '已拒绝',
@@ -1412,6 +1411,227 @@ router.post('/:id/reject', authenticate, operationLog('invitations', '拒绝邀�
       message: '操作失败',
       error: error.message
     });
+  }
+});
+
+/* ==================================================================
+   批次：一次添加多人 / 一次提交多人 = 同一批，可整批审核
+   说明：审核入口已统一收敛到邀约管理，「报名审核」页不再单独使用。
+   ================================================================== */
+
+// 批次列表（需要认证，仅管理员）
+router.get('/batches', authenticate, operationLog('invitations', '获取邀约批次列表'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可查看批次' });
+    }
+    const { event_id, only_pending } = req.query;
+    const where = [`i.batch_no IS NOT NULL AND i.batch_no <> ''`];
+    if (event_id) where.push(`i.event_id = ${Number(event_id)}`);
+
+    const rows = await Invitation.sequelize.query(`
+      SELECT i.batch_no,
+             MAX(i.event_id) AS event_id,
+             count(*) AS total,
+             count(*) FILTER (WHERE i.registration_status = 0) AS not_registered,
+             count(*) FILTER (WHERE i.registration_status = 1) AS pending,
+             count(*) FILTER (WHERE i.registration_status = 2) AS approved,
+             count(*) FILTER (WHERE i.registration_status = 3) AS rejected,
+             count(*) FILTER (WHERE COALESCE(i.need_pay, 1) = 1) AS need_pay_count,
+             MIN(i.created_at) AS created_at,
+             MAX(i.source_bd) AS source_bd,
+             bool_or(COALESCE(i.extra_fields->>'auto_created', 'false') = 'true') AS from_registration
+      FROM ec9_invitations i
+      WHERE ${where.join(' AND ')}
+      GROUP BY i.batch_no
+      ORDER BY MIN(i.created_at) DESC
+    `, { type: require('sequelize').QueryTypes.SELECT });
+
+    let list = rows;
+    if (only_pending === '1' || only_pending === 'true') {
+      // 「待处理」= 还有待审批的人，或还没报名的人（后台批量创建的批次就是待回复，同样要能整批处理）
+      list = rows.filter(r => Number(r.pending) > 0 || Number(r.not_registered) > 0);
+    }
+    // BD 只能看自己的批次
+    if (req.user.role === 'bd') list = list.filter(r => r.source_bd === req.user.username);
+
+    const events = await Event.findAll({ attributes: ['id', 'name'] });
+    const emap = new Map(events.map(e => [e.id, e.name]));
+    list = list.map(r => ({ ...r, event_name: emap.get(r.event_id) || '-' }));
+
+    res.json({ code: 200, message: '获取成功', data: { list } });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '获取批次失败', error: error.message });
+  }
+});
+
+// 批次明细：这批有谁、各自票种/是否付款/当前状态
+router.get('/batches/:batchNo', authenticate, operationLog('invitations', '获取邀约批次明细'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可查看批次' });
+    }
+    const batchNo = String(req.params.batchNo || '').trim();
+    const invs = await Invitation.findAll({
+      where: { batch_no: batchNo },
+      include: [{ model: Guest, as: 'guest' }, { model: Event, as: 'event' }],
+      order: [['id', 'ASC']]
+    });
+    if (!invs.length) return res.status(404).json({ code: 404, message: '批次不存在或已清空' });
+
+    const invIds = invs.map(i => i.id);
+    const regs = await Registration.findAll({
+      where: { invitation_id: { [Op.in]: invIds } },
+      include: [{ model: TicketType, as: 'ticketType' }],
+      order: [['id', 'DESC']]
+    });
+    const regMap = new Map();
+    for (const r of regs) if (!regMap.has(r.invitation_id)) regMap.set(r.invitation_id, r);
+
+    const list = invs.map(inv => {
+      const o = inv.toJSON();
+      const reg = regMap.get(inv.id);
+      let phone = null;
+      if (o.guest && o.guest.phone) {
+        try { phone = decryptPhone(o.guest.phone); } catch (e) { phone = null; }
+      }
+      return {
+        invitation_id: inv.id,
+        guest_id: inv.guest_id,
+        name: (o.guest && o.guest.name) || '-',
+        company: (o.guest && o.guest.company) || '-',
+        position: (o.guest && o.guest.position) || '-',
+        phone,
+        event_id: inv.event_id,
+        event_name: (o.event && o.event.name) || '-',
+        registration_status: inv.registration_status,
+        need_pay: Number(inv.need_pay) !== 0,
+        source_bd: inv.source_bd || '-',
+        approval_remark: inv.approval_remark || '',
+        registration_id: reg ? reg.id : null,
+        group_no: reg ? reg.group_no : null,
+        reg_status: reg ? reg.status : null,
+        ticket_name: reg && reg.ticketType ? reg.ticketType.name : null,
+        ticket_price: reg && reg.ticketType ? Number(reg.ticketType.price) : null
+      };
+    });
+
+    const groupNos = [...new Set(list.map(x => x.group_no).filter(Boolean))];
+    let order = null;
+    if (groupNos.length === 1) {
+      const { Order } = require('../models');
+      order = await Order.findOne({ where: { group_no: groupNos[0] }, order: [['id', 'DESC']] });
+      if (order) order = {
+        order_no: order.order_no, status: order.status,
+        final_amount: Number(order.final_amount), discount_rate: Number(order.discount_rate)
+      };
+    }
+
+    res.json({
+      code: 200, message: '获取成功',
+      data: {
+        batch_no: batchNo,
+        event_id: invs[0].event_id,
+        source_bd: invs[0].source_bd || '-',
+        created_at: invs[0].created_at,
+        total: list.length,
+        pending: list.filter(x => x.registration_status === 1).length,
+        approved: list.filter(x => x.registration_status === 2).length,
+        rejected: list.filter(x => x.registration_status === 3).length,
+        order, list
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '获取批次明细失败', error: error.message });
+  }
+});
+
+// 整批审核：这批人一起通过 / 一起驳回
+router.post('/batches/:batchNo/audit', authenticate, operationLog('invitations', '整批审核邀约'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可以审批' });
+    }
+    const { action, remark, need_pay } = req.body || {};
+    if (action !== 'approve' && action !== 'reject') {
+      return res.status(400).json({ code: 400, message: 'action 只能是 approve 或 reject' });
+    }
+    if (action === 'reject' && !remark) {
+      return res.status(400).json({ code: 400, message: '整批驳回必须填写原因' });
+    }
+    const batchNo = String(req.params.batchNo || '').trim();
+    const invs = await Invitation.findAll({ where: { batch_no: batchNo }, order: [['id', 'ASC']] });
+    if (!invs.length) return res.status(404).json({ code: 404, message: '批次不存在或已清空' });
+
+    const results = [];
+    for (const inv of invs) {
+      if (action === 'approve') {
+        if (Number(inv.registration_status) === 2) { results.push({ id: inv.id, skipped: true, reason: '已通过' }); continue; }
+        const r = await approveInvitationCore(inv, req.user, { remark, need_pay });
+        results.push(r.ok ? { id: inv.id, ok: true, free: !!r.free } : { id: inv.id, ok: false, reason: r.error });
+      } else {
+        if (Number(inv.registration_status) === 3) { results.push({ id: inv.id, skipped: true, reason: '已拒绝' }); continue; }
+        const r = await rejectInvitationCore(inv, req.user, { remark });
+        results.push(r.ok ? { id: inv.id, ok: true } : { id: inv.id, ok: false, reason: r.error });
+      }
+    }
+    const okN = results.filter(r => r.ok).length;
+    const failN = results.filter(r => r.ok === false).length;
+
+    res.json({
+      code: 200,
+      message: action === 'approve'
+        ? `整批通过完成：成功 ${okN} 人${failN ? `，失败 ${failN} 人` : ''}`
+        : `整批驳回完成：成功 ${okN} 人${failN ? `，失败 ${failN} 人` : ''}`,
+      data: { batch_no: batchNo, total: invs.length, ok: okN, failed: failN, results }
+    });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '整批审核失败', error: error.message });
+  }
+});
+
+// 勾选批量审核（可跨批次，任意多条）
+router.post('/bulk-audit', authenticate, operationLog('invitations', '批量审核邀约'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可以审批' });
+    }
+    const { ids, action, remark, need_pay } = req.body || {};
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ code: 400, message: '请先勾选要审核的邀约' });
+    }
+    if (action !== 'approve' && action !== 'reject') {
+      return res.status(400).json({ code: 400, message: 'action 只能是 approve 或 reject' });
+    }
+    if (action === 'reject' && !remark) {
+      return res.status(400).json({ code: 400, message: '批量驳回必须填写原因' });
+    }
+    const invs = await Invitation.findAll({ where: { id: { [Op.in]: ids.map(Number).filter(n => n > 0) } }, order: [['id', 'ASC']] });
+
+    const results = [];
+    for (const inv of invs) {
+      if (action === 'approve') {
+        if (Number(inv.registration_status) === 2) { results.push({ id: inv.id, skipped: true, reason: '已通过' }); continue; }
+        const r = await approveInvitationCore(inv, req.user, { remark, need_pay });
+        results.push(r.ok ? { id: inv.id, ok: true, free: !!r.free } : { id: inv.id, ok: false, reason: r.error });
+      } else {
+        if (Number(inv.registration_status) === 3) { results.push({ id: inv.id, skipped: true, reason: '已拒绝' }); continue; }
+        const r = await rejectInvitationCore(inv, req.user, { remark });
+        results.push(r.ok ? { id: inv.id, ok: true } : { id: inv.id, ok: false, reason: r.error });
+      }
+    }
+    const okN = results.filter(r => r.ok).length;
+    const failN = results.filter(r => r.ok === false).length;
+
+    res.json({
+      code: 200,
+      message: action === 'approve'
+        ? `批量通过完成：成功 ${okN} 人${failN ? `，失败 ${failN} 人` : ''}`
+        : `批量驳回完成：成功 ${okN} 人${failN ? `，失败 ${failN} 人` : ''}`,
+      data: { total: invs.length, ok: okN, failed: failN, results }
+    });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '批量审核失败', error: error.message });
   }
 });
 

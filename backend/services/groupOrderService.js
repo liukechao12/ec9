@@ -46,6 +46,75 @@ function genCheckinCode() {
   return 'EC9' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
+function genInviteCode() {
+  return crypto.randomBytes(8).toString('hex').toUpperCase();
+}
+
+/**
+ * 报名落库后同步「邀约管理」记录 —— 对齐 EC8 口径，让后台邀约表里能看到每一次报名：
+ *   命中邀约名单  → 原邀约置为「已报名(2)」，报名直接成功、免审核
+ *   不在邀约名单  → 新建一条邀约，状态「待审批(1)」，管理员在邀约管理里审批
+ * registration_status 语义（models/Invitation.js）：0 未报名 1 待审批 2 已报名 3 已拒绝
+ */
+async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitationId, at }) {
+  try {
+    if (isInvited && invitationId) {
+      const inv = await Invitation.findByPk(invitationId);
+      if (inv) {
+        await inv.update({ registration_status: 2, registration_time: at });
+        return inv.id;
+      }
+    }
+    if (isInvited && !invitationId) {
+      const inv = await Invitation.findOne({ where: { event_id: eventId, guest_id: guestId, is_valid: 1 } });
+      if (inv) {
+        await inv.update({ registration_status: 2, registration_time: at });
+        return inv.id;
+      }
+    }
+    // 不在邀约名单：建一条待审批的邀约记录（幂等：同一活动+嘉宾只建一条）
+    let inv = await Invitation.findOne({ where: { event_id: eventId, guest_id: guestId } });
+    if (!inv) {
+      let code = genInviteCode();
+      while (await Invitation.findOne({ where: { invite_code: code } })) code = genInviteCode();
+      inv = await Invitation.create({
+        event_id: eventId,
+        guest_id: guestId,
+        invite_code: code,
+        registration_status: 1,   // 待审批
+        registration_time: at,
+        is_valid: 1,
+        extra_fields: { auto_created: true }   // 标记：本条由「非邀约人报名」自动生成
+      });
+    } else if (inv.registration_status !== 2) {
+      // 未被审批通过过的，重提时回到待审批
+      await inv.update({ registration_status: 1, registration_time: at });
+    }
+    return inv.id;
+  } catch (e) {
+    console.error('[groupOrder] 同步邀约记录失败:', e.message);
+    return null;
+  }
+}
+
+/** 审核结果回写邀约表：通过 → 2 已报名；驳回 → 3 已拒绝 */
+async function syncInvitationOnAudit(registration, action, at) {
+  try {
+    const invId = registration.invitation_id;
+    if (!invId) return;
+    const inv = await Invitation.findByPk(invId);
+    if (!inv) return;
+    await inv.update({
+      registration_status: action === 'reject' ? 3 : 2,
+      approval_status: action === 'reject' ? 3 : 2,
+      approval_time: at,
+      approval_remark: action === 'reject' ? (registration.reject_reason || null) : null
+    });
+  } catch (e) {
+    console.error('[groupOrder] 回写邀约审核状态失败:', e.message);
+  }
+}
+
 /**
  * 判断手机号是否在「邀约名单」内（该活动下有有效邀约记录）
  * @param {string[]} phones 明文手机号
@@ -67,7 +136,10 @@ async function findInvited(phones, eventId) {
   const gid2phone = new Map(guests.map(g => [g.id, g.phone_hmac]));
   const hmac2phone = new Map();
   phones.forEach(p => hmac2phone.set(hmacPhone(String(p)), String(p)));
-  for (const inv of invs) {
+  // 排除「报名时自动生成的待审批邀约」（extra_fields.auto_created）——那不是真邀约，
+  // 否则非邀约人提交后二次估价会误判为命中名单、白白免票免审
+  const genuine = invs.filter(inv => !(inv.extra_fields && inv.extra_fields.auto_created));
+  for (const inv of genuine) {
     const hmac = gid2phone.get(inv.guest_id);
     const phone = hmac2phone.get(hmac);
     if (phone) map.set(phone, { invitation_id: inv.id, source_bd: inv.source_bd || '' });
@@ -185,13 +257,19 @@ async function createGroup({ buyerPhone, eventId, members }) {
     }
 
     const isInvited = invitedMap.has(phone);
+    // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
+    const invId = await syncInvitationOnRegister({
+      eventId, guestId: guest.id, isInvited,
+      invitationId: isInvited ? invitedMap.get(phone).invitation_id : null,
+      at: now
+    });
     // 邀约名单内：免审核直接通过 + 免票（audit_exempt 标记，驳回重提时仍免审）
     const reg = await Registration.create({
       event_id: eventId,
       session_id: Number(m.session_id) || 0,
       ticket_type_id: Number(m.ticket_type_id) || 0,
       guest_id: guest.id,
-      invitation_id: isInvited ? invitedMap.get(phone).invitation_id : null,
+      invitation_id: invId || (isInvited ? invitedMap.get(phone).invitation_id : null),
       group_no: groupNo,
       status: isInvited ? REG_STATUS.APPROVED : REG_STATUS.SUBMITTED,
       focus: clip(m.focus, 200),
@@ -321,6 +399,7 @@ async function auditGroup({ groupNo, action, reason, operator }) {
       r.reject_reason = clip(reason, 500);
       r.audited_at = new Date();
       await r.save();
+      await syncInvitationOnAudit(r, 'reject', r.audited_at);   // 邀约表 → 已拒绝(3)
     }
     return {
       ok: true, action: 'rejected', group_no: groupNo,
@@ -337,6 +416,7 @@ async function auditGroup({ groupNo, action, reason, operator }) {
     r.audited_at = new Date();
     r.reject_reason = null;
     await r.save();
+    await syncInvitationOnAudit(r, 'approve', r.audited_at);    // 邀约表 → 已报名(2)
   }
   for (const r of regs) {
     members.push({

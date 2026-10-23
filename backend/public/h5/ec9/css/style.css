@@ -37,7 +37,14 @@ html, body {
   color: #1D2129;
 }
 
-#app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--page-bg); position: relative; }
+/* 等比适配：页面始终按 375 设计稿宽度布局，再由 JS 整体缩放（common.js fitViewport）
+   100vh 会被缩放放大，因此统一用 calc(100vh / var(--z,1)) 抵消 */
+#app {
+  width: 375px; max-width: 375px; margin: 0 auto;
+  min-height: calc(100vh / var(--z, 1));
+  background: var(--page-bg); position: relative;
+  transform-origin: top center;
+}
 #app.home { background: var(--page-bg); }   /* 蓝色只保留 375px 手机舞台，外围不铺蓝 */
 /* 首页隐藏 H5 自带 logo 大条（设计稿无此元素），仅保留右上角语言切换浮层 */
 #app.home .brand { display: none; }
@@ -93,7 +100,7 @@ html, body {
   margin-top: -20px;
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - 164px);
+  min-height: calc(100vh / var(--z, 1) - 164px);
   padding: 26px 20px 40px;
 }
 .sheet--flush { min-height: 0; }
@@ -357,7 +364,7 @@ select.input.filled { color: #1D2129; }
 .result-page .btn-primary + .btn-primary { margin-top: 12px; }
 
 /* ---------- 电子票（设计稿：蓝底品牌区+白卡 y193 浮起，行距40，状态值大字） ---------- */
-.eticket-wrap { background: var(--brand-blue); padding: 0 12px 30px; min-height: 100vh; position: relative; }
+.eticket-wrap { background: var(--brand-blue); padding: 0 12px 30px; min-height: calc(100vh / var(--z, 1)); position: relative; }
 #app.eticket-wrap .btn-primary { margin-top: 12px; }
 #app.eticket-wrap div > .btn-primary:first-child { margin-top: 18px; }
 .eticket {
@@ -401,7 +408,7 @@ select.input.filled { color: #1D2129; }
 #app.agree-page { background: var(--brand-blue); }
 .agree-page .brand::before { display: none; }
 .agree-page .lang-switch { top: 24px; }
-.agree-page { min-height: 100vh; padding: 64px 12px 30px; position: relative; }
+.agree-page { min-height: calc(100vh / var(--z, 1)); padding: 64px 12px 30px; position: relative; }
 .agree-page .back-btn { color: #4E5969; }
 .agree-page .back-btn:active { color: #1D2129; }
 .agree-card { background: #fff; border-radius: 16px; padding: 0 0 30px; overflow: hidden; }
@@ -569,7 +576,7 @@ select.input.filled { color: #1D2129; }
    灰底 #EDEDED，无品牌头；标题 y70-92 / 三卡 y114-541 / 权益面板
    y562-889 / 协议 y950-963 / 提交按钮 y984-1021 / 退款说明 y1061-1069
    ============================================================ */
-#app.tk-page { background: #EDEDED; min-height: 100vh; padding: 69px 0 30px; }
+#app.tk-page { background: #EDEDED; min-height: calc(100vh / var(--z, 1)); padding: 69px 0 30px; }
 #app.tk-page .tk-title {
   text-align: center; font-size: 24px; line-height: 1; font-weight: 600;
   color: var(--title-gray); margin: 0 0 21px;

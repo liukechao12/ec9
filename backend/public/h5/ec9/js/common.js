@@ -28,6 +28,40 @@
     clear() { sessionStorage.removeItem("ec9_vtoken"); sessionStorage.removeItem("ec9_phone"); localStorage.removeItem("ec9_data"); }
   };
 
+  /* ---------- 等比适配 ----------
+     设计稿是 375px 宽：#app 永远按 375 布局，再整体缩放到屏幕宽度，
+     保证任何机型（360/375/390/414/430...）版式比例完全一致，不会错位或留白。
+     zoom 会被算进布局（浏览器原生缩放）；不支持的旧 WebView 退化为 transform scale + 占位补偿。 */
+  var DESIGN_W = 375;
+  var MAX_SCALE = 1.6;              // 宽屏（含桌面预览）上限，避免字被拉得过大
+  var zoomSupported = (w.CSS && CSS.supports) ? CSS.supports("zoom", "1.5") : false;
+
+  function fitViewport() {
+    var app = document.getElementById("app");
+    if (!app) return;
+    var vw = document.documentElement.clientWidth || w.innerWidth || DESIGN_W;
+    if (!vw) return;
+    var s = Math.min(vw / DESIGN_W, MAX_SCALE);
+    document.documentElement.style.setProperty("--z", s);
+    if (zoomSupported) {
+      app.style.zoom = s;
+    } else {
+      app.style.transform = "scale(" + s + ")";
+      app.style.transformOrigin = "top center";
+      // transform 不占布局空间，用负外边距把被缩掉的高度补回来
+      app.style.marginBottom = ((s - 1) * app.offsetHeight) + "px";
+    }
+  }
+
+  fitViewport();
+  w.addEventListener("resize", fitViewport);
+  w.addEventListener("orientationchange", function () { setTimeout(fitViewport, 120); });
+  w.addEventListener("load", fitViewport);
+  document.addEventListener("DOMContentLoaded", fitViewport);
+  // 字体/图片到位后高度会变，再补一次
+  setTimeout(fitViewport, 300);
+  setTimeout(fitViewport, 1200);
+
   /* ---------- 三语 ---------- */
   function t(k) {
     var dict = I18N[S.lang] || I18N["zh-CN"];

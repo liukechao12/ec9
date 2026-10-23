@@ -18,6 +18,11 @@ const { VerificationCode, VerificationToken } = require('../models');
 const { hmacPhone, hashCode } = require('../utils/phoneCrypto');
 const sms = require('./verificationSmsService');
 
+if (config.sms.fixedCode) {
+  console.warn('[verification] ⚠️ 联调模式：验证码固定为 ' + config.sms.fixedCode +
+    '，不发送真实短信。上线前必须移除 SMS_FIXED_CODE');
+}
+
 const PHONE_RE = /^1[3-9]\d{9}$/;
 
 function genCode() {
@@ -39,34 +44,36 @@ async function sendCode(phone, purpose = 'register', ip = '') {
   const phoneHmac = hmacPhone(phone);
   const now = new Date();
 
-  // 频率限制：60 秒内不可重发
-  const [recent] = await VerificationCode.findAll({
-    where: { phone_hmac: phoneHmac, purpose },
-    order: [['created_at', 'DESC']],
-    limit: 1
-  });
-  if (recent) {
-    const lastAt = new Date(recent.created_at).getTime();
-    const waitMs = smsConfig.get().code_resend_seconds * 1000 - (now.getTime() - lastAt);
-    if (waitMs > 0) {
-      return { ok: false, error: '发送过于频繁，请稍后再试', retryAfter: Math.ceil(waitMs / 1000) };
+  // 联调模式（固定验证码）：跳过频率限制与日上限，方便反复跑流程
+  if (!config.sms.fixedCode) {
+    const [recent] = await VerificationCode.findAll({
+      where: { phone_hmac: phoneHmac, purpose },
+      order: [['created_at', 'DESC']],
+      limit: 1
+    });
+    if (recent) {
+      const lastAt = new Date(recent.created_at).getTime();
+      const waitMs = smsConfig.get().code_resend_seconds * 1000 - (now.getTime() - lastAt);
+      if (waitMs > 0) {
+        return { ok: false, error: '发送过于频繁，请稍后再试', retryAfter: Math.ceil(waitMs / 1000) };
+      }
     }
-  }
 
-  // 日上限
-  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const todayCount = await VerificationCode.count({
-    where: {
-      phone_hmac: phoneHmac, purpose,
-      created_at: { [require('sequelize').Op.gte]: dayStart }
+    // 日上限
+    const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+    const todayCount = await VerificationCode.count({
+      where: {
+        phone_hmac: phoneHmac, purpose,
+        created_at: { [require('sequelize').Op.gte]: dayStart }
+      }
+    });
+    if (todayCount >= smsConfig.get().code_daily_limit) {
+      return { ok: false, error: '今日验证码发送次数已达上限' };
     }
-  });
-  if (todayCount >= smsConfig.get().code_daily_limit) {
-    return { ok: false, error: '今日验证码发送次数已达上限' };
   }
 
   // 生成 + 哈希落库
-  const code = genCode();
+  const code = config.sms.fixedCode || genCode();
   const expiresAt = new Date(now.getTime() + smsConfig.get().code_expire_minutes * 60000);
   await VerificationCode.create({
     phone_hmac: phoneHmac,
@@ -75,6 +82,12 @@ async function sendCode(phone, purpose = 'register', ip = '') {
     ip,
     expires_at: expiresAt
   });
+
+  // 联调模式：固定验证码时完全不走短信通道
+  if (config.sms.fixedCode) {
+    console.warn('[verification] 联调模式生效：验证码固定为 ' + config.sms.fixedCode + '，未真实发送短信');
+    return { ok: true, mock: true };
+  }
 
   // 发送（无通道 → mock；mock 时登记到进程内 outbox 供自检）
   const sent = await sms.sendVerificationSms(phone, code);

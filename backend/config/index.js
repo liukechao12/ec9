@@ -57,7 +57,10 @@ const config = {
     codeExpireMinutes: parseInt(process.env.SMS_CODE_EXPIRE_MINUTES) || 5,
     codeResendSeconds: parseInt(process.env.SMS_CODE_RESEND_SECONDS) || 60,
     codeMaxAttempts: parseInt(process.env.SMS_CODE_MAX_ATTEMPTS) || 5,
-    codeDailyLimit: parseInt(process.env.SMS_CODE_DAILY_LIMIT) || 10
+    codeDailyLimit: parseInt(process.env.SMS_CODE_DAILY_LIMIT) || 10,
+    // 联调开关：设置后不发短信，验证码固定为该值（默认留空=关闭）
+    // 例：SMS_FIXED_CODE=123456 —— 仅用于跑通流程，上线前必须删掉
+    fixedCode: (process.env.SMS_FIXED_CODE || '').trim()
   },
 
   // ==================== 微信支付 ====================

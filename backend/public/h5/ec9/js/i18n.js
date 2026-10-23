@@ -456,7 +456,16 @@ Object.assign(I18N["zh-CN"], {
   st_booked: "预定成功",
   invited_free_row: "邀约嘉宾免票",
   auto_approved_tip: "全员在邀约名单内（或免费票），已自动通过并出票，各填报人凭本人手机签到",
-  audit_exempt_tag: "免审"
+  audit_exempt_tag: "免审",
+  pending_pay_title: "待付款",
+  pending_pay_sub: "审核已通过，请完成支付，付款成功即为预定成功",
+  pending_pay_btn: "立即支付",
+  pending_pay_order: "订单号",
+  pending_pay_count: "填报人数",
+  person_unit: "人",
+  no_pending_order: "暂无待付款订单",
+  order_load_fail: "订单加载失败",
+  order_not_ready: "订单未就绪，请稍候再试"
 });
 
 Object.assign(I18N["zh-Hant"], {
@@ -501,7 +510,16 @@ Object.assign(I18N["zh-Hant"], {
   st_booked: "預定成功",
   invited_free_row: "邀約嘉賓免票",
   auto_approved_tip: "全員在邀約名單內（或免費票），已自動通過並出票，各填報人憑本人手機簽到",
-  audit_exempt_tag: "免審"
+  audit_exempt_tag: "免審",
+  pending_pay_title: "待付款",
+  pending_pay_sub: "審核已通過，請完成支付，付款成功即為預定成功",
+  pending_pay_btn: "立即支付",
+  pending_pay_order: "訂單號",
+  pending_pay_count: "填報人數",
+  person_unit: "人",
+  no_pending_order: "暫無待付款訂單",
+  order_load_fail: "訂單載入失敗",
+  order_not_ready: "訂單未就緒，請稍候再試"
 });
 
 Object.assign(I18N["en"], {
@@ -546,7 +564,16 @@ Object.assign(I18N["en"], {
   st_booked: "Booked",
   invited_free_row: "Invited guest - free",
   auto_approved_tip: "All attendees are invited (or free tickets). Approved and issued automatically. Each attendee checks in with their own phone.",
-  audit_exempt_tag: "Exempt"
+  audit_exempt_tag: "Exempt",
+  pending_pay_title: "Pending Payment",
+  pending_pay_sub: "Approved. Complete the payment to confirm your booking.",
+  pending_pay_btn: "Pay Now",
+  pending_pay_order: "Order No.",
+  pending_pay_count: "Attendees",
+  person_unit: "",
+  no_pending_order: "No pending order",
+  order_load_fail: "Failed to load order",
+  order_not_ready: "Order not ready, please retry"
 });
 
 const LANGS = ["zh-CN", "en", "zh-Hant"];

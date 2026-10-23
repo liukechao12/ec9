@@ -1075,6 +1075,8 @@ router.get('/group/:groupNo', async (req, res) => {
       data: {
         group_no: req.params.groupNo,
         event_id: g.event_id,
+        // 购票人 / 管理员已通过鉴权，回传 pay_token 供 H5「待付款页」直连订单支付页
+        pay_token: (g.order && g.order.pay_token) ? String(g.order.pay_token) : '',
         registrations: g.registrations.map(r => {
           const ef = r.extra_fields || {};
           const tt = r.ticketType;

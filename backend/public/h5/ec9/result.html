@@ -35,10 +35,11 @@
 
   // 报名结果
   var REG = {
-    pending:  { icon: "earth_blue_review.png",   title: "result_pending",  sub: "" },
-    rejected: { icon: "earth_orange_reject.png", title: "result_rejected", sub: "result_rejected_sub" },
-    approved: { icon: "earth_green_check.png",   title: "result_success",  sub: "" },
-    paid:     { icon: "earth_green_check.png",   title: "st_booked",      sub: "" }
+    pending:     { icon: "earth_blue_review.png",   title: "result_pending",     sub: "" },
+    rejected:    { icon: "earth_orange_reject.png", title: "result_rejected",    sub: "result_rejected_sub" },
+    approved:    { icon: "earth_green_check.png",   title: "result_success",     sub: "" },
+    pending_pay: { icon: "earth_blue_review.png",   title: "pending_pay_title",  sub: "pending_pay_sub" },
+    paid:        { icon: "earth_green_check.png",   title: "st_booked",          sub: "" }
   };
   // 签到结果
   var CHK = {
@@ -68,6 +69,7 @@
   function renderGroup(g) {
     var regs = g.registrations || [];
     var order = g.order;
+    var curPayToken = payTokenParam || g.pay_token || "";
     var box = document.getElementById("groupBox");
     var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
     var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
@@ -117,8 +119,8 @@
       setMain(E.t("resubmit"), function () { E.go("profile.html", { event_id: eventId }); });
       setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     } else if (anyApproved && order && order.status === "pending_payment") {
-      setMain(E.t("go_pay"), function () {
-        E.go("pay.html", { event_id: eventId, group_no: groupNo, order_no: order.order_no });
+      setMain(E.t("pending_pay_btn"), function () {
+        E.go("pending_pay.html", { event_id: eventId, group_no: groupNo, pay_token: curPayToken });
       });
       setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     } else {
@@ -138,6 +140,17 @@
       // 整单一起审核：只要还有人在审核中，整单就还是「待审核」
       var st = allPaid ? "paid" : (anyRejected ? "rejected" : (anyPending ? "pending" : (anyApproved ? "approved" : "pending")));
       var c = REG[st] || REG.pending;
+
+      // 审核通过（或邀约免审）但要掏钱 → 直接进「待付款」页：上面有付款金额和支付按钮
+      var orderPending = order && order.status === "pending_payment";
+      if (st === "approved" && orderPending) {
+        E.go("pending_pay.html", {
+          event_id: eventId, group_no: groupNo,
+          pay_token: payTokenParam || g.pay_token || ""
+        });
+        return;
+      }
+
       document.getElementById("resIcon").src = "assets/" + c.icon;
       document.getElementById("resTitle").textContent = E.t(c.title);
       renderGroup(g);

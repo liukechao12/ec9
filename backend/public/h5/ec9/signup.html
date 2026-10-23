@@ -64,8 +64,9 @@
 
       var back = E.param("redirect", "");
       var regId = E.param("reg_id", "");
-      // 凭证失效后重新验证：直接回原页面
-      if (back) { E.go(back, { event_id: eventId, reg_id: regId }); return; }
+      var gno = E.param("group_no", "");
+      // 凭证失效后重新验证：直接回原页面（group_no 一并带回，避免丢单）
+      if (back) { E.go(back, { event_id: eventId, reg_id: regId, group_no: gno }); return; }
 
       // 已报名用户按状态分流，避免重复报名
       E.Api.mine(eventId).then(function (m) {
@@ -78,7 +79,14 @@
           });
           if (m.paid) return E.go("eticket.html", { event_id: eventId, reg_id: m.registration_id });
           if (m.status === "rejected") return E.go("result.html", { event_id: eventId, status: "rejected", reg_id: m.registration_id });
-          if (m.status === "approved") return E.go("pay.html", { event_id: eventId, reg_id: m.registration_id });
+          // 审核通过 → 待付款页（展示应付金额 + 支付按钮，点了才进订单支付页）
+          if (m.status === "approved") {
+            var grp = m.group;
+            if (grp && grp.is_buyer && grp.order && !grp.order.paid) {
+              return E.go("pending_pay.html", { event_id: eventId, group_no: grp.group_no });
+            }
+            return E.go("pending_pay.html", { event_id: eventId, reg_id: m.registration_id });
+          }
           return E.go("result.html", { event_id: eventId, status: "pending", reg_id: m.registration_id });
         }
         E.go("profile.html", { event_id: eventId });

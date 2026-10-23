@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title data-i18n="pending_pay_title">待付款</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+
+  <div class="sheet result-page">
+    <div class="result-icon" style="width:150px;height:150px;max-width:150px;margin-top:10px">
+      <img src="assets/earth_blue_review.png" alt="">
+    </div>
+    <div class="result-title" style="margin-top:30px" data-i18n="pending_pay_title">待付款</div>
+    <div class="result-sub" data-i18n="pending_pay_sub">审核已通过，请完成支付，付款成功即为预定成功</div>
+
+    <div class="price" style="margin-top:24px"><span class="cny">¥</span> <span id="ppAmount">—</span></div>
+
+    <div class="fee-box hidden" id="ppBox" style="text-align:left;margin-top:16px"></div>
+
+    <button class="btn-primary" id="btnPay" style="margin-top:28px" data-i18n="pending_pay_btn">立即支付</button>
+    <button class="btn-primary" id="btnHome" style="margin-top:12px;background:#2A2A2C" data-i18n="back_home">回到首页</button>
+    <div class="error-pill hidden" id="errPill"></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script>
+(function () {
+  var E = window.EC9;
+  E.mountHeader(document.getElementById("header"), false);
+
+  var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  var groupNo = E.param("group_no", "");
+  var regId = E.param("reg_id", "") || (E.S.data.reg_id || "");
+  var payToken = E.param("pay_token", "");
+
+  var goPay = null;   // 支付按钮要跳的订单支付页
+  var box = document.getElementById("ppBox");
+
+  function setAmount(v) { document.getElementById("ppAmount").textContent = Number(v || 0).toFixed(2); }
+  function err(msg) {
+    var p = document.getElementById("errPill");
+    p.textContent = msg; p.classList.remove("hidden");
+  }
+  function row(k, v, cls) {
+    return '<div class="fee-row' + (cls ? ' ' + cls : '') + '"><span>' + k + '</span><span>' + v + '</span></div>';
+  }
+
+  /* ============================================================
+     模式 A：整单代报（group_no）—— 后台审核通过后待付款
+     ============================================================ */
+  function loadGroup() {
+    E.Api.groupInfo(groupNo, payToken).then(function (g) {
+      var order = g.order;
+      if (!order) {
+        err(E.t("no_pending_order"));
+        document.getElementById("btnPay").classList.add("hidden");
+        return;
+      }
+      // 已支付 / 已关闭：直接回结果页看最终状态
+      if (order.status === "paid") {
+        E.go("result.html", { event_id: eventId, group_no: groupNo, status: "paid", pay_token: payToken || g.pay_token || "" });
+        return;
+      }
+      var token = payToken || g.pay_token || "";
+      var regs = g.registrations || [];
+
+      var html = '<div class="fee-title">' + E.t("fee_summary") + '</div>';
+      html += row(E.t("pending_pay_order"), E.esc(order.order_no || "—"));
+      html += row(E.t("pending_pay_count"), regs.length + " " + E.t("person_unit"));
+      (order.price_detail || []).forEach(function (it) {
+        html += row(E.esc(it.ticket_name || "") + " × 1",
+          it.is_free ? '<span class="free-mark">¥0.00</span>' : "¥" + Number(it.price).toFixed(2));
+      });
+      if (Number(order.discount_amount) > 0) {
+        html += row(E.t("discount_row") + "（" + (Number(order.discount_rate) * 10) + "折）",
+          "-¥" + Number(order.discount_amount).toFixed(2), "discount");
+      }
+      html += row(E.t("total_row"), "¥" + Number(order.final_amount).toFixed(2), "total");
+      box.innerHTML = html;
+      box.classList.remove("hidden");
+      setAmount(order.final_amount);
+
+      goPay = function () {
+        E.go("pay.html", {
+          event_id: eventId, group_no: groupNo,
+          order_no: order.order_no, pay_token: token
+        });
+      };
+    }).catch(onFail);
+  }
+
+  /* ============================================================
+     模式 B：单人报名（reg_id）
+     ============================================================ */
+  function loadSingle() {
+    E.Api.mine(eventId).then(function (m) {
+      if (!m || !m.registered) { E.go("signup.html", { event_id: eventId }); return; }
+      if (m.paid) { E.go("eticket.html", { event_id: eventId, reg_id: m.registration_id }); return; }
+      if (m.status === "rejected") {
+        E.go("result.html", { event_id: eventId, status: "rejected", reg_id: m.registration_id });
+        return;
+      }
+      var price = Number(m.price != null ? m.price : ((m.ticket && m.ticket.price) || 0));
+      var html = '<div class="fee-title">' + E.t("fee_summary") + '</div>';
+      if (m.order_no) html += row(E.t("pending_pay_order"), E.esc(m.order_no));
+      html += row(E.esc(m.ticket_name || (m.ticket && m.ticket.name) || "—") + " × 1", "¥" + price.toFixed(2));
+      html += row(E.t("total_row"), "¥" + price.toFixed(2), "total");
+      box.innerHTML = html;
+      box.classList.remove("hidden");
+      setAmount(price);
+
+      goPay = function () { E.go("pay.html", { event_id: eventId, reg_id: m.registration_id }); };
+    }).catch(onFail);
+  }
+
+  document.getElementById("btnPay").addEventListener("click", function () {
+    if (!goPay) { err(E.t("order_not_ready")); return; }
+    goPay();
+  });
+  document.getElementById("btnHome").addEventListener("click", function () {
+    E.go("index.html", { event_id: eventId });
+  });
+
+  // 凭证缺失/过期 → 回报名页验证后原路返回（带上 group_no，避免丢单）
+  function relogin() {
+    E.go("signup.html", {
+      event_id: eventId, redirect: "pending_pay.html",
+      reg_id: regId || "", group_no: groupNo || ""
+    });
+  }
+  function onFail(e) {
+    var msg = (e && e.message) || "";
+    if (msg.indexOf("验证") > -1 || msg.indexOf("401") > -1) { relogin(); return; }
+    err(msg || E.t("order_load_fail"));
+  }
+
+  if (groupNo) {
+    if (!E.S.token) { relogin(); return; }
+    loadGroup();
+  } else if (regId) {
+    if (!E.S.token) { relogin(); return; }
+    loadSingle();
+  } else E.go("index.html", { event_id: eventId });
+})();
+</script>
+</body>
+</html>

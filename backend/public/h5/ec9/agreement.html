@@ -86,14 +86,20 @@
     document.title = E.t(TAB_TITLE[name] || "user_agreement");
 
     if (name === "user" || name === "privacy") {
-      var path = name === "user" ? "/api/legal/user-agreement" : "/api/legal/privacy-policy";
+      var api = name === "user" ? "/api/legal/user-agreement" : "/api/legal/privacy-policy";
       body.innerHTML = '<div class="agree-body">…</div>';
-      // 后端法务文档（HTML）
-      fetch(path).then(function (r) {
+      // 法务文档？lang= 带上当前语言：有对应语言版本就返回该版本，
+      // 没有就回退简体原文并在响应头 X-Legal-Lang 里说明实际用的是哪种语言。
+      fetch(api + "?lang=" + encodeURIComponent(E.S.lang)).then(function (r) {
         if (!r.ok) throw new Error("fallback");
-        return r.text();
-      }).then(function (html) {
-        body.innerHTML = '<div class="agree-body">' + sanitizeLegalHtml(html) + '</div>';
+        var used = r.headers.get("X-Legal-Lang") || "zh-CN";
+        return r.text().then(function (html) { return { html: html, used: used }; });
+      }).then(function (doc) {
+        var notice = "";
+        // 没有目标语言版本时挂一句说明，避免用户以为「切了语言但整页还是中文」是 bug
+        var tip = E.t("legal_zh_only");
+        if (tip && doc.used !== E.S.lang) notice = '<div class="legal-notice">' + E.esc(tip) + '</div>';
+        body.innerHTML = '<div class="agree-body">' + notice + sanitizeLegalHtml(doc.html) + '</div>';
       }).catch(function () {
         body.innerHTML = '<div class="agree-body" style="white-space:pre-line">' +
           E.esc(name === "user" ? E.t("agreement_sample") : E.t("privacy_sample")) + '</div>';

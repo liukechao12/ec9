@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>地球克隆计划9 · EC9</title>
+<title data-i18n="index_title">地球克隆计划9 · EC9</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,15 +14,15 @@
     <div class="home-hero">
       <div class="home-title" id="evName">地球克隆计划<span class="home-nine">9</span></div>
       <div class="home-tagline-en">JOIN PHYSICAL AI,HERE AND NOW</div>
-      <div class="home-tagline-cn">拥抱物理AI&#12288;此刻即未来</div>
+      <div class="home-tagline-cn" id="homeSloganCn" data-i18n="home_slogan_cn">拥抱物理AI&#12288;此刻即未来</div>
       <div class="home-ticker">6651.HK</div>
     </div>
 
     <div class="home-meta">
       <div class="home-label home-label1" data-i18n="home_date_label">时间：</div>
-      <div class="home-value home-value1" id="evDate">2026年12月4日</div>
+      <div class="home-value home-value1" id="evDate" data-i18n="home_date">2026年12月4日</div>
       <div class="home-label home-label2" data-i18n="home_loc_label">地址：</div>
-      <div class="home-value home-value2" id="evLocation">中国·深圳</div>
+      <div class="home-value home-value2" id="evLocation" data-i18n="home_loc">中国·深圳</div>
     </div>
 
     <div class="home-bottom">
@@ -79,14 +79,17 @@
       document.getElementById("evName").innerHTML = nameHtml;
     }
     if (ev.start_time) {
-      var dt = new Date(ev.start_time);
-      document.getElementById("evDate").textContent =
-        dt.getFullYear() + "年" + (dt.getMonth() + 1) + "月" + dt.getDate() + "日";
+      // 日期格式随语言走：中文「2026年12月4日」，英文「December 4, 2026」
+      document.getElementById("evDate").textContent = E.fmtDate(new Date(ev.start_time));
     }
     if (ev.location) document.getElementById("evLocation").textContent = ev.location;
     E.S.patch({ event_id: eventId, event_name: ev.name || "" });
   }).catch(function (e) {
-    E.toast(e.message || "活动信息加载失败");
+    E.toast(e.message || E.t("err_event_load"));
+    // 活动信息取不到时也要按当前语言显示名称/地址兜底（字典里有三语版本）
+    document.getElementById("evName").innerHTML =
+      E.esc(E.t("home_title")) + '<span class="home-nine">9</span>';
+    document.title = E.t("index_title");
   });
 })();
 </script>

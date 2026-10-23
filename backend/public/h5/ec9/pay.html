@@ -57,14 +57,14 @@
     document.getElementById("orderNo").textContent = orderNo;
 
     function renderGroupOrder(d) {
-      document.getElementById("tkName").textContent = "多人代报 · " + ((d.price_detail || []).length) + " 人";
+      document.getElementById("tkName").textContent = E.t("group_order_title").replace("{n}", (d.price_detail || []).length);
       var html = "";
       (d.price_detail || []).forEach(function (it) {
         html += '<div class="fee-row"><span>' + E.esc(it.ticket_name || "") + '</span><span>' +
           (it.is_free ? '<span class="free-mark">¥0.00</span>' : '¥' + Number(it.price).toFixed(2)) + '</span></div>';
       });
       if (Number(d.discount_amount) > 0) {
-        html += '<div class="fee-row discount"><span>' + E.t("discount_row") + '（' + (Number(d.discount_rate) * 10) + '折）</span><span>-¥' + Number(d.discount_amount).toFixed(2) + '</span></div>';
+        html += '<div class="fee-row discount"><span>' + E.esc(E.t("discount_row") + " " + E.discountText(d.discount_rate)) + '</span><span>-¥' + Number(d.discount_amount).toFixed(2) + '</span></div>';
       }
       if (html) {
         document.getElementById("groupBox").innerHTML =
@@ -82,7 +82,7 @@
 
     E.Api.groupPayInfo(orderNo, payToken).then(function (d) {
       if (renderGroupOrder(d)) return;
-    }).catch(function (e) { E.errPill(e.message || "订单加载失败"); });
+    }).catch(function (e) { E.errPill(e.message || E.t("err_order_load")); });
 
     document.getElementById("btnPay").addEventListener("click", function () {
       E.toast(E.t("pay_loading"));
@@ -90,7 +90,7 @@
         if (d && d.jsapi_params) callWechatPay(d.jsapi_params);
         else if (d && d.mock) { document.getElementById("btnMock").classList.remove("hidden"); startGroupPoll(); }
         else startGroupPoll();
-      }).catch(function (e) { E.errPill(e.message || "支付发起失败"); });
+      }).catch(function (e) { E.errPill(e.message || E.t("err_pay_launch")); });
     });
 
     document.getElementById("btnMock").addEventListener("click", function () {
@@ -145,12 +145,12 @@
       var order = d.order || d;
       setOrder(order.order_no || order.out_trade_no || "", order.final_amount || order.amount || (state.ticket && state.ticket.price) || 0);
       E.S.patch({ order_no: orderNo });
-    }).catch(function (e) { E.errPill(e.message || "订单创建失败"); });
+    }).catch(function (e) { E.errPill(e.message || E.t("err_order_create")); });
   }
 
   // 2. 支付
   document.getElementById("btnPay").addEventListener("click", function () {
-    if (!orderNo) { E.errPill("订单未就绪"); return; }
+    if (!orderNo) { E.errPill(E.t("err_order_not_ready")); return; }
     E.toast(E.t("pay_loading"));
 
     // JSAPI（后端补齐后生效）；失败则回落 NATIVE 二维码
@@ -162,7 +162,7 @@
     }).catch(function () {
       E.Api.payNative(orderNo).then(function (d) {
         showNative(d);
-      }).catch(function (e2) { E.errPill(e2.message || "支付发起失败"); });
+      }).catch(function (e2) { E.errPill(e2.message || E.t("err_pay_launch")); });
     });
   });
 

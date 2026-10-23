@@ -8,6 +8,8 @@
 </head>
 <body>
 <div id="app" class="tk-page">
+  <div id="header"></div>
+
   <div class="tk-title" data-i18n="ticket_title">门票类型</div>
 
   <div class="tk-cards" id="tkCards"></div>
@@ -43,6 +45,9 @@
 <script>
 (function () {
   var E = window.EC9;
+  // 门票页底色是浅灰（无蓝色品牌条），但语言切换入口必须有：
+  // 这里挂 header 后在 CSS 里隐藏 .brand、只留右上角的切换浮层并改成深色。
+  E.mountHeader(document.getElementById("header"), false);
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var tickets = [];
   var members = (E.S.data && E.S.data.draft_members) || [];
@@ -163,13 +168,13 @@
       .replace("{n}", members.length).replace("{f}", freeN).replace("{m}", buyN)) + '</div>';
     html += '<div>' + E.esc(E.t("tk_fee_line")
       .replace("{n}", buyN).replace("{ticket}", tk.name).replace("{amt}", total.toFixed(2))) +
-      (rate < 1 ? "（" + (rate * 10) + "折）" : "") + '</div>';
+      (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
 
     // 免票 / 购票 分别是哪些人（邀约嘉宾固定标准票），便于核对人数
     var freeNames = [], buyNames = [];
     members.forEach(function (m) {
       var nm = String(m.name || "").trim() || String(m.phone || "");
-      if (unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? "（邀约·标准票）" : ""));
+      if (unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? E.t("invited_std_tag") : ""));
       else buyNames.push(nm);
     });
     if (freeNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("free_ticket_count").replace("{n}", freeNames.length)) + '：' + E.esc(freeNames.join("、")) + '</div>';
@@ -194,12 +199,12 @@
     var list = res[1].ticket_types || res[1].list || res[1] || [];
     tickets = list.filter(function (t) { return t.on_shelf === undefined || t.on_shelf == 1; });
     tickets.sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
-    if (!tickets.length) { E.errPill("票种加载失败"); return; }
+    if (!tickets.length) { E.errPill(E.t("err_ticket_load")); return; }
     renderCards(); renderCols();
     var def = tickets.filter(function (t) { return Number(t.price) > 0; })[0] || tickets[0];
     select(def.id);
     E.applyLang();
-  }).catch(function (e) { E.errPill(e.message || "票种加载失败"); });
+  }).catch(function (e) { E.errPill(e.message || E.t("err_ticket_load")); });
 
   /* ---------- 提交 ---------- */
   document.getElementById("btnSubmit").addEventListener("click", function () {

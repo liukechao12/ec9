@@ -176,7 +176,7 @@
     members.push({ id: ++seq, name: (E.S.data && E.S.data.name) || "", phone: buyerPhone, company: (E.S.data && E.S.data.company) || "", position: (E.S.data && E.S.data.position) || "", inviter: "", focus: (E.S.data && E.S.data.focus) || "", session_id: 0 });
     render();
     checkInvited();
-  }).catch(function (e) { E.errPill(e.message || "加载失败"); });
+  }).catch(function (e) { E.errPill(e.message || E.t("err_profile_load")); });
 
   /* ---------- 下一步：校验后进入门票类型页 ---------- */
   document.getElementById("btnSubmit").addEventListener("click", function () {

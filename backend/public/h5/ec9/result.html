@@ -106,7 +106,7 @@
     });
     if (order && !allPaid) {
       html += '<div class="fee-row"><span>' + E.t("total_row") + '</span><span>¥' + Number(order.final_amount).toFixed(2) +
-        (order.discount_rate < 1 ? '（' + E.t("discount_row") + ' ' + (order.discount_rate * 10) + '折）' : '') + '</span></div>';
+        (order.discount_rate < 1 ? " " + E.discountText(order.discount_rate) : '') + '</span></div>';
     }
     html += '</div>';
     box.innerHTML = html;

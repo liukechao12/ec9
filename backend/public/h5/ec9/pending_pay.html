@@ -78,7 +78,7 @@
           it.is_free ? '<span class="free-mark">¥0.00</span>' : "¥" + Number(it.price).toFixed(2));
       });
       if (Number(order.discount_amount) > 0) {
-        html += row(E.t("discount_row") + "（" + (Number(order.discount_rate) * 10) + "折）",
+        html += row(E.t("discount_row") + " " + E.discountText(order.discount_rate),
           "-¥" + Number(order.discount_amount).toFixed(2), "discount");
       }
       html += row(E.t("total_row"), "¥" + Number(order.final_amount).toFixed(2), "total");
@@ -136,8 +136,10 @@
   }
   function onFail(e) {
     var msg = (e && e.message) || "";
-    if (msg.indexOf("验证") > -1 || msg.indexOf("401") > -1) { relogin(); return; }
-    err(msg || E.t("order_load_fail"));
+    // 凭证失效一律按 code 判断：后端文案是中文，靠中文子串匹配在非中文环境下会漏判
+    if (e && (e.code === 401 || e.code === 403)) { relogin(); return; }
+    if (msg.indexOf("401") > -1) { relogin(); return; }
+    err(msg || E.t("err_order_load"));
   }
 
   if (groupNo) {

@@ -72,15 +72,91 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-  function applyLang() {
+
+  /* 后端返回的错误文案是中文（message 字段），逐条改后端成本太高。
+     这里做反向映射：字典里 zh-CN 值与后端原文完全一致的 key（server_* 系列），
+     显示时自动换成当前语言。以后后端新增文案，只要在字典里加同名 key 即可。 */
+  var MSG_REV = {};
+  (function buildRev() {
+    var d = (typeof I18N !== "undefined") ? I18N["zh-CN"] : {};
+    for (var k in d) {
+      if (d[k] == null) continue;
+      var v = String(d[k]).trim();
+      if (v.length >= 2 && v.length <= 40 && MSG_REV[v] === undefined) MSG_REV[v] = k;
+    }
+  })();
+  function localizeMsg(msg) {
+    if (!msg) return msg;
+    var key = MSG_REV[String(msg).trim()];
+    return key ? t(key) : msg;
+  }
+  /* 写前先比较：值相同就不动 DOM。
+     两个用途：① 避免无意义重排；② MutationObserver 自动翻译时靠它收敛，
+     否则「改文本 → 触发 mutation → 再改文本」会形成死循环。 */
+  function setValue(el, val) {
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+      if (el.placeholder !== val) el.placeholder = val;
+      return;
+    }
+    if (el.textContent !== val) el.textContent = val;
+    // 某语言刻意留空（如英文界面不需要中文标语）就把整块收起来，别留空行
+    if (val === "") { if (el.style.display !== "none") el.style.display = "none"; }
+    else if (el.style.display === "none") el.style.display = "";
+  }
+  function applyLang(root) {
     document.documentElement.lang = S.lang === "zh-Hant" ? "zh-Hant" : (S.lang === "en" ? "en" : "zh-CN");
-    var nodes = document.querySelectorAll("[data-i18n]");
+    var scope = root || document;
+    var nodes = scope.querySelectorAll("[data-i18n]");
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
-      var key = el.getAttribute("data-i18n");
-      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") el.placeholder = t(key);
-      else el.textContent = t(key);
+      setValue(el, t(el.getAttribute("data-i18n")));
     }
+    if (scope.querySelectorAll && scope.nodeType === 1 && scope.hasAttribute("data-i18n")) {
+      setValue(scope, t(scope.getAttribute("data-i18n")));
+    }
+  }
+
+  /* 动态渲染（innerHTML 拼出来的卡片、价格行、状态卡）发生时，
+     DOMContentLoaded 那一次 applyLang 早就跑完了，新节点的 data-i18n 没人管。
+     这里统一兜底：只要 DOM 里插入了新节点就补扫一遍。 */
+  (function watchDynamic() {
+    if (!w.MutationObserver) return;
+    var pending = false;
+    var run = function () { pending = false; applyLang(); };
+    var ob = new MutationObserver(function (muts) {
+      var hit = false;
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].addedNodes.length) { hit = true; break; }
+      }
+      if (!hit || pending) return;
+      pending = true;
+      setTimeout(run, 0);
+    });
+    var start = function () { ob.observe(document.body, { childList: true, subtree: true }); };
+    if (document.body) start();
+    else document.addEventListener("DOMContentLoaded", start);
+  })();
+
+  /* ---------- 本地化格式 ---------- */
+  // 日期：中文「2026年12月4日」，英文「December 4, 2026」
+  function fmtDate(d) {
+    if (!d) return "";
+    var dt = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(dt.getTime())) return "";
+    var y = dt.getFullYear(), m = dt.getMonth() + 1, day = dt.getDate();
+    var fmt = t("date_fmt");
+    if (fmt.indexOf("{month}") > -1) {
+      var names = String(t("months")).split(",");
+      fmt = fmt.replace("{month}", names[dt.getMonth()] || m);
+    }
+    return fmt.replace("{y}", y).replace("{m}", m).replace("{d}", day);
+  }
+  // 折扣：中文按「9折」说，英文习惯是「10% off」，同一个 rate 两种算法
+  function discountText(rate) {
+    rate = Number(rate) || 0;
+    if (!rate || rate >= 1) return "";
+    if (S.lang === "en") return t("discount_badge").replace("{n}", Math.round((1 - rate) * 100));
+    return t("discount_badge").replace("{n}", Math.round(rate * 10));
   }
 
   /* ---------- 请求 ---------- */
@@ -178,6 +254,7 @@
 
   /* ---------- UI 小工具 ---------- */
   function toast(msg) {
+    msg = localizeMsg(msg);
     var el = document.createElement("div");
     el.className = "ec9-toast";
     el.textContent = msg;
@@ -186,6 +263,7 @@
     setTimeout(function () { el.classList.remove("show"); setTimeout(function () { el.remove(); }, 300); }, 2400);
   }
   function errPill(msg) {
+    if (msg) msg = localizeMsg(msg);
     var p = document.getElementById("errPill");
     if (!p) { toast(msg); return; }
     p.textContent = msg; p.classList.remove("hidden");
@@ -216,7 +294,21 @@
     if (!btn || !menu) return;
     btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("hidden"); });
     menu.querySelectorAll("[data-lang]").forEach(function (el) {
-      el.addEventListener("click", function () { S.lang = el.dataset.lang; location.reload(); });
+      el.addEventListener("click", function () {
+        S.lang = el.dataset.lang;
+        // S.lang 的 getter 里 URL 上的 ?lang= 优先级高于 localStorage，
+        // 不清掉的话 reload 后会被 URL 参数打回切换前的语言（表现为「切不动」）。
+        if (w.URL && w.history && w.history.replaceState) {
+          try {
+            var u = new w.URL(location.href);
+            if (u.searchParams.has("lang")) {
+              u.searchParams.delete("lang");
+              history.replaceState(null, "", u.toString());
+            }
+          } catch (e) { /* 老浏览器不支持 URL，忽略 */ }
+        }
+        location.reload();
+      });
     });
     document.addEventListener("click", function () { menu.classList.add("hidden"); }, { once: true });
   }
@@ -250,6 +342,7 @@
     S: S, t: t, esc: esc, applyLang: applyLang, Api: Api,
     toast: toast, errPill: errPill, header: header, mountHeader: mountHeader,
     param: param, go: go, codeCountdown: codeCountdown,
+    fmtDate: fmtDate, discountText: discountText, localizeMsg: localizeMsg,
     DEFAULT_EVENT_ID: DEFAULT_EVENT_ID
   };
 

@@ -437,6 +437,17 @@ select.input.filled { color: #1D2129; }
 .agree-body strong, .agree-body b { color: #1D2129; font-weight: 600; }
 .agree-body ul, .agree-body ol { padding-left: 20px; margin: 0 0 10px; }
 .agree-body li { margin-bottom: 6px; }
+/* 法务文档暂无当前语言版本时的说明条（避免用户以为「切了语言整页还是中文」是 bug） */
+.agree-body .legal-notice {
+  background: #FFF6E5;
+  border-left: 3px solid #F0A020;
+  color: #7A4E00;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  border-radius: 4px;
+}
 .agree-body a { color: var(--blue); text-decoration: none; }
 .agree-body img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
 .agree-body hr { border: none; border-top: 1px solid var(--divider); margin: 16px 0; }
@@ -581,6 +592,15 @@ select.input.filled { color: #1D2129; }
    y562-889 / 协议 y950-963 / 提交按钮 y984-1021 / 退款说明 y1061-1069
    ============================================================ */
 #app.tk-page { background: #EDEDED; min-height: calc(100vh / var(--z, 1)); padding: 69px 0 30px; }
+/* 门票页没有蓝色品牌条（设计稿此处是浅灰底），所以只保留语言切换浮层并改成深色，
+   否则白色图标落在灰底上等于看不见 */
+#app.tk-page #header { height: 0; }
+#app.tk-page .brand { display: none; }
+#app.tk-page .lang-switch { color: #1B1C1E; top: 22px; }
+#app.tk-page .lang-switch svg,
+#app.tk-page .lang-switch circle,
+#app.tk-page .lang-switch path { stroke: #1B1C1E; }
+#app.tk-page .lang-menu { top: 50px; }
 #app.tk-page .tk-title {
   text-align: center; font-size: 24px; line-height: 1; font-weight: 600;
   color: var(--title-gray); margin: 0 0 21px;

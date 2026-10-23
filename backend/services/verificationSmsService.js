@@ -40,12 +40,18 @@ function decryptJson(text) {
   }
 }
 
-/** 阿里云短信 POP 签名（HMAC-SHA1，RPC 风格） */
+/** RFC3986 编码（阿里云 POP 要求空格为 %20、保留字符一并转义） */
+function pct(str) {
+  return encodeURIComponent(str)
+    .replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+/** 阿里云短信 POP 签名（HMAC-SHA1，RPC 风格，POST 通道） */
 function aliyunSign(params, secret) {
   const sorted = Object.keys(params).sort().map(k =>
-    encodeURIComponent(k) + '=' + encodeURIComponent(params[k])
+    pct(k) + '=' + pct(params[k])
   ).join('&');
-  const stringToSign = 'GET&%2F&' + encodeURIComponent(sorted);
+  const stringToSign = 'POST&%2F&' + pct(sorted);
   return crypto.createHmac('sha1', secret + '&').update(stringToSign).digest('base64');
 }
 
@@ -60,6 +66,7 @@ async function sendViaAliyun(providerCfg, phone, templateCode, templateParam, si
     SignatureVersion: '1.0',
     Timestamp: new Date().toISOString().slice(0, 19) + 'Z',
     Version: '2017-05-25',
+    RegionId: providerCfg.region || 'cn-hangzhou',
     PhoneNumbers: phone,
     SignName: signName,
     TemplateCode: templateCode,
@@ -67,16 +74,21 @@ async function sendViaAliyun(providerCfg, phone, templateCode, templateParam, si
   };
   params.Signature = aliyunSign(params, providerCfg.accessKeySecret);
 
-  const qs = Object.keys(params).sort().map(k =>
-    encodeURIComponent(k) + '=' + encodeURIComponent(params[k])
+  // 阿里云 dysmsapi 已不接受 GET（返回 UnsupportedHTTPMethod），必须走 POST 表单
+  const body = Object.keys(params).sort().map(k =>
+    pct(k) + '=' + pct(params[k])
   ).join('&');
 
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'dysmsapi.aliyuncs.com',
-      path: '/?' + qs,
-      method: 'GET',
-      timeout: 10000
+      path: '/',
+      method: 'POST',
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body)
+      }
     }, res => {
       let buf = '';
       res.on('data', c => buf += c);
@@ -84,12 +96,13 @@ async function sendViaAliyun(providerCfg, phone, templateCode, templateParam, si
         try {
           const json = JSON.parse(buf);
           if (json.Code === 'OK') resolve({ ok: true, requestId: json.RequestId });
-          else reject(new Error(json.Message || json.Code || '短信发送失败'));
+          else reject(new Error((json.Message || json.Code || '短信发送失败') + (json.Code ? ' (' + json.Code + ')' : '')));
         } catch (e) { reject(new Error('短信返回解析失败')); }
       });
     });
     req.on('timeout', () => { req.destroy(); reject(new Error('短信请求超时')); });
     req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }

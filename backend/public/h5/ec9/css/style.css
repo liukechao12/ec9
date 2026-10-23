@@ -52,10 +52,11 @@ html, body {
   overflow: hidden;
 }
 /* ---------- 语言切换（产品功能入口，设计稿未画；坐标贴设计稿风格） ---------- */
+/* 位置贴页面右上角：状态栏删除后整条上移，右侧留 12px（首页另有设计稿坐标，见下方 #app.home 覆盖） */
 .lang-switch {
   position: absolute;
-  top: 52px;
-  right: 16px;
+  top: 20px;
+  right: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -73,8 +74,8 @@ html, body {
 }
 .lang-menu {
   position: absolute;
-  top: 84px;
-  right: 16px;
+  top: 48px;
+  right: 12px;
   background: #2743A8;
   border-radius: 10px;
   padding: 6px 0;

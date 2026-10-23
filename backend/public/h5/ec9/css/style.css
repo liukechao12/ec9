@@ -356,9 +356,10 @@ select.input.filled { color: #1D2129; }
 
 /* ---------- 状态结果页（设计稿：图标区 y234 Ø252，标题字形带 y553 h34，按钮 y697） ---------- */
 .result-page { text-align: center; padding-top: 26px; }
-.result-icon { width: 252px; height: 252px; max-width: 252px; margin: 22px auto 0; }
+/* 设计帧量测：图标光晕圆 280×280 @ y220（sheet 顶 165 + result-page 26 + margin 29） */
+.result-icon { width: 280px; height: 280px; max-width: 280px; margin: 29px auto 0; }
 .result-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.result-title { font-size: 34px; color: var(--title-gray); font-weight: 600; margin-top: 81px; letter-spacing: 1px; }
+.result-title { font-size: 34px; color: var(--title-gray); font-weight: 600; margin-top: 48px; letter-spacing: 1px; }
 .result-sub { font-size: 13px; color: #86909C; margin-top: 12px; }
 .result-page .btn-primary { margin-top: 106px; }
 .result-page .btn-primary + .btn-primary { margin-top: 12px; }

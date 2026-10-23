@@ -356,6 +356,9 @@ select.input.filled { color: #1D2129; }
 
 /* ---------- 状态结果页（设计稿：图标区 y234 Ø252，标题字形带 y553 h34，按钮 y697） ---------- */
 .result-page { text-align: center; padding-top: 26px; }
+/* 签到页说明文案（设计稿无此元素，沿用 result-sub 的视觉口径） */
+.checkin-tip { font-size: 13px; color: #86909C; text-align: center; margin: -18px 0 24px; line-height: 1.6; }
+
 /* 设计帧量测：图标光晕圆 280×280 @ y220（sheet 顶 165 + result-page 26 + margin 29） */
 .result-icon { width: 280px; height: 280px; max-width: 280px; margin: 29px auto 0; }
 .result-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }

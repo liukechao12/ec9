@@ -10,23 +10,38 @@
 <div id="app">
   <div id="header"></div>
 
-  <div class="sheet">
+  <!-- ① 签到表单：只填手机号（对齐 EC8，现场签到不再走验证码登录） -->
+  <div class="sheet" id="pgForm">
     <div class="page-title" data-i18n="checkin_title">活动签到</div>
+    <div class="checkin-tip" data-i18n="checkin_tip">请输入报名时使用的手机号</div>
 
     <div class="form-row">
       <div class="form-label"><span data-i18n="phone">手机号：</span></div>
       <div class="form-field"><input class="input" id="cPhone" type="tel" maxlength="11" inputmode="numeric" data-i18n="phone_ph"></div>
     </div>
-    <div class="form-row">
-      <div class="form-label"><span data-i18n="code">验证码：</span></div>
-      <div class="form-field">
-        <input class="input" id="cCode" type="tel" maxlength="6" inputmode="numeric" data-i18n="code_ph">
-        <button class="btn-code" id="btnCode" data-i18n="get_code">获取验证码</button>
-      </div>
-    </div>
 
-    <button class="btn-primary" id="btnNext" data-i18n="next">下一步</button>
+    <button class="btn-primary" id="btnCheckin" data-i18n="checkin_btn">确认签到</button>
     <div class="error-pill hidden" id="errPill"></div>
+  </div>
+
+  <!-- ② 签到成功 -->
+  <div class="sheet result-page hidden" id="pgOk">
+    <div class="result-icon"><img src="assets/earth_green_signin.png" alt=""></div>
+    <div class="result-title" data-i18n="checkin_ok">签到成功</div>
+    <div class="result-sub" data-i18n="checkin_done_tip">签到成功，请出示电子票入场</div>
+    <div class="fee-box" id="okBox" style="text-align:left;margin-top:16px"></div>
+    <button class="btn-primary" id="btnOkTicket" data-i18n="view_eticket">查看电子票</button>
+    <button class="btn-primary" id="btnOkHome" style="background:#2A2A2C" data-i18n="back_home">回到首页</button>
+  </div>
+
+  <!-- ③ 已签到（重复签到） -->
+  <div class="sheet result-page hidden" id="pgRepeat">
+    <div class="result-icon"><img src="assets/earth_blue_repeat.png" alt=""></div>
+    <div class="result-title" data-i18n="checkin_already">您已签到</div>
+    <div class="result-sub" data-i18n="checkin_already_sub">无需重复签到，如有疑问请联系现场工作人员</div>
+    <div class="fee-box" id="repeatBox" style="text-align:left;margin-top:16px"></div>
+    <button class="btn-primary" id="btnRepeatTicket" data-i18n="view_eticket">查看电子票</button>
+    <button class="btn-primary" id="btnRepeatHome" style="background:#2A2A2C" data-i18n="back_home">回到首页</button>
   </div>
 </div>
 
@@ -38,37 +53,77 @@
   E.mountHeader(document.getElementById("header"), false);
 
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
-  if (E.S.phone) document.getElementById("cPhone").value = E.S.phone;
+  var pgForm = document.getElementById("pgForm");
+  var pgOk = document.getElementById("pgOk");
+  var pgRepeat = document.getElementById("pgRepeat");
+  var phoneInput = document.getElementById("cPhone");
+  var btn = document.getElementById("btnCheckin");
 
-  document.getElementById("btnCode").addEventListener("click", function () {
-    var phone = document.getElementById("cPhone").value.trim();
-    if (!/^1[3-9]\d{9}$/.test(phone)) { E.errPill(E.t("err_phone")); return; }
-    E.Api.sendCode(phone).then(function () {
-      E.codeCountdown(document.getElementById("btnCode"));
-      E.toast(E.t("code_sent"));
-    }).catch(function (e) { E.errPill(e.message); });
-  });
+  // 刚报名/登录过 → 直接带出手机号，现场不用再输
+  if (E.S.phone) phoneInput.value = E.S.phone;
+  else phoneInput.value = E.param("phone", "");
 
-  document.getElementById("btnNext").addEventListener("click", function () {
-    var phone = document.getElementById("cPhone").value.trim();
-    var code = document.getElementById("cCode").value.trim();
-    if (!/^1[3-9]\d{9}$/.test(phone)) { E.errPill(E.t("err_phone")); return; }
-    if (!code) { E.errPill(E.t("err_code")); return; }
+  function show(el) {
+    [pgForm, pgOk, pgRepeat].forEach(function (x) { x.classList.add("hidden"); });
+    el.classList.remove("hidden");
+  }
+  function err(msg) {
+    var p = document.getElementById("errPill");
+    p.textContent = msg; p.classList.remove("hidden");
+  }
+  function fmt(ts) {
+    if (!ts) return "—";
+    var d = new Date(ts);
+    function p2(n) { return n < 10 ? "0" + n : "" + n; }
+    return d.getFullYear() + "/" + p2(d.getMonth() + 1) + "/" + p2(d.getDate()) +
+      " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  }
+  function infoRows(d) {
+    var g = (d && d.guest) || {};
+    var c = (d && d.checkin) || {};
+    var fn = E.param("name", "");
+    var fc = E.param("company", "");
+    var html = '<div class="fee-title">' + E.t("checkin_title") + '</div>';
+    html += '<div class="fee-row"><span>' + E.t("ck_name") + '</span><span>' + E.esc(g.name || fn || "—") + '</span></div>';
+    html += '<div class="fee-row"><span>' + E.t("ck_company") + '</span><span>' + E.esc(g.company || fc || "—") + '</span></div>';
+    html += '<div class="fee-row"><span>' + E.t("ck_time") + '</span><span>' + fmt(c.checkin_time) + '</span></div>';
+    return html;
+  }
 
-    E.Api.verifyCode(phone, code).then(function (d) {
-      E.S.token = d.verification_token || "";
+  btn.addEventListener("click", function () {
+    var phone = phoneInput.value.trim();
+    if (!/^1[3-9]\d{9}$/.test(phone)) { err(E.t("err_phone")); return; }
+
+    document.getElementById("errPill").classList.add("hidden");
+    btn.disabled = true;
+    btn.textContent = E.t("checkin_ing");
+
+    E.Api.checkin(phone, Number(eventId)).then(function (d) {
+      // 后端已区分首次签到 / 重复签到
+      if (d && d.already) {
+        document.getElementById("repeatBox").innerHTML = infoRows(d);
+        show(pgRepeat);
+      } else {
+        document.getElementById("okBox").innerHTML = infoRows(d);
+        if (d && d.guest && d.guest.name) E.S.patch({ name: d.guest.name });
+        show(pgOk);
+      }
       E.S.phone = phone;
-      return E.Api.checkin(phone, Number(eventId));
-    }).then(function () {
-      E.go("result.html", { type: "checkin", status: "success", event_id: eventId });
     }).catch(function (e) {
-      // 按后端错误码映射到签到状态页
-      var s = "network";
-      if (e.code === 404) s = "mismatch";
-      else if (String(e.message || "").indexOf("重复") >= 0 || String(e.message || "").indexOf("已签到") >= 0) s = "repeat";
-      E.go("result.html", { type: "checkin", status: s, event_id: eventId });
+      btn.disabled = false;
+      btn.textContent = E.t("checkin_btn");
+      show(pgForm);
+      // 直接用后端真实原因（未报名 / 未报名成功 / 没有签到码 ...），不再一律显示「网络错误」
+      err((e && e.message) || E.t("err_checkin"));
     });
   });
+
+  function goTicket() { E.go("eticket.html", { event_id: eventId }); }
+  function goHome() { E.go("index.html", { event_id: eventId }); }
+  document.getElementById("btnOkTicket").addEventListener("click", goTicket);
+  document.getElementById("btnOkHome").addEventListener("click", goHome);
+  document.getElementById("btnRepeatTicket").addEventListener("click", goTicket);
+  document.getElementById("btnRepeatHome").addEventListener("click", goHome);
 })();
 </script>
 </body>

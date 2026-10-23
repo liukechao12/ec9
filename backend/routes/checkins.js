@@ -331,14 +331,16 @@ router.post('/event-checkin', async (req, res) => {
       return res.status(403).json({ code: 403, message: '未报名成功，不能签到' });
     }
     
-    // 检查是否已签到
+    // 检查是否已签到（首次签到 vs 重复签到要区分，前端据此显示不同结果卡）
     let checkin = await Checkin.findOne({
       where: { invitation_id: invitation.id }
     });
-    
+    const already = !!checkin;
+
+    // 报名记录（首次签到要用来反查签到码，返回体也要带上票种名）
+    const reg = await Registration.findOne({ where: { invitation_id: invitation.id } });
+
     if (!checkin) {
-      // ec9_checkins 的 registration_id / checkin_code_id 是 NOT NULL，需按邀约反查
-      const reg = await Registration.findOne({ where: { invitation_id: invitation.id } });
       const code = reg
         ? await CheckinCode.findOne({ where: { registration_id: reg.id } })
         : null;
@@ -376,21 +378,22 @@ router.post('/event-checkin', async (req, res) => {
       }
     }
     
-    // 获取门票
-    const { Ticket } = require('../models');
-    const ticket = await Ticket.findOne({ where: { invitation_id: invitation.id } });
+    // 票种：EC9 的 Ticket 是票种表（无 invitation_id），只能按报名记录上的 ticket_type_id 取
+    let ticket_info = null;
+    if (reg && reg.ticket_type_id) {
+      const { TicketType } = require('../models');
+      const tt = await TicketType.findByPk(reg.ticket_type_id);
+      if (tt) ticket_info = { ticket_name: tt.name };
+    }
     
     res.json({
       code: 200,
-      message: checkin ? '签到成功' : '签到成功',
+      message: already ? '您已签到' : '签到成功',
       data: {
-        status: checkin ? 'checked_in' : 'checked_in',
+        status: already ? 'already' : 'checked_in',
+        already,
         checkin,
-        ticket: ticket ? {
-          ticket_code: ticket.ticket_code,
-          qr_code_url: ticket.qr_code_url,
-          qr_code_data: ticket.qr_code_data
-        } : null,
+        ticket: ticket_info,
         guest: { name: guest.name, company: guest.company }
       }
     });

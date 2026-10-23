@@ -112,7 +112,16 @@
     });
   });
 
-  document.getElementById("btnCheckin").addEventListener("click", function () { E.go("checkin.html", { event_id: eventId }); });
+  document.getElementById("btnCheckin").addEventListener("click", function () {
+    // 带上本人手机号与姓名，签到页直接预填（现场不用再输）
+    function val(id) { var v = (document.getElementById(id).textContent || "").trim(); return v === "—" ? "" : v; }
+    E.go("checkin.html", {
+      event_id: eventId,
+      phone: E.S.phone || "",
+      name: val("tkName"),
+      company: val("tkCompany")
+    });
+  });
   document.getElementById("btnHome").addEventListener("click", function () { E.go("index.html", { event_id: eventId }); });
 })();
 </script>

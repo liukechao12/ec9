@@ -1,7 +1,13 @@
 /* ============================================================
    EC9 · 地球克隆计划9 — H5 设计还原
    设计稿：MasterGo EC9-外部（375 × 815）
+   字体：MiSans（小米可商用字体，字形最接近设计稿的苹方；
+         iOS 真机仍优先使用系统苹方）
    ============================================================ */
+
+@import url("../fonts/MiSans-Regular.min.css");
+@import url("../fonts/MiSans-Normal.min.css");
+@import url("../fonts/MiSans-Medium.min.css");
 
 :root {
   --blue: #3056D4;
@@ -27,7 +33,7 @@
 html, body {
   height: 100%;
   background: var(--page-bg);
-  font-family: "PingFang SC", "PingFang TC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  font-family: "PingFang SC", "PingFang TC", "MiSans", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   color: #1D2129;
 }
 
@@ -87,6 +93,8 @@ html, body {
 .form-field { flex: 1; display: flex; gap: 19px; align-items: center; }
 /* 报名信息页：设计稿标签列 49px（输入框 x69 起）；个人信息页 76px（x95 起） */
 .pg-signup .form-label { width: 49px; white-space: nowrap; }
+/* 报名信息页按钮：设计稿按钮顶 y394（MiSans 行高差 1px 校正） */
+.pg-signup .btn-primary { margin-top: 49px; }
 
 .input {
   width: 100%;

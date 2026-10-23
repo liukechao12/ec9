@@ -3712,8 +3712,8 @@ async function handleInvitationSubmit(e) {
         guest_id: parseInt(formData.get('guest_id')),
         source_bd: formData.get('source_bd') || null,
         created_by: currentUser?.username || 'admin',
-        // 新建邀约默认「需付款」；管理员可选免票
-        need_pay: needPaySel ? (parseInt(needPaySel.value, 10) === 0 ? 0 : 1) : 1
+        // 新建邀约默认「免票」（邀约嘉宾不掏钱）；管理员可选需付款
+        need_pay: needPaySel ? (parseInt(needPaySel.value, 10) === 1 ? 1 : 0) : 0
     };
     
     try {
@@ -3761,7 +3761,7 @@ async function handleBatchInvitationSubmit(e) {
         guest_ids: guestIds,
         source_bd: sourceBd,
         created_by: currentUser?.username || 'admin',
-        need_pay: batchNeedPaySel ? (parseInt(batchNeedPaySel.value, 10) === 0 ? 0 : 1) : 1
+        need_pay: batchNeedPaySel ? (parseInt(batchNeedPaySel.value, 10) === 1 ? 1 : 0) : 0
     };
     
     try {
@@ -4648,12 +4648,12 @@ async function toggleInvitationNeedPay(id, current) {
 let pendingApproveInvitationId = null;
 
 async function approveInvitation(id) {
-    // 预填邀约当前的付款口径
-    let currentNeedPay = 1;
+    // 预填邀约当前的付款口径（邀约默认免票）
+    let currentNeedPay = 0;
     try {
         const d = await apiRequest(`/invitations/${id}`);
-        currentNeedPay = Number(d?.data?.need_pay) !== 0 ? 1 : 0;
-    } catch (e) { /* 读不到就用默认「需付款」 */ }
+        currentNeedPay = Number(d?.data?.need_pay) === 1 ? 1 : 0;
+    } catch (e) { /* 读不到就用默认「免票」 */ }
 
     pendingApproveInvitationId = id;
     const modal = document.getElementById('invApproveModal');
@@ -6037,16 +6037,19 @@ async function loadRegAudit() {
         }
         const stMap = { submitted: '<span style="color:#E8A33D">待审核</span>', approved: '<span style="color:#3056D4">待支付</span>', paid: '<span style="color:#00B42A">已支付</span>', rejected: '<span style="color:#E34D59">已驳回</span>' };
         body.innerHTML = regAuditCache.map((g, i) => {
-            const names = g.members.map(m => m.name + (m.is_buyer ? '(购票人)' : '') + (m.is_invited ? '<span style="color:#00B42A;font-size:11px">[邀约免票]</span>' : '')).join('、');
+            const names = g.members.map(m => m.name + (m.is_buyer ? '(购票人)' : '') + (m.is_invited ? '<span style="color:#00B42A;font-size:11px">[邀约免票]</span>' : '<span style="color:#E8A33D;font-size:11px">[需购票]</span>')).join('、');
             const tickets = [...new Set(g.members.map(m => m.ticket_name))].join('/');
             const canAudit = g.status === 'submitted';
+            // 多人一起审核：只有「全部通过」和「全部驳回」两种结果；满3张9折、满5张8折
+            const disc = (g.paid_count >= 5) ? '满5张8折' : (g.paid_count >= 3 ? '满3张9折' : '');
+            const cntTip = disc ? `<br><span style="font-size:11px;color:#C2404F">${disc}</span>` : '';
             return `<tr data-gi="${i}">
                 <td><input type="checkbox" class="reg-audit-ck" data-gno="${g.group_no}" ${canAudit ? '' : 'disabled'}></td>
                 <td style="font-family:monospace;font-size:12px">${g.group_no}</td>
                 <td style="max-width:260px" title="${names}">${names}</td>
                 <td>${g.submitter_phone || '-'}</td>
                 <td>${tickets}</td>
-                <td>${g.members.length}</td>
+                <td>${g.members.length}<br><span style="font-size:11px;color:#6B7280">邀约 ${g.invited_count || 0} · 需付款 ${g.paid_count || 0}</span>${cntTip}</td>
                 <td>${stMap[g.status] || g.status}${g.members.some(m => m.reject_reason) ? '<br><span style="font-size:11px;color:#E34D59">' + (g.members.find(m => m.reject_reason) || {}).reject_reason + '</span>' : ''}</td>
                 <td style="font-size:12px">${g.submitted_at ? new Date(g.submitted_at).toLocaleString() : '-'}</td>
                 <td>${canAudit ? `<button class="btn btn-primary btn-sm" onclick="regAuditOne('${g.group_no}','approve')">通过</button>
@@ -6069,7 +6072,11 @@ async function regAuditOne(groupNo, action) {
         reason = prompt('驳回原因（将展示给用户）：');
         if (reason === null) return;
     } else {
-        if (!confirm(`确认通过 ${groupNo} 整单？通过后将建单锁库存，并向购票人发送付款链接短信。`)) return;
+        const g = regAuditCache.find(x => x.group_no === groupNo);
+        const n = g ? g.members.length : 0;
+        const p = g ? (g.paid_count || 0) : 0;
+        const disc = p >= 5 ? '（满5张8折）' : (p >= 3 ? '（满3张9折）' : '');
+        if (!confirm(`确认通过 ${groupNo} 整单（${n} 人，需付款 ${p} 人${disc}）？\n通过 = 全部通过；通过后建单锁库存，并向购票人发送付款链接短信。`)) return;
     }
     try {
         const res = await apiRequest(`/registrations/group/${groupNo}/audit`, {

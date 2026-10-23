@@ -38,7 +38,7 @@
     pending:  { icon: "earth_blue_review.png",   title: "result_pending",  sub: "" },
     rejected: { icon: "earth_orange_reject.png", title: "result_rejected", sub: "result_rejected_sub" },
     approved: { icon: "earth_green_check.png",   title: "result_success",  sub: "" },
-    paid:     { icon: "earth_green_check.png",   title: "st_paid",        sub: "" }
+    paid:     { icon: "earth_green_check.png",   title: "st_booked",      sub: "" }
   };
   // 签到结果
   var CHK = {
@@ -72,8 +72,8 @@
     var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
     var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
     var anyApproved = regs.some(function (r) { return r.status === "approved"; });
-    // 「报名成功」只在不用掏钱（全员免票/¥0 票种，或订单已支付）时才算真正完成
-    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited; })
+    // 「报名成功」= 不用掏钱的人（邀约免票 / ¥0 票种 / 订单已支付）：提交即成功，不用等审核
+    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited || !r.need_pay; })
       && (!order || Number(order.final_amount) === 0 || order.status === 'paid');
 
     var html = '<div class="group-tip ' + (allPaid ? 'ok' : (anyRejected ? 'warn' : 'info')) + '" style="margin-top:14px">';
@@ -88,11 +88,15 @@
     else html += E.t("group_submitted_tip");
     html += '</div>';
 
-    // 全员名单
-    html += '<div class="fee-box"><div class="fee-title">' + E.t("group_members_box") + '（' + regs.length + '）</div>';
+    // 全员名单（购票数量与填报人数对得上：免票 F + 购票 M = N）
+    var freeN = regs.filter(function (r) { return r.need_pay === false || Number(r.payable_price) === 0; }).length;
+    var buyN = regs.length - freeN;
+    html += '<div class="fee-box"><div class="fee-title">' + E.t("group_members_box") + '（' + regs.length +
+      '）· ' + E.esc(E.t("tk_count_line").replace("{f}", freeN).replace("{m}", buyN)) + '</div>';
     regs.forEach(function (r) {
-      var stTxt = r.status === 'paid' ? E.t("st_paid") : (r.status === 'approved' ? E.t("st_approved") :
-                  (r.status === 'rejected' ? E.t("result_rejected") : E.t("result_pending")));
+      var stTxt = r.status === 'paid' ? E.t("st_booked")
+        : (r.status === 'approved' ? (r.need_pay === false ? E.t("result_success") : E.t("st_approved"))
+          : (r.status === 'rejected' ? E.t("result_rejected") : E.t("result_pending")));
       html += '<div class="fee-row"><span>' + E.esc(r.name || '') +
         (r.is_invited ? '<span class="mc-tag">' + E.t(r.need_pay === false ? "invited_tag" : "invited_tag_pay") + '</span>' : '') +
         '<span class="mc-tag">' + E.esc(r.ticket_name || '') + ' ¥' + (r.payable_price != null ? Number(r.payable_price) : (r.is_student ? 0 : Number(r.price || 0))) + '</span></span>' +
@@ -130,7 +134,9 @@
       var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
       var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
       var anyApproved = regs.some(function (r) { return r.status === "approved"; });
-      var st = allPaid ? "paid" : (anyRejected ? "rejected" : (anyApproved ? "approved" : "pending"));
+      var anyPending = regs.some(function (r) { return r.status === "submitted" || r.status === "pending_audit"; });
+      // 整单一起审核：只要还有人在审核中，整单就还是「待审核」
+      var st = allPaid ? "paid" : (anyRejected ? "rejected" : (anyPending ? "pending" : (anyApproved ? "approved" : "pending")));
       var c = REG[st] || REG.pending;
       document.getElementById("resIcon").src = "assets/" + c.icon;
       document.getElementById("resTitle").textContent = E.t(c.title);

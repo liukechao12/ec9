@@ -207,7 +207,7 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
     // 手动报名成功时同样允许改「是否需要付款」；不传沿用原值
     const needPay2 = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
       : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
-        : (Number(invitation.need_pay) === 0 ? 0 : 1);
+        : (Number(invitation.need_pay) === 1 ? 1 : 0);   // 不传沿用原值；缺省按「邀约免票」
 
     if (invitation.is_valid === 0 || invitation.is_valid === false) {
       return res.status(400).json({
@@ -865,8 +865,9 @@ router.post('/', authenticate, operationLog('invitations', '创建邀约'), asyn
       source_bd = req.user.username;
     }
 
-    // 是否需要付款：新建邀约默认「需付款(1)」，管理员可在审批时改成免票(0)
-    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
+    // 是否需要付款：2026-10-23 口径 —— 邀约嘉宾一律免票，新建邀约默认「免票(0)」；
+    // 管理员仍可显式改成「需付款(1)」（特殊情形：邀约嘉宾也要买票）
+    const needPay = (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1 : 0;
     
     // 检查该嘉宾在该活动是否已有邀约记录（无论状态，只要is_valid=1）
     const existingInvitation = await Invitation.findOne({
@@ -961,8 +962,8 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
       source_bd = req.user.username;
     }
 
-    // 批量创建同样默认「需付款」，管理员可后续逐条改免票
-    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
+    // 批量创建同样默认「免票」（邀约嘉宾不掏钱），管理员可后续逐条改成需付款
+    const needPay = (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1 : 0;
     
     if (!Array.isArray(guest_ids) || guest_ids.length === 0) {
       return res.status(400).json({
@@ -1264,7 +1265,7 @@ router.post('/:id/approve', authenticate, operationLog('invitations', '批准邀
     // 审批时管理员可改「是否需要付款」；不传则沿用邀约原值（默认需付款）
     const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0
       : (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1
-        : (Number(invitation.need_pay) === 0 ? 0 : 1);
+        : (Number(invitation.need_pay) === 1 ? 1 : 0);   // 不传沿用原值；缺省按「邀约免票」
 
     // 更新状态（只使用 registration_status）
     await invitation.update({

@@ -142,23 +142,40 @@
     renderFee();
   }
 
-  /* ---------- 费用（口径同后端 calcDiscount：邀约/免费不计入付费票，3张9折 5张8折） ---------- */
+  /* ---------- 费用（口径同后端：邀约免票/¥0票种不计入付费票，3张9折 5张8折） ----------
+     购票数量必须和填报人数对得上：需购票张数 = 填报人数 − 免票人数 */
+  function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
+
   function renderFee() {
     var tk = ticketById(selectedId);
     var box = document.getElementById("tkFee");
-    if (!tk || !members.length) { box.textContent = ""; return; }
-    var paid = 0, free = 0, raw = 0;
-    members.forEach(function (m) {
-      // 邀约名单内 + 邀约标记免票 → 免票；其余（含需付款的邀约嘉宾）按票种价计
-      if (m.is_invited && m.need_pay === false) { free++; return; }
-      if (Number(tk.price) === 0) free++; else { paid++; raw += Number(tk.price); }
-    });
-    var rate = paid >= 5 ? 0.8 : (paid >= 3 ? 0.9 : 1.0);
+    if (!tk || !members.length) { box.innerHTML = ""; return; }
+    var unit = Number(tk.price) || 0;
+    var buyers = members.filter(function (m) { return !isFreeOf(m); });
+    // 票种本身 ¥0（学生票）时全员免票，购票数量为 0
+    var buyN = unit === 0 ? 0 : buyers.length;
+    var freeN = members.length - buyN;
+    var raw = unit * buyN;
+    var rate = buyN >= 5 ? 0.8 : (buyN >= 3 ? 0.9 : 1.0);
     var total = Math.round(raw * rate * 100) / 100;
-    box.textContent = E.t("tk_fee_line")
-      .replace("{n}", members.length)
-      .replace("{ticket}", tk.name)
-      .replace("{amt}", total.toFixed(2)) + (rate < 1 ? "（" + (rate * 10) + "折）" : "");
+
+    var html = '<div>' + E.esc(E.t("tk_buy_line")
+      .replace("{n}", members.length).replace("{f}", freeN).replace("{m}", buyN)) + '</div>';
+    html += '<div>' + E.esc(E.t("tk_fee_line")
+      .replace("{n}", buyN).replace("{ticket}", tk.name).replace("{amt}", total.toFixed(2))) +
+      (rate < 1 ? "（" + (rate * 10) + "折）" : "") + '</div>';
+
+    // 免票 / 购票 分别是哪些人（邀约嘉宾固定标准票），便于核对人数
+    var freeNames = [], buyNames = [];
+    members.forEach(function (m) {
+      var nm = String(m.name || "").trim() || String(m.phone || "");
+      if (unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? "（邀约·标准票）" : ""));
+      else buyNames.push(nm);
+    });
+    if (freeNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("free_ticket_count").replace("{n}", freeNames.length)) + '：' + E.esc(freeNames.join("、")) + '</div>';
+    if (buyNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("paid_ticket_count").replace("{n}", buyNames.length)) + '：' + E.esc(buyNames.join("、")) + '</div>';
+
+    box.innerHTML = html;
   }
 
   /* ---------- tab ---------- */

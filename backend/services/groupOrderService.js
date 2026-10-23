@@ -61,14 +61,21 @@ async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitatio
     if (isInvited && invitationId) {
       const inv = await Invitation.findByPk(invitationId);
       if (inv) {
-        await inv.update({ registration_status: 2, registration_time: at });
+        // 邀约嘉宾默认免票：历史行 need_pay 为 NULL 的这里补 0
+        await inv.update({
+          registration_status: 2, registration_time: at,
+          ...(inv.need_pay == null ? { need_pay: 0 } : {})
+        });
         return inv.id;
       }
     }
     if (isInvited && !invitationId) {
       const inv = await Invitation.findOne({ where: { event_id: eventId, guest_id: guestId, is_valid: 1 } });
       if (inv) {
-        await inv.update({ registration_status: 2, registration_time: at });
+        await inv.update({
+          registration_status: 2, registration_time: at,
+          ...(inv.need_pay == null ? { need_pay: 0 } : {})
+        });
         return inv.id;
       }
     }
@@ -84,6 +91,7 @@ async function syncInvitationOnRegister({ eventId, guestId, isInvited, invitatio
         registration_status: 1,   // 待审批
         registration_time: at,
         is_valid: 1,
+        need_pay: 1,              // 非邀约人：需付款购票
         extra_fields: { auto_created: true }   // 标记：本条由「非邀约人报名」自动生成
       });
     } else if (inv.registration_status !== 2) {
@@ -145,14 +153,21 @@ async function findInvited(phones, eventId) {
     if (phone) map.set(phone, {
       invitation_id: inv.id,
       source_bd: inv.source_bd || '',
-      need_pay: Number(inv.need_pay) !== 0      // 空值兼容：NULL 视为需付款
+      need_pay: needPayOf(inv)      // 邀约默认免票；管理员显式改成需付款的才付费
     });
   }
   return map;
 }
 
-/** 取邀约的「是否需要付款」（缺省 1 = 需付款） */
-const needPayOf = (inv) => (inv == null ? true : Number(inv.need_pay) !== 0);
+/**
+ * 取邀约的「是否需要付款」
+ * 缺省语义（2026-10-23）：真邀约 → 免票(0)；报名自动生成的待审批记录 → 需付款(1)
+ */
+const needPayOf = (inv) => {
+  if (inv == null) return true;
+  if (inv.need_pay != null) return Number(inv.need_pay) !== 0;
+  return !!(inv.extra_fields && inv.extra_fields.auto_created);
+};
 
 /**
  * 按 guest_id 查邀约（审核期用：管理员可能刚刚在邀约管理里改过 need_pay，
@@ -179,14 +194,29 @@ async function findInvitedByGuestIds(guestIds, eventId) {
 }
 
 /**
+ * 标准票票种 id —— 邀约嘉宾一律「标准票」（免票），与购票人选的票种无关
+ * 匹配优先级：在售且名称含「标准/Standard」的非学生票 → 首个在售非学生票 → 首个在售票种
+ */
+async function standardTicketId() {
+  const list = await TicketType.findAll({
+    where: { on_shelf: 1 }, order: [['sort', 'ASC'], ['id', 'ASC']]
+  });
+  const std = list.find(t => Number(t.is_student) !== 1 && /标准|standard/i.test(String(t.name || '')));
+  if (std) return std.id;
+  const normal = list.find(t => Number(t.is_student) !== 1 && Number(t.price) > 0);
+  if (normal) return normal.id;
+  return list.length ? list[0].id : 0;
+}
+
+/**
  * 纯估价（无副作用）：H5 提交前实时显示
  *
- * 免费口径（2026-10-23 修订，按昊哥要求）：
- *   ① 票种本身 ¥0（学生票 / 免费票）        → 永远免票
- *   ② 邀约名单内 + 邀约标记 need_pay=0（免票）→ 免票
- *   ③ 邀约名单内 + need_pay=1（默认需付款）   → 照票种价付费
- *   ④ 不在邀约名单                          → 照票种价付费（并走审批）
- * 即：是否免票由「邀约上的 need_pay」决定，不再由「是否在名单内」一刀切。
+ * 免费口径（2026-10-23 二次修订，按昊哥最新流程）：
+ *   ① 票种本身 ¥0（学生票 / 免费票）  → 永远免票
+ *   ② 在邀约名单内                    → 免票（默认），并直接报名成功、免审核
+ *      —— 仅当管理员在邀约管理里把该邀约显式改成 need_pay=1 时才照价付费
+ *   ③ 不在邀约名单                    → 照票种价付费 + 走后台整单审核
+ * 即：免不免票看「在不在邀约名单」，管理员可逐条特批（need_pay=1）。
  * @param {Array<{ticket_type_id:number, phone?:string, guest_id?:number, is_invited?:boolean, need_pay?:boolean}>} members
  */
 async function quoteGroup(eventId, members) {
@@ -207,12 +237,13 @@ async function quoteGroup(eventId, members) {
     const byPhone = m.phone ? invited.get(String(m.phone)) : null;
     const byGuest = m.guest_id ? invitedByGuest.get(Number(m.guest_id)) : null;
     const isInvited = !!m.is_invited || !!byPhone || !!byGuest;
-    // 需付款优先级：调用方显式 need_pay > 邀约记录 > 默认需付款
+    // 需付款优先级：调用方显式 need_pay > 邀约记录 > 「命中邀约即免票」
     let needPay = true;
     if (typeof m.need_pay === 'boolean') needPay = m.need_pay;
     else if (m.need_pay != null) needPay = Number(m.need_pay) !== 0;
-    else if (byPhone) needPay = byPhone.need_pay;
-    else if (byGuest) needPay = byGuest.need_pay;
+    else if (byPhone) needPay = !!byPhone.need_pay;
+    else if (byGuest) needPay = !!byGuest.need_pay;
+    else if (isInvited) needPay = false;   // 在邀约名单内 → 免票
 
     const price = Number(tt.price) || 0;
     const isFree = !needPay || price === 0;   // 免票标记 OR ¥0 票种
@@ -265,11 +296,23 @@ async function createGroup({ buyerPhone, eventId, members }) {
     seen.add(m.phone);
   }
 
-  const quote = await quoteGroup(eventId, members);
+  // 邀约名单 + 标准票：邀约嘉宾一律「标准票」（免票），不跟随购票人给同行人选的票种
+  const invitedMap = await findInvited(members.map(m => String(m.phone)), eventId);
+  const stdTicketId = await standardTicketId();
+  const norm = members.map(m => {
+    const invited = invitedMap.has(String(m.phone));
+    return {
+      ...m,
+      is_invited: invited,
+      ticket_type_id: (invited && stdTicketId) ? stdTicketId : (Number(m.ticket_type_id) || 0)
+    };
+  });
+
+  const quote = await quoteGroup(eventId, norm);
   if (!quote.ok) return quote;
 
-  // 规则 A：限场次票种必须同时选对应场次（每人独立校验）
-  for (const m of members) {
+  // 规则 A：限场次票种必须同时选对应场次（每人独立校验，用生效票种）
+  for (const m of norm) {
     const sel = await validateSelection({
       ticketTypeId: Number(m.ticket_type_id) || 0,
       sessionId: Number(m.session_id) || 0,
@@ -282,9 +325,8 @@ async function createGroup({ buyerPhone, eventId, members }) {
   const groupNo = genGroupNo();
   const now = new Date();
   const created = [];
-  const invitedMap = await findInvited(members.map(m => String(m.phone)), eventId);
 
-  for (const m of members) {
+  for (const m of norm) {
     const phone = String(m.phone);
     const ph = hmacPhone(phone);
     let guest = await Guest.findOne({ where: { phone_hmac: ph } });
@@ -309,8 +351,9 @@ async function createGroup({ buyerPhone, eventId, members }) {
     }
 
     const isInvited = invitedMap.has(phone);
-    // 邀约是否在名单内决定「免不免审」；是否掏钱由邀约上的 need_pay 决定（默认 1 需付款）
-    const invNeedPay = isInvited ? invitedMap.get(phone).need_pay : true;
+    const invNeedPay = isInvited ? !!invitedMap.get(phone).need_pay : true;   // 邀约默认免票
+    // 邀约嘉宾 → 标准票；其余沿用购票人选的票种
+    const effTicketId = isInvited && stdTicketId ? stdTicketId : (Number(m.ticket_type_id) || 0);
     // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
     const invId = await syncInvitationOnRegister({
       eventId, guestId: guest.id, isInvited,
@@ -321,7 +364,7 @@ async function createGroup({ buyerPhone, eventId, members }) {
     const reg = await Registration.create({
       event_id: eventId,
       session_id: Number(m.session_id) || 0,
-      ticket_type_id: Number(m.ticket_type_id) || 0,
+      ticket_type_id: effTicketId,
       guest_id: guest.id,
       invitation_id: invId || (isInvited ? invitedMap.get(phone).invitation_id : null),
       group_no: groupNo,
@@ -344,7 +387,7 @@ async function createGroup({ buyerPhone, eventId, members }) {
       guest_id: guest.id,
       name: clip(m.name, 100),
       phone,
-      ticket_type_id: Number(m.ticket_type_id),
+      ticket_type_id: effTicketId,
       is_buyer: phone === String(buyerPhone),
       is_invited: isInvited,
       need_pay: invNeedPay,
@@ -749,7 +792,7 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 }
 
 module.exports = {
-  calcDiscount, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds,
+  calcDiscount, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
   markGroupPaid, sendGroupPaidSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

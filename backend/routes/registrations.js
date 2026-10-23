@@ -1154,11 +1154,10 @@ router.get('/group-list', authenticate, async (req, res) => {
   try {
     const { Op } = require('sequelize');
     const where = { group_no: { [Op.ne]: null } };
-    if (req.query.status) where.status = req.query.status;
     const regs = await Registration.findAll({
       where,
       order: [['id', 'DESC']],
-      limit: 500,
+      limit: 2000,
       include: [
         { model: Guest, as: 'guest', required: false },
         { model: TicketType, as: 'ticketType', required: false }
@@ -1194,6 +1193,24 @@ router.get('/group-list', authenticate, async (req, res) => {
       });
     }
     let list = Array.from(groups.values());
+
+    // 整单状态聚合：多人一次提交 = 一起审核，只有「全部通过」和「全部驳回」两种结果
+    // 口径：有 submitted → 待审核；全 rejected → 已驳回；全 paid → 已支付；其余 → 待支付
+    for (const g of list) {
+      const sts = g.members.map(m => m.status);
+      g.status = sts.includes('submitted') ? 'submitted'
+        : (sts.every(s => s === 'rejected') ? 'rejected'
+          : (sts.every(s => s === 'paid') ? 'paid' : 'approved'));
+      g.total_count = g.members.length;
+      g.invited_count = g.members.filter(m => m.is_invited).length;
+      // 需付款人数：邀约免票不计，其余都算（免费票种会在计价时归零）
+      g.paid_count = g.members.filter(m => !m.is_invited).length;
+      g.discount_rate = g.paid_count >= 5 ? 0.8 : (g.paid_count >= 3 ? 0.9 : 1);
+    }
+
+    // 状态筛选放在聚合之后（聚合前按单人状态过滤会把整单拆散）
+    if (req.query.status) list = list.filter(g => g.status === req.query.status);
+
     const kw = String(req.query.keyword || '').trim();
     if (kw) {
       list = list.filter(g =>
@@ -1209,8 +1226,9 @@ router.get('/group-list', authenticate, async (req, res) => {
 
 /**
  * POST /api/registrations/check-invited
- * 批量判断手机号是否在邀约名单内（名单内的人免审核；是否掏钱看邀约上的 need_pay）
- * 返回 invited{phone:bool} 与 need_pay{phone:bool}
+ * 填资料时逐人预判结果：在邀约名单内 → 免票、免审核、直接报名成功（票种固定标准票）；
+ * 不在名单 → 需审核 + 购票付款。
+ * 返回 invited{phone:bool}、need_pay{phone:bool}、standard_ticket_id
  * 需要 x-verify-token，防匿名枚举；单次最多 10 个（与单次代报上限一致）
  */
 router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
@@ -1225,10 +1243,14 @@ router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
     for (const p of phones) {
       const hit = map.get(String(p));
       invited[String(p)] = !!hit;
-      // 名单内：按邀约上的 need_pay 决定要不要掏钱；不在名单：需付款（且要审批）
+      // 名单内：默认免票（管理员可特批改成需付款）；不在名单：需付款（且要审批）
       needPay[String(p)] = hit ? !!hit.need_pay : true;
     }
-    res.json({ code: 0, message: 'ok', data: { invited, need_pay: needPay } });
+    const stdId = await groupOrderService.standardTicketId();
+    res.json({
+      code: 0, message: 'ok',
+      data: { invited, need_pay: needPay, standard_ticket_id: stdId || 0 }
+    });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }

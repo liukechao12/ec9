@@ -12,7 +12,7 @@
 
   <div class="sheet">
     <div class="page-title" data-i18n="profile_title">个人信息</div>
-    <div class="group-tip info" id="topTip" data-i18n="buyer_pay_tip">你是购票人，请完成本单支付</div>
+    <div class="group-tip info" id="topTip"></div>
 
     <div id="memberList"></div>
     <button class="add-member-btn" id="btnAddMember" data-i18n="add_member">＋ 添加填报人</button>
@@ -100,8 +100,11 @@
     E.applyLang();
   }
 
-  /* 邀约名单：命中的人免审核、免票（提交时后端同样判定，这里是给用户即时反馈） */
+  /* 邀约名单：命中的人 = 免票 + 免审核 + 提交即报名成功；没命中的 = 需审核后购票付款。
+     这里只是给用户的即时反馈，后端提交时会按同样口径再判一次。 */
   var invitedSet = {}, needPaySet = {};
+  function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
+
   function checkInvited() {
     var phones = members.map(function (x) { return x.phone; }).filter(function (p) { return /^1[3-9]\d{9}$/.test(p); });
     if (!phones.length) { renderInvitedTips(); return; }
@@ -110,7 +113,7 @@
       needPaySet = (d && d.need_pay) || {};
       members.forEach(function (m) {
         m.is_invited = !!invitedSet[m.phone];
-        // 邀约名单内是否要掏钱，由邀约上的 need_pay 决定（默认需付款）
+        // 邀约名单内默认免票；管理员特批 need_pay=1 的才要掏钱
         m.need_pay = m.is_invited ? (needPaySet[m.phone] !== false) : true;
       });
       renderInvitedTips();
@@ -121,18 +124,43 @@
     var box = document.getElementById("memberList");
     Array.prototype.forEach.call(box.querySelectorAll(".member-card"), function (card, i) {
       var m = members[i];
+      if (!m) return;
       var tip = card.querySelector(".invited-tip");
-      if (!tip) return;
-      if (m && m.is_invited) {
-        var free = m.need_pay === false;
-        tip.textContent = free ? E.t("invited_tip") : E.t("invited_tip_pay");
-        tip.classList.remove("hidden");
-        var tag = card.querySelector(".mc-tag");
-        if (tag) tag.textContent = free ? E.t("invited_tag") : E.t("invited_tag_pay");
+      // 结果标签单独加一个，避免覆盖「购票人·本人 / 同行人」身份标签
+      var head = card.querySelector(".mc-head > div");
+      var tag = card.querySelector(".mc-tag-result");
+      if (!tag && head) {
+        tag = document.createElement("span");
+        tag.className = "mc-tag mc-tag-result";
+        head.appendChild(tag);
+      }
+      if (isFreeOf(m)) {
+        if (tip) { tip.textContent = E.t("invited_tip"); tip.classList.remove("hidden"); }
+        if (tag) tag.textContent = E.t("invited_tag");
+      } else if (m.is_invited) {
+        // 管理员特批：邀约嘉宾也要买票
+        if (tip) { tip.textContent = E.t("invited_tip_pay"); tip.classList.remove("hidden"); }
+        if (tag) tag.textContent = E.t("invited_tag_pay");
       } else {
-        tip.classList.add("hidden");
+        if (tip) { tip.textContent = E.t("need_buy_tip"); tip.classList.remove("hidden"); }
+        if (tag) tag.textContent = E.t("need_buy_tag");
       }
     });
+    renderSummary();
+  }
+
+  /* 顶部汇总：这单里谁直接报名成功、谁要购票，人数对得上 */
+  function renderSummary() {
+    var box = document.getElementById("topTip");
+    if (!box) return;
+    if (!members.length) { box.textContent = ""; return; }
+    var free = members.filter(isFreeOf).length;
+    var pay = members.length - free;
+    box.className = "group-tip " + (pay ? "info" : "ok");
+    box.textContent = E.t("profile_summary")
+      .replace("{n}", members.length)
+      .replace("{ok}", free)
+      .replace("{pay}", pay);
   }
 
   document.getElementById("btnAddMember").addEventListener("click", function () {

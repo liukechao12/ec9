@@ -474,8 +474,10 @@ function switchPage(pageName) {
     // 显示目标页面
     document.getElementById(pageName).classList.remove('hidden');
     
-    // 更新页面标题
-    document.getElementById('pageTitle').textContent = pageTitles[pageName] || '控制台';
+    // 更新页面标题（走 t()：中文原文经 zhIndex 反查成当前语言，
+    // 不依赖 MutationObserver —— 标题是 textContent 赋值，Observer 补不到）
+    document.getElementById('pageTitle').textContent =
+        (typeof t === 'function' ? t(pageTitles[pageName] || '控制台') : (pageTitles[pageName] || '控制台'));
     
     // 更新导航状态
     document.querySelectorAll('.nav-item[data-page]').forEach(item => {
@@ -715,7 +717,7 @@ function loadRecentEvents(events) {
                             <path d="M16 2V6" stroke="#155DFC" stroke-width="2" stroke-linecap="round"/>
                         </svg>
                     </div>
-                    <span>${event.name}</span>
+                    <span>${ec9I18n(event, 'name')}</span>
                 </div>
             </td>
             <td>
@@ -783,7 +785,7 @@ async function loadEvents() {
                                         <path d="M16 2V6" stroke="#155DFC" stroke-width="2" stroke-linecap="round"/>
                                     </svg>
                                 </div>
-                                <span>${event.name}</span>
+                                <span>${ec9I18n(event, 'name')}</span>
                             </div>
                             ${extraFieldsHtml ? `<div style="padding-left: 52px; font-size: 12px; color: #6B7280;">${extraFieldsHtml}</div>` : ''}
                         </div>
@@ -1643,7 +1645,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <rect x="2.67" y="4" width="10.67" height="8" rx="1.33" stroke="#99A1AF" stroke-width="1.33"/>
                             </svg>
-                            <span>${inv.event?.name || '-'}</span>
+                            <span>${ec9I18n(inv.event, 'name') || '-'}</span>
                         </div>
                     </td>
                     <td>${bdContact}</td>
@@ -1891,7 +1893,7 @@ async function loadCheckins() {
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <rect x="2.67" y="4" width="10.67" height="8" rx="1.33" stroke="#99A1AF" stroke-width="1.33"/>
                             </svg>
-                            <span>${checkin.event?.name || '-'}</span>
+                            <span>${ec9I18n(checkin.event, 'name') || '-'}</span>
                         </div>
                     </td>
                     <td>
@@ -1961,7 +1963,7 @@ function renderCheckinTimeline(checkins) {
                 <div class="timeline-header">
                     <div>
                         <div class="timeline-title">${window.t('admin.checkedInDone', [checkin.guest?.name || '-'])}</div>
-                        <div class="timeline-desc">${checkin.event?.name || '-'}</div>
+                        <div class="timeline-desc">${ec9I18n(checkin.event, 'name') || '-'}</div>
                     </div>
                     <div class="timeline-time">${dateTime}</div>
                 </div>
@@ -4224,7 +4226,7 @@ async function viewInvitation(id) {
                     <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">活动信息</div>
                     <div style="display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 220px;">
-                            <div style="font-size: 16px; font-weight: 500;">${invitation.event?.name || '-'}</div>
+                            <div style="font-size: 16px; font-weight: 500;">${ec9I18n(invitation.event, 'name') || '-'}</div>
                             <div style="font-size: 14px; color: #6B7280; margin-top: 4px;">${formatDateTime(invitation.event?.start_time)}</div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center; flex: 1; min-width: 260px;">
@@ -6165,7 +6167,7 @@ async function viewCheckin(checkinId) {
                             <div class="detail-grid">
                                 <div class="detail-item">
                                     <span class="detail-label">活动名称</span>
-                                    <span class="detail-value">${checkin.event?.name || '-'}</span>
+                                    <span class="detail-value">${ec9I18n(checkin.event, 'name') || '-'}</span>
                                 </div>
                                 <div class="detail-item">
                                     <span class="detail-label">活动地点</span>

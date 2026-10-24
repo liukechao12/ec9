@@ -323,7 +323,9 @@
                                         <path d="M10.67 4.67L8 7.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
                                         <path d="M2.67 4.67L2.67 13.33L13.33 13.33" stroke="#00A63E" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
-                                    <span class="trend-text" id="trendCheckins">+0 本周</span>
+                                    <!-- 拆开写：数字 + 独立词条，「+0 本周」整串匹配不到词条 -->
+                                    <span class="trend-text" id="trendCheckins">+0</span>
+                                    <span class="trend-text" data-i18n="admin.thisWeek">本周</span>
                                 </div>
                             </div>
                             <div class="stat-icon-bg stat-icon-gray">
@@ -529,9 +531,7 @@
                 <div id="invTabBar" style="display:flex; gap:8px; align-items:center; margin: 16px 0 4px; border-bottom: 1px solid #E5E7EB;">
                     <button id="invTabList" class="btn btn-sm btn-primary" style="width:auto; padding:8px 18px; white-space:nowrap;" onclick="switchInvTab('list')">按人查看</button>
                     <button id="invTabBatch" class="btn btn-sm btn-outline" style="width:auto; padding:8px 18px; white-space:nowrap;" onclick="switchInvTab('batch')">按批次审核</button>
-                    <span style="align-self:center; margin-left:8px; font-size:12px; color:#6B7280; white-space:nowrap;">
-                        一次批量创建 / 一次提交多人 = 同一批，可整批一起通过或驳回
-                    </span>
+                    <span data-i18n="admin.invBatchHint" style="align-self:center; margin-left:8px; font-size:12px; color:#6B7280; white-space:nowrap;">一次批量创建 / 一次提交多人 = 同一批，可整批一起通过或驳回</span>
                 </div>
                 <div id="invListWrap">
                 <div class="page-header">
@@ -1452,6 +1452,18 @@
                             </select>
                         </div>
                     </div>
+                    <!-- 多语言：加语种不用改表结构，留空则回退上方简体 -->
+                    <div class="form-group">
+                        <label>多语言（选填，留空则与上方一致）</label>
+                        <div class="form-row">
+                            <input type="text" id="sessionNameTw" placeholder="繁体中文名称">
+                            <input type="text" id="sessionNameEn" placeholder="English name">
+                        </div>
+                        <div class="form-row">
+                            <input type="text" id="sessionLocationTw" placeholder="繁體地點">
+                            <input type="text" id="sessionLocationEn" placeholder="Location (English)">
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeSessionModal()">取消</button>
@@ -1511,11 +1523,16 @@
                         <label>描述</label>
                         <textarea id="ttDescription" name="description" rows="2" placeholder="票种说明（选填）"></textarea>
                     </div>
+                    <!-- 多语言：加语种不用改表结构，留空则回退上方简体 -->
                     <div class="form-group">
-                        <label>多语言名称（选填，留空则与上方一致）</label>
+                        <label>多语言（选填，留空则与上方一致）</label>
                         <div class="form-row">
                             <input type="text" id="ttNameTw" placeholder="繁体中文名称">
                             <input type="text" id="ttNameEn" placeholder="English name">
+                        </div>
+                        <div class="form-row">
+                            <input type="text" id="ttDescTw" placeholder="繁體描述">
+                            <input type="text" id="ttDescEn" placeholder="Description (English)">
                         </div>
                     </div>
                 </div>

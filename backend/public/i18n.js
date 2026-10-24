@@ -498,16 +498,44 @@
   }
 
   var obsTimer = null;
+  var mo = null;
+  var HAS_CN = /[\u4e00-\u9fff]/;
+
+  /**
+   * ⚠️ 收敛靠「内容过滤」而不是「丢弃记录」。
+   *
+   * 曾试过用 mo.takeRecords() 把「自己改 DOM 引发的变更」清掉来防回环，
+   * 结果踩了大坑：列表是 **逐个 appendChild(tr)** 渲染的，第一次插入触发
+   * Observer 后，60ms 防抖窗口内完成的其余各行记录被 takeRecords() 一并丢掉，
+   * 于是整张表永远翻不过来（邀约列表 7 行全是简体，就是这个原因）。
+   *
+   * 正确做法：只处理「内容里还有中文」的变更。译完之后内容变成英文，
+   * 下一轮自然不再命中 —— 无需丢弃任何记录，业务的真实渲染也不会被误吞。
+   */
   function observe() {
     if (typeof MutationObserver === 'undefined') return;
-    var mo = new MutationObserver(function (muts) {
+    if (mo) return;          // 只挂一次（init 早期已挂，重复调用无害）
+    mo = new MutationObserver(function (muts) {
       if (current === DEFAULT_LANG) return;
       var targets = [];
-      for (var i = 0; i < muts.length && targets.length < 40; i++) {
+      var seen = [];
+      function push(el) {
+        if (!el || seen.indexOf(el) > -1) return;
+        seen.push(el); targets.push(el);
+      }
+      for (var i = 0; i < muts.length && targets.length < 80; i++) {
         var m = muts[i];
+        // ① 新增元素节点（表格/列表渲染走这条）
         for (var j = 0; j < m.addedNodes.length; j++) {
           var n = m.addedNodes[j];
-          if (n.nodeType === 1 && translatable(n)) targets.push(n);
+          if (n.nodeType === 1 && translatable(n) && HAS_CN.test(n.textContent || '')) push(n);
+        }
+        // ② 文本被改写（el.textContent = '活动管理' 走这条）
+        //    旧实现只听 addedNodes，于是 JS 赋值的文案（页面大标题、统计数字）
+        //    永远翻不过来 —— 这是「标题还是中文」的根因。
+        if (m.type === 'characterData' && m.target && m.target.parentNode) {
+          var pn = m.target.parentNode;
+          if (translatable(pn) && HAS_CN.test(m.target.nodeValue || '')) push(pn);
         }
       }
       if (!targets.length) return;
@@ -519,7 +547,7 @@
         }
       }, 60);
     });
-    mo.observe(document.body, { childList: true, subtree: true });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   /* ===================== 语言切换 ===================== */
@@ -564,6 +592,15 @@
         try {
           global.dispatchEvent(new CustomEvent('i18n:changed', { detail: { lang: lang, prev: prev } }));
         } catch (e) {}
+      }
+      // 与 init 同理：切换后异步渲染出来的内容再补扫几遍
+      if (current !== DEFAULT_LANG) {
+        [400, 1200, 3000].forEach(function (ms) {
+          setTimeout(function () {
+            if (current !== lang) return;
+            apply(document);
+          }, ms);
+        });
       }
     }).catch(function () { /* 已回退中文，不抛 */ });
     return pending;
@@ -749,15 +786,29 @@
       ? Promise.resolve()
       : load(DEFAULT_LANG).catch(function () {});
 
+    // ★ Observer 必须在语言包到位【之前】就挂上。
+    //   旧实现放在 .then() 里，于是「比语言包更早渲染出来的表格/列表」
+    //   一次都进不了 Observer —— 表现为英文界面里表格仍是中文。
+    if (opt.observe !== false) observe();
+
     pending = base.then(function () { return load(lang); })
       .catch(function () { current = DEFAULT_LANG; })
       .then(function () {
         apply(document);
-        if (opt.observe !== false) observe();
         if (opt.switcher !== false) autoMount(opt);
         try {
           global.dispatchEvent(new CustomEvent('i18n:ready', { detail: { lang: current } }));
         } catch (e) {}
+        // 异步兜底：列表数据往往比语言包晚到，等一会儿再整体扫一遍，
+        // 把「Observer 挂上之前就已渲染」和「渲染时语言包还没到位」的都补上。
+        if (current !== DEFAULT_LANG) {
+          [400, 1200, 3000].forEach(function (ms) {
+            setTimeout(function () {
+              if (current === DEFAULT_LANG) return;
+              apply(document);
+            }, ms);
+          });
+        }
       });
     return pending;
   }

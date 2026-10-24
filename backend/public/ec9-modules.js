@@ -29,6 +29,31 @@ function ec9T(key, fallback) {
 
 /* ---------- 通用小工具 ---------- */
 
+/**
+ * 取业务数据的多语字段（活动名 / 场次名 / 票种名 …）。
+ *
+ * 后台列表过去只显示简体 name，切到英文界面时表格里仍是中文 ——
+ * 因为那是**数据**不是文案，i18n 的 DOM 扫描管不到。
+ * 这里按当前界面语言从 i18n 树里取，取不到再回退简体基准字段。
+ *
+ * @param {object} row  含 i18n 的行数据
+ * @param {string} field 'name' | 'description' | 'location'
+ */
+function ec9I18n(row, field) {
+    field = field || 'name';
+    if (!row) return '';
+    var lang = 'zh-CN';
+    try {
+        if (typeof window !== 'undefined' && window.I18N && typeof window.I18N.getLang === 'function') {
+            lang = window.I18N.getLang() || 'zh-CN';
+        }
+    } catch (e) {}
+    var tree = row.i18n || {};
+    if (typeof tree === 'string') { try { tree = JSON.parse(tree); } catch (e) { tree = {}; } }
+    var f = tree[field] || {};
+    return f[lang] || f['zh-CN'] || row[field] || '';
+}
+
 /** HTML 转义：所有拼进 innerHTML 的动态文本都要过这里，防 XSS */
 function ec9Esc(s) {
     if (s === null || s === undefined) return '';
@@ -173,10 +198,10 @@ function ec9RenderSessions(list) {
         const st = EC9_SESSION_STATUS[Number(s.status)] || [null, 'status-inactive'];
         return `<tr>
             <td>${ec9Esc(s.id)}</td>
-            <td>${ec9Esc(s.name)}</td>
+            <td>${ec9Esc(ec9I18n(s, 'name'))}</td>
             <td>${ec9Esc(formatDateTime(s.start_time))}</td>
             <td>${ec9Esc(formatDateTime(s.end_time))}</td>
-            <td>${ec9Esc(s.location || '-')}</td>
+            <td>${ec9Esc(ec9I18n(s, 'location') || '-')}</td>
             <td>${total > 0 ? total : ec9T('ec9.field.unlimited', '不限')}</td>
             <td>${ec9Esc(s.stock_sold || 0)}</td>
             <td>${ec9Esc(s.stock_locked || 0)}</td>
@@ -216,6 +241,12 @@ function openSessionModal(id) {
         document.getElementById('sessionCapacity').value = s.capacity || 0;
         document.getElementById('sessionSortOrder').value = s.sort || 0;
         document.getElementById('sessionStatus').value = String(Number(s.status));
+        // 多语字段从 i18n 树里回填
+        var si = s.i18n || {};
+        document.getElementById('sessionNameTw').value = (si.name && si.name['zh-TW']) || '';
+        document.getElementById('sessionNameEn').value = (si.name && si.name.en) || '';
+        document.getElementById('sessionLocationTw').value = (si.location && si.location['zh-TW']) || '';
+        document.getElementById('sessionLocationEn').value = (si.location && si.location.en) || '';
     }).catch((e) => alert('加载场次失败：' + e.message));
 }
 
@@ -230,6 +261,14 @@ async function handleSessionSubmit(e) {
     const start = ec9FromLocalInput(document.getElementById('sessionStartTime').value);
     if (!name || !start) { alert('请填写场次名称和开始时间'); return; }
 
+    // 多语：只有填了才带上，后端会与简体基准字段合并
+    const sI18n = { name: {}, location: {} };
+    const val = (id) => (document.getElementById(id) || {}).value || '';
+    if (val('sessionNameTw').trim()) sI18n.name['zh-TW'] = val('sessionNameTw').trim();
+    if (val('sessionNameEn').trim()) sI18n.name.en = val('sessionNameEn').trim();
+    if (val('sessionLocationTw').trim()) sI18n.location['zh-TW'] = val('sessionLocationTw').trim();
+    if (val('sessionLocationEn').trim()) sI18n.location.en = val('sessionLocationEn').trim();
+
     const payload = {
         name,
         start_time: start,
@@ -237,7 +276,8 @@ async function handleSessionSubmit(e) {
         location: document.getElementById('sessionLocation').value.trim(),
         capacity: Number(document.getElementById('sessionCapacity').value) || 0,
         sort: Number(document.getElementById('sessionSortOrder').value) || 0,
-        status: Number(document.getElementById('sessionStatus').value)
+        status: Number(document.getElementById('sessionStatus').value),
+        i18n: sI18n
     };
 
     // 表单里没有会议选择器，编辑时带上原会议，新建时取第一个
@@ -324,7 +364,7 @@ function ec9RenderTicketTypes(list) {
         const on = Number(t.on_shelf) === 1;
         return `<tr>
             <td>${ec9Esc(t.id)}</td>
-            <td>${ec9Esc(t.name)}${t.session_name ? `<div style="font-size:12px;color:#9CA3AF;">${ec9Esc(t.session_name)}</div>` : ''}</td>
+            <td>${ec9Esc(ec9I18n(t, 'name'))}${t.session_name ? `<div style="font-size:12px;color:#9CA3AF;">${ec9Esc(t.session_name)}</div>` : ''}</td>
             <td>${ec9Money(t.price)}</td>
             <td>${total > 0 ? total : ec9T('ec9.field.unlimited', '不限')}</td>
             <td>${ec9Esc(t.stock_locked || 0)}</td>
@@ -370,6 +410,8 @@ function openTicketTypeModal(id) {
         const i18n = t.i18n || {};
         document.getElementById('ttNameTw').value = (i18n.name && i18n.name['zh-TW']) || '';
         document.getElementById('ttNameEn').value = (i18n.name && i18n.name.en) || '';
+        document.getElementById('ttDescTw').value = (i18n.description && i18n.description['zh-TW']) || '';
+        document.getElementById('ttDescEn').value = (i18n.description && i18n.description.en) || '';
     }).catch((e) => alert('加载票种失败：' + e.message));
 }
 
@@ -384,11 +426,15 @@ async function handleTicketTypeSubmit(e) {
     if (!name) { alert('请填写票种名称'); return; }
 
     // 多语：只有填了才带上，后端会与基准字段合并
-    const i18n = { name: {} };
+    const i18n = { name: {}, description: {} };
     const tw = document.getElementById('ttNameTw').value.trim();
     const en = document.getElementById('ttNameEn').value.trim();
+    const dtw = document.getElementById('ttDescTw').value.trim();
+    const den = document.getElementById('ttDescEn').value.trim();
     if (tw) i18n.name['zh-TW'] = tw;
     if (en) i18n.name.en = en;
+    if (dtw) i18n.description['zh-TW'] = dtw;
+    if (den) i18n.description.en = den;
 
     const payload = {
         name,

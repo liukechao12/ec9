@@ -19,6 +19,10 @@ const { localize, setI18nField, I18N_FIELDS, normalizeLang } = require('../utils
  *
  * 简体从原字段取（name/description/location 本来就是简体基准列），
  * 这样即使 i18n 整棵树丢了，简体也不会丢。
+ *
+ * ⚠️ 语义是「整树重建」，不是增量合并：入参里没带的字段/语言，存库后会被清掉。
+ * 直接调本接口时（非后台表单）必须传全字段的完整三语，否则会静默丢失既有翻译。
+ * 后台表单安全的前提是编辑前会把既有值回填进输入框再整体提交。
  */
 function buildI18nTree(i18nIn, base) {
   const tree = {};

@@ -51,7 +51,19 @@ function ec9I18n(row, field) {
     var tree = row.i18n || {};
     if (typeof tree === 'string') { try { tree = JSON.parse(tree); } catch (e) { tree = {}; } }
     var f = tree[field] || {};
-    return f[lang] || f['zh-CN'] || row[field] || '';
+    // 界面语言 key（zh-Hant）与库里存的 key（zh-TW）不是一回事，先归一化再取，
+    // 否则繁体界面一律取不到、静默回退简体。
+    var ALIAS = { 'zh-Hant': 'zh-TW', 'zh-HK': 'zh-TW', 'zh-TW': 'zh-TW', 'zh-CN': 'zh-CN', 'en': 'en', 'zh': 'zh-CN' };
+    var want = ALIAS[lang] || lang;
+    // 顺序：目标语种 → 简体基准字段 → 英文。
+    // 英文必须排最后：i18n 树里通常没有 zh-CN（buildI18nTree 会剔除与简体列重复的），
+    // 若把 en 排在 row[field] 前面，取不到目标语种时会跳去显示英文而不是简体。
+    var order = [want, lang, 'zh-CN'];
+    for (var i = 0; i < order.length; i++) {
+        var v = f[order[i]];
+        if (v != null && String(v).trim() !== '') return v;
+    }
+    return row[field] || f.en || '';
 }
 
 /** HTML 转义：所有拼进 innerHTML 的动态文本都要过这里，防 XSS */
@@ -261,7 +273,9 @@ async function handleSessionSubmit(e) {
     const start = ec9FromLocalInput(document.getElementById('sessionStartTime').value);
     if (!name || !start) { alert('请填写场次名称和开始时间'); return; }
 
-    // 多语：只有填了才带上，后端会与简体基准字段合并
+    // 多语：只有填了才带上。注意后端 buildI18nTree 是**整树重建**不是增量合并，
+    // 所以这里必须覆盖 name/location 全部字段——否则未提交的字段其繁英会被清空。
+    // 依赖 openSessionModal 的回填保证已有值不被冲掉。
     const sI18n = { name: {}, location: {} };
     const val = (id) => (document.getElementById(id) || {}).value || '';
     if (val('sessionNameTw').trim()) sI18n.name['zh-TW'] = val('sessionNameTw').trim();

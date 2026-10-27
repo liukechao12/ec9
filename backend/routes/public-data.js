@@ -17,7 +17,7 @@
 const express = require('express');
 const router = express.Router();
 const { Op, Event, Session, TicketType, sequelize } = require('../models');
-const { localize, parseI18n } = require('../utils/i18nData');
+const { localize, parseI18n, normalizeLang } = require('../utils/i18nData');
 
 const SESSION_FIELDS = ['name', 'location'];
 const TICKET_FIELDS = ['name', 'description'];
@@ -38,7 +38,12 @@ function pickLang(i18nJson, field, lang) {
 
 function resolveLang(req) {
   const q = req.query && req.query.lang;
-  if (q && ['zh-CN', 'zh-TW', 'en'].indexOf(q) >= 0) return q;
+  // H5 前端传的是 zh-Hant，库里存的是 zh-TW：先归一化再判定，
+  // 否则繁体参数会被当成无效值丢掉，一路回退成简体。
+  if (q) {
+    const n = normalizeLang(q);
+    if (['zh-CN', 'zh-TW', 'en'].indexOf(n) >= 0) return n;
+  }
   const h = (req.headers && req.headers['accept-language']) || '';
   const nav = String(h).toLowerCase();
   if (nav.indexOf('zh-tw') === 0 || nav.indexOf('zh-hk') === 0 || nav.indexOf('zh-hant') === 0) return 'zh-TW';

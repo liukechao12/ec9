@@ -123,7 +123,10 @@
   function renderCols() {
     var box = document.getElementById("tkCols");
     box.innerHTML = tickets.map(function (tk) {
-      var lis = benefitsOf(tk).map(function (b) { return '<li>' + E.esc(b) + '</li>'; }).join("");
+      // 设计稿权益表首行是票面价格，价格来自接口，不写死
+      var price = Number(tk.price) === 0 ? E.t("tk_free") : priceText(tk) + " " + E.t("tk_unit");
+      var lis = '<li class="tk-p">' + E.esc(price) + '</li>' +
+        benefitsOf(tk).map(function (b) { return '<li>' + E.esc(b) + '</li>'; }).join("");
       return '<div class="tk-col" data-cid="' + tk.id + '">' +
         '<div class="tk-col-h">' + E.esc(tk.name) + '</div>' +
         '<ul class="tk-ben">' + lis + '</ul>' +

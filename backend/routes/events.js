@@ -4,7 +4,7 @@ const { Event, Invitation, Checkin } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
 const config = require('../config');
-const { localize, setI18nField, I18N_FIELDS } = require('../utils/i18nData');
+const { localize, setI18nField, I18N_FIELDS, normalizeLang } = require('../utils/i18nData');
 
 /**
  * 组装 i18n 树。
@@ -41,7 +41,12 @@ function buildI18nTree(i18nIn, base) {
  */
 function resolveLang(req) {
   const q = req.query && req.query.lang;
-  if (q && ['zh-CN', 'zh-TW', 'en'].indexOf(q) >= 0) return q;
+  // H5 前端传的是 zh-Hant，库里存的是 zh-TW：先归一化再判定，
+  // 否则繁体参数会被当成无效值丢掉，一路回退成简体。
+  if (q) {
+    const n = normalizeLang(q);
+    if (['zh-CN', 'zh-TW', 'en'].indexOf(n) >= 0) return n;
+  }
   const h = req.headers && (req.headers['accept-language'] || '');
   const nav = String(h).toLowerCase();
   if (nav.indexOf('zh-tw') === 0 || nav.indexOf('zh-hk') === 0 || nav.indexOf('zh-hant') === 0) return 'zh-TW';

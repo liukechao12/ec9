@@ -19,6 +19,26 @@
 const LANGS = ['zh-CN', 'zh-TW', 'en'];
 const DEFAULT_LANG = 'zh-CN';
 
+/**
+ * 语种别名 → 内部语种。
+ * H5 前端用的是 zh-Hant（与 i18n.js 的三语 key 一致），后端库里存的是 zh-TW。
+ * 缺这层映射时，繁体界面会一路回退到英文（zh-Hant 命中不了 → 简体也被
+ * buildI18nTree 剔除了 → 落到 en），表现为「切繁体却显示英文」。
+ */
+const LANG_ALIAS = {
+  'zh-Hant': 'zh-TW',
+  'zh-HK': 'zh-TW',
+  'zh-TW': 'zh-TW',
+  'zh-CN': 'zh-CN',
+  'zh': 'zh-CN',
+  'en': 'en',
+  'en-US': 'en'
+};
+function normalizeLang(lang) {
+  if (!lang) return DEFAULT_LANG;
+  return LANG_ALIAS[String(lang)] || (LANGS.indexOf(String(lang)) > -1 ? String(lang) : DEFAULT_LANG);
+}
+
 /** 需要多语的字段 */
 const I18N_FIELDS = ['name', 'description', 'location'];
 
@@ -47,17 +67,16 @@ function parseI18n(raw) {
 function pick(i18n, field, lang, fallback) {
   const tree = parseI18n(i18n);
   const node = tree && tree[field];
-  if (isI18nNode(node)) {
-    const order = [lang, DEFAULT_LANG, 'en'];
-    for (const l of order) {
-      const v = node[l];
-      if (v != null && String(v).trim() !== '') return v;
-    }
-  }
-  // i18n 里没有 → 用传入的兜底（数据库的简体原字段）
+  const want = normalizeLang(lang);
+  const has = (l) => node && node[l] != null && String(node[l]).trim() !== '';
+
+  // 树里只存非简体语种（buildI18nTree 会剔除简体），所以：
+  //   简体 → 直接用数据库原字段
+  //   其它 → 目标语种 → 英文
+  if (want !== DEFAULT_LANG && has(want)) return node[want];
+  // 兜底：数据库简体原字段（宁可显示简体，也不显示空白）
   if (fallback != null && String(fallback).trim() !== '') return fallback;
-  // 最后兜底：i18n 里的英文
-  if (node && node.en) return node.en;
+  if (has('en')) return node.en;
   return '';
 }
 
@@ -137,6 +156,6 @@ function hasVariant(i18n, field, lang) {
 
 module.exports = {
   LANGS, DEFAULT_LANG, I18N_FIELDS,
-  parseI18n, isI18nNode, pick, localize, localizeList, toPlain,
+  parseI18n, isI18nNode, normalizeLang, pick, localize, localizeList, toPlain,
   setI18nField, hasVariant
 };

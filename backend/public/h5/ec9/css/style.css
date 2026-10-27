@@ -352,7 +352,7 @@ select.input.filled { color: #1D2129; }
 .price .cny { font-size: 30px; }
 
 /* 退款提示 */
-.refund-tip { font-size: 11px; color: #86909C; margin-top: 22px; line-height: 1.6; }
+.refund-tip { font-size: 11px; color: #86909C; margin-top: 22px; line-height: 1.6; white-space: pre-line; }
 
 /* ---------- 状态结果页（设计稿：图标区 y234 Ø252，标题字形带 y553 h34，按钮 y697） ---------- */
 .result-page { text-align: center; padding-top: 26px; }
@@ -565,7 +565,7 @@ select.input.filled { color: #1D2129; }
 .group-tip.ok { background: #E8FFEA; color: #008A20; }
 .group-tip.warn { background: #FDECEC; color: #C2404F; }
 
-.refund-note { font-size: 11px; color: var(--label-gray); line-height: 1.6; margin: 10px 2px 4px; }
+.refund-note { font-size: 11px; color: var(--label-gray); line-height: 1.6; margin: 10px 2px 4px; white-space: pre-line; }
 
 /* 票种行内选择（member card 内） */
 .ticket-select-row .select-wrap::after { border-color: var(--blue); }

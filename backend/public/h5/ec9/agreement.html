@@ -22,6 +22,7 @@
     <div class="agree-tabs">
       <div class="agree-tab" data-tab="user" data-i18n="user_agreement_tab">用户协议</div>
       <div class="agree-tab" data-tab="privacy" data-i18n="privacy_policy_tab">隐私政策</div>
+      <div class="agree-tab" data-tab="refund" data-i18n="refund_policy_tab">退款政策</div>
       <div class="agree-tab" data-tab="contact" data-i18n="contact_us_tab">联系我们</div>
     </div>
     <div id="agreeBody"></div>
@@ -47,7 +48,7 @@
   document.querySelector(".brand").style.background = "transparent";
 
   var body = document.getElementById("agreeBody");
-  var TAB_TITLE = { user: "user_agreement", privacy: "privacy_policy", contact: "contact_us" };
+  var TAB_TITLE = { user: "user_agreement", privacy: "privacy_policy", refund: "refund_policy_title", contact: "contact_us" };
 
   // 法务文档是后台存的一段完整 HTML（自带 <style> 和弹窗查看器的关闭按钮）。
   // 直接 innerHTML 会反噬整个页面：文档里的 body{background:#fff;padding:20px}
@@ -104,6 +105,10 @@
         body.innerHTML = '<div class="agree-body" style="white-space:pre-line">' +
           E.esc(name === "user" ? E.t("agreement_sample") : E.t("privacy_sample")) + '</div>';
       });
+    } else if (name === "refund") {
+      // 退款政策是设计稿给死的文案（客户定稿），不走法务文档接口
+      body.innerHTML = '<div class="agree-body" style="white-space:pre-line">' +
+        E.esc(E.t("refund_policy_body")) + '</div>';
     } else {
       body.innerHTML = contactHtml();
     }

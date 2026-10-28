@@ -9,6 +9,7 @@ const { requireVerifiedReusable } = require('../middleware/requireVerified');
 const operationLog = require('../middleware/operationLog');
 const { hashPhone, encryptPhone } = require('../utils/phoneCrypto');
 const { validateSelection, pickLang, toSid } = require('../services/ticketBinding');
+const { calcDiscount, isStandardType } = require('../services/groupOrderService');
 
 /**
  * 从请求里取「门票 + 场次」并按规则 A 校验。
@@ -1188,6 +1189,7 @@ router.get('/group-list', authenticate, async (req, res) => {
         })(),
         ticket_name: r.ticketType ? r.ticketType.name : '',
         price: r.ticketType ? Number(r.ticketType.price) : 0,
+        is_std: isStandardType(r.ticketType),
         focus: r.focus, status: r.status, reject_reason: r.reject_reason,
         is_invited: !!(r.extra_fields && r.extra_fields.is_invited),
         audit_exempt: !!(r.extra_fields && r.extra_fields.audit_exempt),
@@ -1207,7 +1209,9 @@ router.get('/group-list', authenticate, async (req, res) => {
       g.invited_count = g.members.filter(m => m.is_invited).length;
       // 需付款人数：邀约免票不计，其余都算（免费票种会在计价时归零）
       g.paid_count = g.members.filter(m => !m.is_invited).length;
-      g.discount_rate = g.paid_count >= 5 ? 0.8 : (g.paid_count >= 3 ? 0.9 : 1);
+      // 折扣只认「付费的标准票」张数：学生票/尊享票/邀约免票都不进门槛（2026-10-29 口径）
+      const stdN = g.members.filter(m => m.is_std && !m.is_invited && Number(m.price) > 0).length;
+      g.discount_rate = calcDiscount(stdN).rate;
     }
 
     // 状态筛选放在聚合之后（聚合前按单人状态过滤会把整单拆散）

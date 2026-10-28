@@ -9,8 +9,10 @@
  *   4. 支付成功 → 全员 paid + 每人独立入场码 + 全员订票成功短信
  *   5. 入场：各填报人凭自身手机签到
  *
- * 折扣（按整单付费票张数，学生票免费不占名额）：
- *   >=5 张 8 折；>=3 张 9 折；否则原价。学生票 ¥0 不进合计。
+ * 折扣（2026-10-29 昊哥口径修订，只认标准票）：
+ *   付费的「标准票」>=5 张 → 标准票 8 折；>=3 张 → 标准票 9 折；否则原价。
+ *   学生票（¥0）、邀约免票不计张数也不进合计；尊享票等其它付费票种照原价，
+ *   既不参与张数门槛，也不享受折扣。总价 = 标准票金额×折扣 + 其它票种金额（原价）。
  */
 const { Op } = require('sequelize');
 const crypto = require('crypto');
@@ -27,11 +29,64 @@ const { sendBusinessSms } = require('./verificationSmsService');
 const config = require('../config');
 
 // ---------- 折扣 ----------
-/** 整单付费票张数 → 折扣率 */
-function calcDiscount(paidCount) {
-  if (paidCount >= 5) return { rate: 0.8, label: '五张及以上8折' };
-  if (paidCount >= 3) return { rate: 0.9, label: '三张9折' };
+/**
+ * 是否「标准票」—— 折扣口径的唯一定价对象（2026-10-29 昊哥口径）
+ * 票种表里没有"是否标准"字段，只能按名称判；三语名都要认（前端会拿到已本地化的名字）。
+ */
+const STD_NAME_RE = /标准|標準|standard/i;
+function isStandardType(t) {
+  if (!t) return false;
+  if (Number(t.is_student) === 1) return false;   // 学生票永不算标准票
+  return STD_NAME_RE.test(String(t.name || ''));
+}
+
+/**
+ * 付费「标准票」张数 → 折扣率
+ * 只有标准票计入张数门槛，也只有标准票享受折扣；学生票/尊享票/其它票种一律原价。
+ */
+function calcDiscount(stdCount) {
+  if (stdCount >= 5) return { rate: 0.8, label: '标准票五张及以上8折' };
+  if (stdCount >= 3) return { rate: 0.9, label: '标准票三张9折' };
   return { rate: 1.0, label: '' };
+}
+
+/**
+ * 按票种分摊折扣 —— 纯函数，便于单测
+ * @param {Array<{price:number,is_free:boolean,is_standard:boolean}>} list
+ * @returns {{paid_count,total_amount,discount_rate,discount_label,discount_amount,final_amount,std_count}}
+ */
+function applyDiscount(list) {
+  let paidCount = 0, rawTotal = 0, stdCount = 0;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  for (const it of list) {
+    const p = Number(it.price) || 0;
+    if (it.is_free || p === 0) continue;      // 邀约免票 / ¥0 票种：不计张数也不计钱
+    paidCount++; rawTotal += p;
+    if (it.is_standard) stdCount++;
+  }
+  rawTotal = r2(rawTotal);
+  const { rate, label } = calcDiscount(stdCount);
+
+  // 按票种分桶打折后求和（与 H5 ticket.html 的逐票种小计同一种取整方式，
+  // 避免「先合计再打折」和「分行取整」在小数票价上差 1 分）
+  const buckets = new Map();
+  for (const it of list) {
+    const p = Number(it.price) || 0;
+    if (it.is_free || p === 0) continue;
+    const key = String(it.ticket_type_id != null ? it.ticket_type_id : (it.ticket_name || 'x'));
+    if (!buckets.has(key)) buckets.set(key, { std: !!it.is_standard, amt: 0 });
+    buckets.get(key).amt += p;
+  }
+  let finalAmount = 0;
+  for (const b of buckets.values()) finalAmount = r2(finalAmount + r2(b.amt * (b.std ? rate : 1)));
+
+  return {
+    paid_count: paidCount, std_count: stdCount,
+    total_amount: rawTotal,
+    discount_rate: rate, discount_label: label,
+    discount_amount: r2(rawTotal - finalAmount),
+    final_amount: finalAmount
+  };
 }
 
 function genGroupNo() {
@@ -232,7 +287,6 @@ async function quoteGroup(eventId, members) {
   const tmap = new Map(tickets.map(t => [t.id, t]));
 
   const items = [];
-  let paidCount = 0, rawTotal = 0;
   for (const m of members) {
     const tt = tmap.get(Number(m.ticket_type_id));
     if (!tt) return { ok: false, error: `票种不存在：${m.ticket_type_id}` };
@@ -253,25 +307,25 @@ async function quoteGroup(eventId, members) {
     const price = Number(tt.price) || 0;
     const isFree = !needPay || price === 0;   // 免票标记 OR ¥0 票种
     const payable = isFree ? 0 : price;
-    if (!isFree) { paidCount++; rawTotal += payable; }
     items.push({
       ticket_type_id: tt.id, ticket_name: tt.name,
       price: payable,
       is_free: isFree,
       is_invited: isInvited,
       need_pay: !isFree,
-      is_student: Number(tt.is_student) === 1
+      is_student: Number(tt.is_student) === 1,
+      is_standard: isStandardType(tt)   // 折扣口径：只有标准票参与
     });
   }
-  const { rate, label } = calcDiscount(paidCount);
-  const finalAmount = Math.round(rawTotal * rate * 100) / 100;
+  // 折扣只吃付费标准票：〉=3 张 9 折、〉=5 张 8 折，其余票种原价
+  const pay = applyDiscount(items);
   return {
     ok: true,
-    items, paid_count: paidCount, total_count: members.length,
-    discount_rate: rate, discount_label: label,
-    total_amount: Math.round(rawTotal * 100) / 100,
-    discount_amount: Math.round((rawTotal - finalAmount) * 100) / 100,
-    final_amount: finalAmount
+    items, paid_count: pay.paid_count, std_count: pay.std_count, total_count: members.length,
+    discount_rate: pay.discount_rate, discount_label: pay.discount_label,
+    total_amount: pay.total_amount,
+    discount_amount: pay.discount_amount,
+    final_amount: pay.final_amount
   };
 }
 
@@ -797,7 +851,7 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 }
 
 module.exports = {
-  calcDiscount, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
+  calcDiscount, applyDiscount, isStandardType, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
   markGroupPaid, sendGroupPaidSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

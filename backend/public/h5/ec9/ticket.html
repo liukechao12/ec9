@@ -208,9 +208,13 @@
     renderFee();
   }
 
-  /* ---------- 费用（口径同后端：邀约免票/¥0票种不计入付费票，3张9折 5张8折） ----------
-     购票数量必须和填报人数对得上：需购票张数 = 填报人数 − 免票人数 */
+  /* ---------- 费用（口径同后端：邀约免票/¥0票种不计入付费票；折扣只认标准票） ----------
+     只有标准票计入张数门槛（满3张9折 / 满5张8折），也只有标准票打折；
+     尊享票等非标准票一律原价。总价 = 标准票金额×折扣 + 其它票种原价。 */
   function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
+  // 名称在前端是「已按界面语言本地化」的，三语文案都要认
+  var STD_RE = /标准|標準|standard/i;
+  function isStd(t) { return !!(t && Number(t.is_student) !== 1 && STD_RE.test(String(t.name || ""))); }
 
   function renderFee() {
     var box = document.getElementById("tkFee");
@@ -218,22 +222,23 @@
 
     // 每人按自己选的票种计价：票种 ¥0（学生票）或命中邀约 → 该人不计费
     var sub = [];   // [{tid, name, n, amt}]
-    var buyN = 0, raw = 0;
+    var buyN = 0, raw = 0, stdN = 0, stdAmt = 0, otherAmt = 0;
     members.forEach(function (m, i) {
       var tk = ticketById(perTicket[i] || selectedId);
       if (!tk) return;
       var unit = Number(tk.price) || 0;
       if (isFreeOf(m) || unit === 0) return;
       buyN++; raw += unit;
+      if (isStd(tk)) { stdN++; stdAmt += unit; } else { otherAmt += unit; }
       var row = null;
       sub.forEach(function (s) { if (s.tid === tk.id) row = s; });
-      if (!row) { row = { tid: tk.id, name: tk.name, n: 0, amt: 0 }; sub.push(row); }
+      if (!row) { row = { tid: tk.id, name: tk.name, n: 0, amt: 0, std: isStd(tk) }; sub.push(row); }
       row.n++; row.amt += unit;
     });
     var freeN = members.length - buyN;
-    // 折扣口径同后端 groupOrderService：按付费张数，3张9折 / 5张8折
-    var rate = buyN >= 5 ? 0.8 : (buyN >= 3 ? 0.9 : 1.0);
-    var total = Math.round(raw * rate * 100) / 100;
+    // 折扣只吃付费标准票（同后端 groupOrderService.applyDiscount）
+    var rate = stdN >= 5 ? 0.8 : (stdN >= 3 ? 0.9 : 1.0);
+    var total = Math.round((stdAmt * rate + otherAmt) * 100) / 100;
 
     var html = '<div>' + E.esc(E.t("tk_buy_line")
       .replace("{n}", members.length).replace("{f}", freeN).replace("{m}", buyN)) + '</div>';
@@ -244,13 +249,17 @@
         .replace("{n}", buyN).replace("{ticket}", sub[0].name).replace("{amt}", total.toFixed(2))) +
         (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
     } else if (sub.length > 1) {
-      // 混合票种：逐票种列小计，再给折后合计
+      // 混合票种：逐票种列小计（标准票这行已是折后，其它票种原价），再给合计
+      var CheckedTotal = 0;
       sub.forEach(function (s) {
+        var lineAmt = s.std ? Math.round(s.amt * rate * 100) / 100 : s.amt;
+        CheckedTotal = Math.round((CheckedTotal + lineAmt) * 100) / 100;
         html += '<div>' + E.esc(E.t("tk_item_line")
-          .replace("{ticket}", s.name).replace("{n}", s.n).replace("{amt}", s.amt.toFixed(2))) + '</div>';
+          .replace("{ticket}", s.name).replace("{n}", s.n).replace("{amt}", lineAmt.toFixed(2))) +
+          (rate < 1 && s.std ? " " + E.discountText(rate) : "") + '</div>';
       });
-      html += '<div class="tk-fee-total">' + E.esc(E.t("tk_total_line").replace("{amt}", total.toFixed(2))) +
-        (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
+      total = CheckedTotal;   // 逐行取整后再合计，避免分行显示与合计对不上
+      html += '<div class="tk-fee-total">' + E.esc(E.t("tk_total_line").replace("{amt}", total.toFixed(2))) + '</div>';
     }
 
     // 免票 / 购票 分别是哪些人，便于核对人数

@@ -158,6 +158,13 @@
                     </svg>
                     <span>票种管理</span>
                 </a>
+                <a href="#" class="nav-item" data-page="discount-rules">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10.83 2.5L3.33 7.5V12.5L10.83 17.5L16.67 14.17V9.17L10.83 5.83V2.5Z" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"/>
+                        <path d="M7.5 10.83L9.17 12.5L13.33 7.5" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>折扣规则</span>
+                </a>
                 <a href="#" class="nav-item" data-page="orders">
                     <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path d="M4.17 2.5H15.83C16.67 2.5 17.5 3.33 17.5 4.17V15.83C17.5 16.67 16.67 17.5 15.83 17.5H4.17C3.33 17.5 2.5 16.67 2.5 15.83V4.17C2.5 3.33 3.33 2.5 4.17 2.5Z" stroke="currentColor" stroke-width="1.67"/>
@@ -1177,6 +1184,45 @@
             </div>
 
             <!-- 支付配置（微信支付资质，管理员可改，改完立即生效） -->
+            <div id="discount-rules" class="content-page hidden">
+                <div class="page-header">
+                    <div style="margin-right:auto;font-size:13px;color:#6B7280;">
+                        <span data-i18n="ec9.dr.belongEvent">所属活动</span>
+                        <select id="drEventSelect" onchange="loadDiscountRules()" style="margin-left:8px;padding:6px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;color:#111827;"></select>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline btn-sm" onclick="loadDiscountRules()"><span data-i18n="ec9.action.refresh">刷新</span></button>
+                        <button class="btn btn-outline btn-sm" onclick="addDiscountRuleRow()"><span data-i18n="ec9.dr.addTier">新增档位</span></button>
+                        <button class="btn btn-primary btn-sm" onclick="saveDiscountRules()"><span data-i18n="ec9.action.save">保存</span></button>
+                    </div>
+                </div>
+
+                <div style="padding:12px 16px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;margin-bottom:16px;font-size:13px;line-height:1.7;color:#78350F;">
+                    <div><span data-i18n="ec9.dr.ruleHint1">门槛只数「付费的标准票」：票种管理里勾了「是否标准票」的票才计数，学生票与邀约免票不算。</span></div>
+                    <div><span data-i18n="ec9.dr.ruleHint2">折扣只作用在标准票金额上，尊享票等其它票种一律原价。</span></div>
+                    <div><span data-i18n="ec9.dr.ruleHint3">多档命中时取「就高」：例如配了满3张9折、满5张8折，买7张按满5张8折算。</span></div>
+                    <div><span data-i18n="ec9.dr.ruleHint4">想彻底取消折扣，请把档位全部停用（不要把表删空，删空会回退到内置的满3张9折/满5张8折）。</span></div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:180px;"><span data-i18n="ec9.dr.minQty">达到张数</span></th>
+                                <th style="width:180px;"><span data-i18n="ec9.dr.discount">折扣</span></th>
+                                <th style="width:120px;"><span data-i18n="ec9.field.status">状态</span></th>
+                                <th><span data-i18n="ec9.field.remark">备注</span></th>
+                                <th style="width:100px;"><span data-i18n="ec9.field.action">操作</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="drTableBody"></tbody>
+                    </table>
+                    <div id="drEmpty" style="padding:24px;text-align:center;color:#6B7280;display:none;">
+                        <span data-i18n="ec9.dr.empty">还没有档位，点右上角「新增档位」开始配置</span>
+                    </div>
+                </div>
+            </div>
+
             <div id="pay-config" class="content-page hidden">
                 <div class="stats-mini">
                     <div class="stat-mini-card">

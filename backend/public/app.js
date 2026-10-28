@@ -14,6 +14,7 @@ const pageTitles = {
     events: '活动管理',
     sessions: '场次管理',
     'ticket-types': '票种管理',
+    'discount-rules': '折扣规则',
     orders: '订单管理',
     'reg-audit': '报名审核',
     payments: '支付流水',
@@ -515,6 +516,9 @@ function switchPage(pageName) {
             break;
         case 'ticket-types':
             if (typeof loadTicketTypes === 'function') loadTicketTypes();
+            break;
+        case 'discount-rules':
+            if (typeof loadDiscountRules === 'function') loadDiscountRules();
             break;
         case 'orders':
             if (typeof loadOrders === 'function') loadOrders(1, 20);

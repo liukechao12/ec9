@@ -209,8 +209,8 @@
   }
 
   /* ---------- 费用（口径同后端：邀约免票/¥0票种不计入付费票；折扣只认标准票） ----------
-     只有标准票计入张数门槛（满3张9折 / 满5张8折），也只有标准票打折；
-     尊享票等非标准票一律原价。总价 = 标准票金额×折扣 + 其它票种原价。 */
+     只有标准票计入张数门槛，也只有标准票打折；尊享票等非标准票一律原价。
+     总价 = 标准票金额×折扣 + 其它票种原价。档位在后台「折扣规则」配置，不写死在前端。 */
   function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
   // 判定以票种属性 is_standard 为准（后台可勾），名称匹配只在属性缺失的老数据上兜底
   var STD_RE = /标准|標準|standard/i;
@@ -218,6 +218,29 @@
     if (!t || Number(t.is_student) === 1) return false;
     if (t.is_standard !== undefined && t.is_standard !== null && String(t.is_standard) !== '') return Number(t.is_standard) === 1;
     return STD_RE.test(String(t.name || ""));
+  }
+
+  /* ---------- 折扣档位（后台「折扣规则」页配置，随票种接口一起下发） ----------
+     这儿必须和后端 services/discountRules.js 用同一套口径，否则页面显示的优惠
+     和真正扣的钱对不上：
+       ① 张数只数「付费的标准票」；
+       ② 命中取就高（min_qty <= 张数 里最大的那档）；
+       ③ 没有配档位时才用内置默认，配了就完全听后台的。 */
+  var discountRules = [];
+  // 仅当后台一条都没配时的兜底，和后端 DEFAULT_TIERS 保持一致
+  var DEFAULT_DR = [{ min_qty: 5, rate: 0.8, enabled: 1 }, { min_qty: 3, rate: 0.9, enabled: 1 }];
+
+  /** 付费标准票张数 → 折扣率（1 = 不打折） */
+  function tierRate(stdN) {
+    var rules = (discountRules && discountRules.length) ? discountRules : DEFAULT_DR;
+    var hit = null;
+    rules.forEach(function (r) {
+      if (r && r.enabled !== undefined && r.enabled !== null && Number(r.enabled) !== 1) return;
+      var mq = Number(r && r.min_qty), ra = Number(r && r.rate);
+      if (!isFinite(mq) || !isFinite(ra) || ra <= 0 || ra > 1) return;
+      if (stdN >= mq && (!hit || mq > hit.min_qty)) hit = { min_qty: mq, rate: ra };
+    });
+    return hit ? hit.rate : 1.0;
   }
 
   function renderFee() {
@@ -240,8 +263,8 @@
       row.n++; row.amt += unit;
     });
     var freeN = members.length - buyN;
-    // 折扣只吃付费标准票（同后端 groupOrderService.applyDiscount）
-    var rate = stdN >= 5 ? 0.8 : (stdN >= 3 ? 0.9 : 1.0);
+    // 折扣只吃付费标准票，档位来自后台配置（同后端 services/discountRules.js）
+    var rate = tierRate(stdN);
     var total = Math.round((stdAmt * rate + otherAmt) * 100) / 100;
 
     var html = '<div>' + E.esc(E.t("tk_buy_line")
@@ -295,6 +318,7 @@
   /* ---------- 加载 ---------- */
   Promise.all([E.Api.event(eventId), E.Api.tickets(eventId)]).then(function (res) {
     var list = res[1].ticket_types || res[1].list || res[1] || [];
+    discountRules = res[1].discount_rules || [];
     tickets = list.filter(function (t) { return t.on_shelf === undefined || t.on_shelf == 1; });
     tickets.sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
     if (!tickets.length) { E.errPill(E.t("err_ticket_load")); return; }

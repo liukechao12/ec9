@@ -1277,6 +1277,25 @@
         "staleSign": "Signature still belongs to the old entity (Yunxi) — replace it with the customer’s approved signature",
         "allGood": "Channel parameters are complete — real sends are possible"
       }
+    },
+    "dr": {
+      "belongEvent": "Event",
+      "addTier": "Add tier",
+      "minQty": "Min. qty (paid standard)",
+      "discount": "Discount",
+      "zheUnit": "zhe",
+      "on": "Enabled",
+      "off": "Disabled",
+      "remarkPh": "Optional note",
+      "empty": "No tiers yet - click Add tier to start",
+      "ruleHint1": "Only paid Standard tickets count toward the quantity threshold (is_standard checked in Ticket Types). Student and complimentary tickets never count.",
+      "ruleHint2": "The discount applies to the standard-ticket amount only. Other paid types stay at full price.",
+      "ruleHint3": "Highest matching tier wins: with 3 -> 10% off and 5 -> 20% off configured, buying 7 uses the 5 tier (20% off).",
+      "ruleHint4": "To disable discounts entirely, set every tier to Disabled. Do not delete all rows - an empty table falls back to the built-in 3 / 5 tiers.",
+      "saved": "Discount tiers saved and live immediately (existing orders keep their original amount)",
+      "errMinQty": "Min. qty must be an integer greater than 0",
+      "errRate": "Discount must be between 0.1 and 10",
+      "errDup": "Duplicate quantity threshold: {n}"
     }
   },
   "h5": {

@@ -18,6 +18,8 @@ const express = require('express');
 const router = express.Router();
 const { Op, Event, Session, TicketType, sequelize } = require('../models');
 const { localize, parseI18n, normalizeLang } = require('../utils/i18nData');
+// 折扣档位：与后端扣钱用同一份 pickTier/calcDiscount，页面显示的优惠才算得准
+const { fetchDiscountRules } = require('../services/discountRules');
 
 const SESSION_FIELDS = ['name', 'location'];
 const TICKET_FIELDS = ['name', 'description'];
@@ -147,7 +149,8 @@ router.get('/events/:id', async (req, res) => {
         lang,
         event: localize(event, lang, ['name', 'description', 'location']),
         sessions,
-        ticket_types: tickets
+        ticket_types: tickets,
+        discount_rules: await fetchDiscountRules(event.id)
       }
     });
   } catch (e) {
@@ -179,7 +182,10 @@ router.get('/events/:id/tickets', async (req, res) => {
       return res.status(404).json({ code: 404, message: '会议不存在或未发布' });
     }
     const tickets = await listTickets(event.id, lang);
-    res.json({ code: 0, message: 'ok', data: { lang, list: tickets } });
+    res.json({
+      code: 0, message: 'ok',
+      data: { lang, list: tickets, discount_rules: await fetchDiscountRules(event.id) }
+    });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }

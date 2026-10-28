@@ -132,6 +132,7 @@ app.use('/api/admins', require('./routes/admins'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/ticket-types', require('./routes/ticket-types'));
+app.use('/api/discount-rules', require('./routes/discount-rules'));
 app.use('/api/guests', require('./routes/guests'));
 app.use('/api/invitations', require('./routes/invitations'));
 app.use('/api/registrations', require('./routes/registrations'));

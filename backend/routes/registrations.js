@@ -9,7 +9,8 @@ const { requireVerifiedReusable } = require('../middleware/requireVerified');
 const operationLog = require('../middleware/operationLog');
 const { hashPhone, encryptPhone } = require('../utils/phoneCrypto');
 const { validateSelection, pickLang, toSid } = require('../services/ticketBinding');
-const { calcDiscount, isStandardType } = require('../services/groupOrderService');
+const { calcDiscount, fetchDiscountRules } = require('../services/discountRules');
+const { isStandardType } = require('../services/groupOrderService');
 
 /**
  * 从请求里取「门票 + 场次」并按规则 A 校验。
@@ -1198,6 +1199,14 @@ router.get('/group-list', authenticate, async (req, res) => {
     }
     let list = Array.from(groups.values());
 
+    // 折扣档位按活动缓存（后台可配 ec9_discount_rules）：整单列表可能跨多个活动，每种只查一次库
+    const ruleCache = new Map();
+    const rulesOf = async (eid) => {
+      const k = Number(eid) || 1;
+      if (!ruleCache.has(k)) ruleCache.set(k, await fetchDiscountRules(k));
+      return ruleCache.get(k);
+    };
+
     // 整单状态聚合：多人一次提交 = 一起审核，只有「全部通过」和「全部驳回」两种结果
     // 口径：有 submitted → 待审核；全 rejected → 已驳回；全 paid → 已支付；其余 → 待支付
     for (const g of list) {
@@ -1211,7 +1220,7 @@ router.get('/group-list', authenticate, async (req, res) => {
       g.paid_count = g.members.filter(m => !m.is_invited).length;
       // 折扣只认「付费的标准票」张数：学生票/尊享票/邀约免票都不进门槛（2026-10-29 口径）
       const stdN = g.members.filter(m => m.is_std && !m.is_invited && Number(m.price) > 0).length;
-      g.discount_rate = calcDiscount(stdN).rate;
+      g.discount_rate = calcDiscount(stdN, await rulesOf(g.event_id)).rate;
     }
 
     // 状态筛选放在聚合之后（聚合前按单人状态过滤会把整单拆散）

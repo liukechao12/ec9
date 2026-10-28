@@ -938,7 +938,7 @@ function pcSetText(id, v) {
 async function loadPayConfig() {
     try {
         const res = await apiRequest('/pay-config');
-        if (res.code !== 0) throw new Error(res.message || ec9T('admin.loadFailed', '加载失败'));
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.loadFail', '加载失败'));
         fillPayConfigForm(res.data.config || {});
         const r = document.getElementById('pcTestResult');
         if (r) r.innerHTML = '';
@@ -1052,7 +1052,7 @@ async function testPayConfig() {
     box.innerHTML = `<div style="padding:16px;color:#6B7280;">${ec9Esc(ec9T('admin.loading', '加载中'))}...</div>`;
     try {
         const res = await apiRequest('/pay-config/test', { method: 'POST', body: JSON.stringify({}) });
-        if (res.code !== 0) throw new Error(res.message || ec9T('admin.loadFailed', '加载失败'));
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.loadFail', '加载失败'));
         pcLastTest = res.data || {};
         renderPayConfigIssues(pcLastTest);
     } catch (e) {
@@ -1126,7 +1126,7 @@ let scLastTest = null;
 async function loadSmsConfig() {
     try {
         const res = await apiRequest('/sms-config');
-        if (res.code !== 0) throw new Error(res.message || ec9T('admin.loadFailed', '加载失败'));
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.loadFail', '加载失败'));
         fillSmsConfigForm(res.data.config || {});
         const r = document.getElementById('scTestResult');
         if (r) r.innerHTML = '';
@@ -1218,7 +1218,7 @@ async function testSmsConfig() {
     box.innerHTML = `<div style="padding:16px;color:#6B7280;">${ec9Esc(ec9T('admin.loading', '加载中'))}...</div>`;
     try {
         const res = await apiRequest('/sms-config/test', { method: 'POST', body: JSON.stringify({}) });
-        if (res.code !== 0) throw new Error(res.message || ec9T('admin.loadFailed', '加载失败'));
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.loadFail', '加载失败'));
         scLastTest = res.data || {};
         renderSmsConfigIssues(scLastTest);
     } catch (e) {
@@ -1260,3 +1260,152 @@ function renderSmsConfigIssues(d) {
         } catch (e) { /* 忽略 */ }
     });
 })();
+
+/* ============================================================
+ * 折扣规则（多人购票阶梯折扣）
+ * ------------------------------------------------------------
+ * 过去程序里写死「>=3张9折、>=5张8折」，运营想改档位必须改代码发版。
+ * 现在改成表格化配置：这里编辑 → PUT /api/discount-rules 整表保存 →
+ * 后端算钱（groupOrderService）每次实时读表，改完刷新购票页即刻生效。
+ * 注意：历史订单存的是下单当时的金额，改规则不会追溯改动它们。
+ * ============================================================ */
+
+/** 当前活动的规则原始档位（保存前的基准，用于判断哪些行是新增的） */
+let drRows = [];
+
+/** 活动下拉里已加载过就不再重复请求 */
+let drEventsLoaded = false;
+
+/** 折扣说明里给运营看的换算表：几折 ↔ 省多少 */
+function drOffPercent(zhe) { return Math.round((10 - Number(zhe)) * 10); }
+
+async function loadDiscountRules() {
+    const tbody = document.getElementById('drTableBody');
+    const empty = document.getElementById('drEmpty');
+    if (!tbody) return;
+    try {
+        // 活动下拉只加载一次（切换时用 change 事件重载规则即可）
+        if (!drEventsLoaded) {
+            const ev = await apiRequest('/events');
+            const list = (ev && ev.data && (ev.data.list || ev.data)) || [];
+            const sel = document.getElementById('drEventSelect');
+            if (sel) {
+                sel.innerHTML = list.map(e =>
+                    `<option value="${e.id}">${ec9Esc(e.name || ('活动 ' + e.id))}</option>`).join('');
+            }
+            drEventsLoaded = true;
+        }
+        const eid = Number((document.getElementById('drEventSelect') || {}).value) || 1;
+        const res = await apiRequest('/discount-rules?event_id=' + eid);
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.loadFail', '加载失败'));
+        drRows = res.data.list || [];
+        drRenderRows();
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:#EF4444;">${ec9Esc(e.message)}</td></tr>`;
+        if (empty) empty.style.display = 'none';
+    }
+}
+
+function drRenderRows() {
+    const tbody = document.getElementById('drTableBody');
+    const empty = document.getElementById('drEmpty');
+    if (!tbody) return;
+    if (!drRows.length) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+    tbody.innerHTML = drRows.map((r, i) => `
+        <tr>
+            <td><input type="number" min="1" step="1" class="dr-min" data-idx="${i}" value="${Number(r.min_qty)}"
+                       style="width:110px;padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;"></td>
+            <td><input type="number" min="0.1" max="10" step="0.1" class="dr-zhe" data-idx="${i}" value="${drZhe(r.rate)}"
+                       style="width:90px;padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;">
+                <span style="font-size:12px;color:#6B7280;margin-left:4px;">${ec9Esc(ec9T('ec9.dr.zheUnit', '折'))}</span>
+                <span style="font-size:12px;color:#9CA3AF;margin-left:6px;" class="dr-off-hint" data-idx="${i}"></span>
+            </td>
+            <td>
+                <select class="dr-enabled" data-idx="${i}" style="padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;">
+                    <option value="1"${Number(r.enabled) === 1 ? ' selected' : ''} data-i18n="ec9.dr.on">启用</option>
+                    <option value="0"${Number(r.enabled) !== 1 ? ' selected' : ''} data-i18n="ec9.dr.off">停用</option>
+                </select>
+            </td>
+            <td><input type="text" class="dr-remark" data-idx="${i}" value="${ec9Esc(r.remark || '')}"
+                       data-i18n-ph="ec9.dr.remarkPh" placeholder="选填" style="width:100%;padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;"></td>
+            <td><button class="btn btn-outline btn-sm" onclick="removeDiscountRuleRow(${i})"><span data-i18n="ec9.field.delete">删除</span></button></td>
+        </tr>`).join('');
+    // 让 i18n 扫描器接管表格里的 option / placeholder 文案
+    if (typeof window.I18N !== 'undefined' && window.I18N.apply) window.I18N.apply();
+    drRefreshHints();
+}
+
+/** rate(0.9) → 中文习惯的「几折」(9) */
+function drZhe(rate) {
+    const z = Math.round(Number(rate) * 1000) / 100;   // 0.85 → 8.5
+    return String(z).replace(/\.?0+$/, '');
+}
+
+/** 每行实时补一句「省 X%」，中英文都能看懂 */
+function drRefreshHints() {
+    document.querySelectorAll('.dr-off-hint').forEach(el => {
+        const i = Number(el.dataset.idx);
+        const input = document.querySelector(`.dr-zhe[data-idx="${i}"]`);
+        if (!input) return;
+        const z = Number(input.value);
+        el.textContent = (Number.isFinite(z) && z < 10) ? `(${drOffPercent(z)}% off)` : '';
+    });
+}
+
+/** 从 DOM 里把当前编辑值读回 drRows（点保存时才生效，避免半路失焦丢数据） */
+function drCollect() {
+    return drRows.map((r, i) => ({
+        id: r.id,
+        min_qty: Number((document.querySelector(`.dr-min[data-idx="${i}"]`) || {}).value),
+        rate: Math.round(Number((document.querySelector(`.dr-zhe[data-idx="${i}"]`) || {}).value) * 10) / 100,
+        enabled: Number((document.querySelector(`.dr-enabled[data-idx="${i}"]`) || {}).value),
+        remark: (document.querySelector(`.dr-remark[data-idx="${i}"]`) || {}).value || '',
+        sort: i
+    }));
+}
+
+function addDiscountRuleRow() {
+    // 默认落在已有最大门槛 +2，避免运营手填重复档
+    const maxMin = drRows.reduce((a, r) => Math.max(a, Number(r.min_qty) || 0), 0);
+    drRows.push({ id: null, min_qty: maxMin ? maxMin + 2 : 3, rate: 0.9, enabled: 1, remark: '', sort: drRows.length });
+    drRenderRows();
+}
+
+function removeDiscountRuleRow(i) {
+    drRows.splice(i, 1);
+    drRenderRows();
+}
+
+async function saveDiscountRules() {
+    try {
+        const rows = drCollect();
+        const bad = rows.find(r => !Number.isInteger(r.min_qty) || r.min_qty < 1);
+        if (bad) throw new Error(ec9T('ec9.dr.errMinQty', '「达到张数」必须是不小于 1 的整数'));
+        const badRate = rows.find(r => !(r.rate > 0 && r.rate <= 1));
+        if (badRate) throw new Error(ec9T('ec9.dr.errRate', '折扣必须在 0.1 折 ~ 10 折之间'));
+        const seen = new Set();
+        for (const r of rows) {
+            if (seen.has(r.min_qty)) throw new Error(ec9T('ec9.dr.errDup', '同一「达到张数」不能配置多档').replace('{n}', r.min_qty));
+            seen.add(r.min_qty);
+        }
+        const eid = Number((document.getElementById('drEventSelect') || {}).value) || 1;
+        const res = await apiRequest('/discount-rules', {
+            method: 'PUT', body: JSON.stringify({ event_id: eid, list: rows })
+        });
+        if (res.code !== 0) throw new Error(res.message || ec9T('ec9.field.saveFail', '保存失败'));
+        alert(ec9T('ec9.dr.saved', '折扣规则已保存，购票页与后台计价即时生效（会员已下单的旧金额不受影响）'));
+        await loadDiscountRules();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+// 输入时实时刷新「省 X%」提示
+document.addEventListener('input', function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains('dr-zhe')) drRefreshHints();
+});

@@ -9,8 +9,9 @@
  *   4. 支付成功 → 全员 paid + 每人独立入场码 + 全员订票成功短信
  *   5. 入场：各填报人凭自身手机签到
  *
- * 折扣（2026-10-29 昊哥口径修订，只认标准票）：
- *   付费的「标准票」>=5 张 → 标准票 8 折；>=3 张 → 标准票 9 折；否则原价。
+ * 折扣（2026-10-29 昊哥口径修订，只认标准票；档位后台可配）：
+ *   付费的「标准票」达到 N 张 → 标准票按该档折扣结算；档位在后台「折扣规则」页配置
+ *   （ec9_discount_rules：min_qty + rate，就高命中，默认 3张9折 / 5张8折）。
  *   学生票（¥0）、邀约免票不计张数也不进合计；尊享票等其它付费票种照原价，
  *   既不参与张数门槛，也不享受折扣。总价 = 标准票金额×折扣 + 其它票种金额（原价）。
  */
@@ -46,22 +47,24 @@ function isStandardType(t) {
   return STD_NAME_RE.test(String(t.name || ''));   // 兜底：属性缺失才看名字
 }
 
-/**
- * 付费「标准票」张数 → 折扣率
- * 只有标准票计入张数门槛，也只有标准票享受折扣；学生票/尊享票/其它票种一律原价。
- */
-function calcDiscount(stdCount) {
-  if (stdCount >= 5) return { rate: 0.8, label: '标准票五张及以上8折' };
-  if (stdCount >= 3) return { rate: 0.9, label: '标准票三张9折' };
-  return { rate: 1.0, label: '' };
-}
+// 折扣档位：由后台配置（ec9_discount_rules），实现统一放在 services/discountRules.js。
+// 那边零业务依赖，public-data 下发档位时引它不会被短信/支付这些重模块拖累；
+// pickTier / calcDiscount 是后端扣钱与前端展示共用的同一份口径，务必改一处即两处生效。
+const {
+  DEFAULT_TIERS, rateToZhe, pickTier, calcDiscount, fetchDiscountRules
+} = require('./discountRules');
 
 /**
  * 按票种分摊折扣 —— 纯函数，便于单测
- * @param {Array<{price:number,is_free:boolean,is_standard:boolean}>} list
+ *
+ * 折扣只吃标准票金额：final = Σ(每票种金额 × (标准票 ? rate : 1))
+ * 其它付费票种（尊享票等）既不计入门槛也不打折，一律原价。
+ *
+ * @param {Array<{price:number,is_free:boolean,is_standard:boolean,ticket_type_id?:number,ticket_name?:string}>} list
+ * @param {{rules?:Array}} [opts] 传 { rules: 后台配置的档位 }；不传则用内置默认
  * @returns {{paid_count,total_amount,discount_rate,discount_label,discount_amount,final_amount,std_count}}
  */
-function applyDiscount(list) {
+function applyDiscount(list, opts) {
   let paidCount = 0, rawTotal = 0, stdCount = 0;
   const r2 = (v) => Math.round(v * 100) / 100;
   for (const it of list) {
@@ -71,7 +74,7 @@ function applyDiscount(list) {
     if (it.is_standard) stdCount++;
   }
   rawTotal = r2(rawTotal);
-  const { rate, label } = calcDiscount(stdCount);
+  const { rate, label } = calcDiscount(stdCount, opts && opts.rules);
 
   // 按票种分桶打折后求和（与 H5 ticket.html 的逐票种小计同一种取整方式，
   // 避免「先合计再打折」和「分行取整」在小数票价上差 1 分）
@@ -326,8 +329,8 @@ async function quoteGroup(eventId, members) {
       is_standard: isStandardType(tt)   // 折扣口径：只有标准票参与
     });
   }
-  // 折扣只吃付费标准票：〉=3 张 9 折、〉=5 张 8 折，其余票种原价
-  const pay = applyDiscount(items);
+  // 折扣档位来自后台配置（ec9_discount_rules），只吃付费标准票，其余票种原价
+  const pay = applyDiscount(items, { rules: await fetchDiscountRules(eventId) });
   return {
     ok: true,
     items, paid_count: pay.paid_count, std_count: pay.std_count, total_count: members.length,
@@ -860,7 +863,8 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 }
 
 module.exports = {
-  calcDiscount, applyDiscount, isStandardType, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
+  calcDiscount, applyDiscount, isStandardType,
+  pickTier, rateToZhe, fetchDiscountRules, DEFAULT_TIERS, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
   markGroupPaid, sendGroupPaidSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

@@ -68,7 +68,10 @@ function publicTicket(t, lang, sessionName) {
     original_price: t.original_price === null ? null : Number(t.original_price),
     per_order_limit: t.per_order_limit,
     stock_available: Math.max(0, available(t)),
-    product_type: t.product_type
+    product_type: t.product_type,
+    // 折扣口径用属性判定，不再靠票种名.match
+    is_student: Number(t.is_student) === 1 ? 1 : 0,
+    is_standard: Number(t.is_standard) === 1 ? 1 : 0
   };
 }
 

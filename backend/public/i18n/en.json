@@ -1109,7 +1109,10 @@
       "phEn": "English name",
       "phDesc": "Ticket description (optional)",
       "phStock": "0 means unlimited",
-      "phCapacity": "0 means unlimited"
+      "phCapacity": "0 means unlimited",
+      "isStandard": "Standard ticket (eligible for group discount)",
+      "isStandardHint": "If checked: this type counts toward the 3+/5+ quantity tiers and is the only one discounted. Others stay at full price.",
+      "std": "Discount"
     },
     "order": {
       "total": "Total Orders",

@@ -1039,7 +1039,7 @@
                             <tr>
                                 <th>ID</th><th><span data-i18n="ec9.tt.title">票种名称</span></th><th><span data-i18n="ec9.tt.priceShort">价格</span></th>
                                 <th><span data-i18n="ec9.tt.stockTotal">总库存</span></th><th><span data-i18n="ec9.field.locked">锁定</span></th><th><span data-i18n="ec9.field.sold">已售</span></th><th><span data-i18n="ec9.field.remaining">剩余</span></th>
-                                <th><span data-i18n="ec9.tt.saleEnd">售卖截止</span></th><th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.field.sort">排序</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
+                                <th><span data-i18n="ec9.tt.saleEnd">售卖截止</span></th><th><span data-i18n="ec9.field.status">状态</span></th><th><span data-i18n="ec9.tt.std">折扣</span></th><th><span data-i18n="ec9.field.sort">排序</span></th><th><span data-i18n="ec9.field.action">操作</span></th>
                             </tr>
                         </thead>
                         <tbody id="ticketTypeTableBody"></tbody>
@@ -1522,6 +1522,14 @@
                     <div class="form-group">
                         <label>描述</label>
                         <textarea id="ttDescription" name="description" rows="2" placeholder="票种说明（选填）"></textarea>
+                    </div>
+                    <!-- 折扣口径：只有标准票参与「满3张9折 / 满5张8折」，由属性决定而不是靠票种名猜 -->
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:6px;">
+                            <input type="checkbox" id="ttIsStandard" style="width:auto;">
+                            <span data-i18n="ec9.tt.isStandard">是否标准票（参与多人折扣）</span>
+                        </label>
+                        <div style="font-size:12px;color:#9CA3AF;margin-top:4px;line-height:1.5;" data-i18n="ec9.tt.isStandardHint">勾选后：该票种计入「满3张9折 / 满5张8折」的张数门槛，也只有它享受折扣；不勾则一律原价</div>
                     </div>
                     <!-- 多语言：加语种不用改表结构，留空则回退上方简体 -->
                     <div class="form-group">

@@ -31,13 +31,19 @@ const config = require('../config');
 // ---------- 折扣 ----------
 /**
  * 是否「标准票」—— 折扣口径的唯一定价对象（2026-10-29 昊哥口径）
- * 票种表里没有"是否标准"字段，只能按名称判；三语名都要认（前端会拿到已本地化的名字）。
+ *
+ * 判定顺序：**票种属性 is_standard 说了算**（1=标准票参与折扣，0=不参与），
+ * 只有属性缺失（老数据 / 没走 Model 的裸对象）时才退回按名称猜，避免历史数据突然不打折。
+ * 票种名遗留下来的正则仅用于兜底，新增/改名票种请到后台勾「是否标准票」，不要再依赖名字。
  */
 const STD_NAME_RE = /标准|標準|standard/i;
 function isStandardType(t) {
   if (!t) return false;
   if (Number(t.is_student) === 1) return false;   // 学生票永不算标准票
-  return STD_NAME_RE.test(String(t.name || ''));
+  if (t.is_standard !== undefined && t.is_standard !== null && String(t.is_standard) !== '') {
+    return Number(t.is_standard) === 1;
+  }
+  return STD_NAME_RE.test(String(t.name || ''));   // 兜底：属性缺失才看名字
 }
 
 /**
@@ -261,6 +267,9 @@ async function standardTicketId() {
   const list = await TicketType.findAll({
     where: { on_shelf: 1 }, order: [['sort', 'ASC'], ['id', 'ASC']]
   });
+  // 同上：属性优先，名称兜底
+  const flagged = list.find(t => Number(t.is_standard) === 1 && Number(t.is_student) !== 1);
+  if (flagged) return flagged.id;
   const std = list.find(t => Number(t.is_student) !== 1 && /标准|standard/i.test(String(t.name || '')));
   if (std) return std.id;
   const normal = list.find(t => Number(t.is_student) !== 1 && Number(t.price) > 0);

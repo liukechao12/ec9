@@ -172,6 +172,8 @@ router.post('/', authenticate, operationLog('ticket_types', '新建票种'), asy
       on_shelf: b.on_shelf !== undefined ? b.on_shelf : 1,
       product_type: b.product_type || 'ticket',
       coupon_enabled: b.coupon_enabled !== undefined ? b.coupon_enabled : 0,
+      is_student: b.is_student !== undefined ? Number(b.is_student) : 0,
+      is_standard: b.is_standard !== undefined ? Number(b.is_standard) : 0,
       sort: toNumber(b.sort, 0),
       status: b.status !== undefined ? b.status : 1
     });
@@ -229,6 +231,8 @@ router.put('/:id', authenticate, operationLog('ticket_types', '更新票种'), a
     if (b.on_shelf !== undefined) tt.on_shelf = b.on_shelf;
     if (b.product_type !== undefined) tt.product_type = b.product_type;
     if (b.coupon_enabled !== undefined) tt.coupon_enabled = b.coupon_enabled;
+    if (b.is_student !== undefined) tt.is_student = Number(b.is_student);
+    if (b.is_standard !== undefined) tt.is_standard = Number(b.is_standard);
 
     // 库存：允许调整，但不能调到低于 locked + sold
     if (b.stock_total !== undefined) {

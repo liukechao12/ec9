@@ -212,9 +212,13 @@
      只有标准票计入张数门槛（满3张9折 / 满5张8折），也只有标准票打折；
      尊享票等非标准票一律原价。总价 = 标准票金额×折扣 + 其它票种原价。 */
   function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
-  // 名称在前端是「已按界面语言本地化」的，三语文案都要认
+  // 判定以票种属性 is_standard 为准（后台可勾），名称匹配只在属性缺失的老数据上兜底
   var STD_RE = /标准|標準|standard/i;
-  function isStd(t) { return !!(t && Number(t.is_student) !== 1 && STD_RE.test(String(t.name || ""))); }
+  function isStd(t) {
+    if (!t || Number(t.is_student) === 1) return false;
+    if (t.is_standard !== undefined && t.is_standard !== null && String(t.is_standard) !== '') return Number(t.is_standard) === 1;
+    return STD_RE.test(String(t.name || ""));
+  }
 
   function renderFee() {
     var box = document.getElementById("tkFee");

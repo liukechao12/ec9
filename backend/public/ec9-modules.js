@@ -359,14 +359,14 @@ async function loadTicketTypes(eventId) {
         if (res.code !== 0) throw new Error(res.message || '加载失败');
         ec9RenderTicketTypes(res.data.list || []);
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:32px;color:#EF4444;">加载失败：${ec9Esc(e.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:32px;color:#EF4444;">加载失败：${ec9Esc(e.message)}</td></tr>`;
     }
 }
 
 function ec9RenderTicketTypes(list) {
     const tbody = document.getElementById('ticketTypeTableBody');
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:#9CA3AF;">暂无票种</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:32px;color:#9CA3AF;">暂无票种</td></tr>';
         return;
     }
     tbody.innerHTML = list.map((t) => {
@@ -386,6 +386,9 @@ function ec9RenderTicketTypes(list) {
             <td>${remain === null ? ec9T('ec9.field.unlimited', '不限') : remain}</td>
             <td>${ec9Esc(formatDateTime(t.sale_end))}</td>
             <td>${ec9Badge(on ? ec9T('ec9.tt.onShelf', '上架') : ec9T('ec9.tt.offShelf', '下架'), on ? 'status-active' : 'status-inactive')}</td>
+            <td>${Number(t.is_standard) === 1
+                ? ec9Badge('9折/8折', 'status-active')
+                : `<span style="color:#9CA3AF;">${ec9T('ec9.field.none', '不参与')}</span>`}</td>
             <td>${ec9Esc(t.sort || 0)}</td>
             <td>
                 <button class="btn btn-sm btn-outline" onclick="openTicketTypeModal(${t.id})">编辑</button>
@@ -406,6 +409,7 @@ function openTicketTypeModal(id) {
     document.getElementById('ticketTypeForm').reset();
     document.getElementById('ticketTypeModalTitle').textContent = id ? '编辑票种' : '新增票种';
     document.getElementById('ttStatus').value = '1';
+    document.getElementById('ttIsStandard').checked = false;
 
     if (!id) { delete modal.dataset.editId; return; }
     modal.dataset.editId = id;
@@ -420,6 +424,8 @@ function openTicketTypeModal(id) {
         document.getElementById('ttSortOrder').value = t.sort || 0;
         document.getElementById('ttStatus').value = String(Number(t.on_shelf));
         document.getElementById('ttDescription').value = t.description || '';
+        // 折扣口径由属性决定（后端 judge 也以此为准），名称只是老数据兜底
+        document.getElementById('ttIsStandard').checked = Number(t.is_standard) === 1;
         // 多语字段从 i18n 树里取
         const i18n = t.i18n || {};
         document.getElementById('ttNameTw').value = (i18n.name && i18n.name['zh-TW']) || '';
@@ -458,6 +464,7 @@ async function handleTicketTypeSubmit(e) {
         sale_end: ec9FromLocalInput(document.getElementById('ttSaleEnd').value),
         sort: Number(document.getElementById('ttSortOrder').value) || 0,
         on_shelf: Number(document.getElementById('ttStatus').value),
+        is_standard: document.getElementById('ttIsStandard').checked ? 1 : 0,
         description: document.getElementById('ttDescription').value.trim(),
         i18n
     };

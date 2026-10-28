@@ -651,6 +651,53 @@ select.input.filled { color: #1D2129; }
   color: #E54A55; line-height: 1; white-space: nowrap; letter-spacing: 0;
 }
 .tk-s-cur.free, .tk-s-val.free { color: #83B931; }
+
+/* ---------- 英文适配：副券区只有 60px 可用宽，英文票种名放不下 ----------
+   英文票种名（如 "Standard Ticket"）17px 时要 130px，会越出副券压到右侧色条上；
+   场馆名 "Qianhai Int'l Convention Center" 14px 时要 208px，会撞上右下角标语。
+   这里只在 lang="en" 下缩小字号并允许折行，中文/繁体完全不受影响。 */
+html[lang="en"] .tk-s-name {
+  font-size: 11px; line-height: 1.15; white-space: normal;
+  width: 52px; letter-spacing: -.2px;
+}
+html[lang="en"] .tk-s-top { font-size: 10px; letter-spacing: .4px; }
+html[lang="en"] .tk-city { font-size: 12px; }
+html[lang="en"] .tk-venue {
+  font-size: 10px; line-height: 1.2; white-space: normal;
+  width: 146px; margin-top: 2px;
+}
+/* 列头英文会折成两行，把整列往下顶，三列就对不齐了 */
+html[lang="en"] .tk-col-h { font-size: 12px; }
+
+/* ---------- 按人分配票种 ---------- */
+.tk-assign {
+  margin: 16px 20px 0; padding: 12px 14px;
+  background: #fff; border-radius: 8px;
+}
+.tk-assign-t { font-size: 13px; font-weight: 700; color: #1D2129; }
+.tk-assign-hint { font-size: 11px; color: #86909C; margin-top: 4px; line-height: 1.5; }
+.tk-a-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-top: 1px solid #F2F3F5;
+}
+.tk-a-row:first-child { border-top: none; }
+.tk-a-name {
+  font-size: 12px; color: #1D2129; font-weight: 500;
+  max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tk-a-free { font-size: 10px; color: #83B931; margin-left: 4px; }
+.tk-a-btns { display: flex; gap: 6px; flex: 1; justify-content: flex-end; flex-wrap: wrap; }
+.tk-a-btn {
+  font-size: 11px; color: #4E5969; background: #F2F3F5;
+  border: 1px solid transparent; border-radius: 4px;
+  padding: 5px 8px; cursor: pointer; line-height: 1;
+}
+.tk-a-btn.on { color: #fff; background: #3056D4; }
+/* 英文票种名更长，按钮区改纵向排布避免挤成一团 */
+html[lang="en"] .tk-a-row { flex-direction: column; align-items: stretch; gap: 6px; }
+html[lang="en"] .tk-a-name { max-width: none; }
+html[lang="en"] .tk-a-btns { justify-content: flex-start; }
+.tk-fee-total { font-weight: 700; margin-top: 2px; }
 .tk-bar { width: 20px; flex: none; }
 .tk-bar.g1 { background: #83B931; }
 .tk-bar.g2 { background: #3056D4; }

@@ -23,6 +23,12 @@
     <div class="tk-agenda hidden" id="tkAgenda" data-i18n="agenda_content"></div>
   </div>
 
+  <div class="tk-assign hidden" id="tkAssign">
+    <div class="tk-assign-t" data-i18n="tk_assign_title">为每人选择票种</div>
+    <div class="tk-assign-hint" data-i18n="tk_assign_hint">上方票卡可批量套用给所有人，下面可单独调整</div>
+    <div id="tkAssignList"></div>
+  </div>
+
   <div class="tk-fee" id="tkFee"></div>
   <div class="tk-student-tip hidden" id="tkStudentTip"></div>
 
@@ -51,7 +57,8 @@
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var tickets = [];
   var members = (E.S.data && E.S.data.draft_members) || [];
-  var selectedId = 0;
+  var selectedId = 0;          // 默认票种：点上方票卡会批量套用给所有人
+  var perTicket = [];          // 每人票种，下标与 members 对齐
   var agreed = false;
 
   if (!E.S.token || !E.S.phone) { E.go("signup.html", { event_id: eventId }); return; }
@@ -132,10 +139,55 @@
         '<ul class="tk-ben">' + lis + '</ul>' +
       '</div>';
     }).join("");
+    alignBenRows();
+  }
+
+  /* 三列权益表按行对齐：英文条目会折成两行，行高不一致时三列就错位了。
+     做法是按行取三列的最大高度，统一设成 min-height。 */
+  function alignBenRows() {
+    var cols = Array.prototype.slice.call(document.querySelectorAll(".tk-col"));
+    if (cols.length < 2) return;
+    var rows = Math.min.apply(null, cols.map(function (c) {
+      return c.querySelectorAll(".tk-ben li").length;
+    }));
+    for (var i = 0; i < rows; i++) {
+      var lis = cols.map(function (c) { return c.querySelectorAll(".tk-ben li")[i]; });
+      var max = 0;
+      lis.forEach(function (li) { li.style.minHeight = ""; });
+      lis.forEach(function (li) { max = Math.max(max, li.getBoundingClientRect().height); });
+      lis.forEach(function (li) { li.style.minHeight = max + "px"; });
+    }
+  }
+
+  /* ---------- 按人分配票种 ---------- */
+  function renderAssign() {
+    var box = document.getElementById("tkAssign");
+    if (!members.length || tickets.length < 2) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    var list = document.getElementById("tkAssignList");
+    list.innerHTML = members.map(function (m, i) {
+      var nm = String(m.name || "").trim() || String(m.phone || "");
+      var btns = tickets.map(function (tk) {
+        return '<span class="tk-a-btn' + (perTicket[i] === tk.id ? " on" : "") +
+          '" data-i="' + i + '" data-tid="' + tk.id + '">' + E.esc(tk.name) + '</span>';
+      }).join("");
+      return '<div class="tk-a-row">' +
+        '<div class="tk-a-name">' + E.esc(nm) + (isFreeOf(m) ? '<span class="tk-a-free">' + E.esc(E.t("invited_std_tag")) + '</span>' : '') + '</div>' +
+        '<div class="tk-a-btns">' + btns + '</div>' +
+      '</div>';
+    }).join("");
+    Array.prototype.forEach.call(list.querySelectorAll(".tk-a-btn"), function (el) {
+      el.addEventListener("click", function () {
+        perTicket[Number(el.getAttribute("data-i"))] = Number(el.getAttribute("data-tid"));
+        renderAssign(); renderFee();
+      });
+    });
   }
 
   function select(id) {
     selectedId = id;
+    // 点票卡 = 批量套用给所有人；要单独调整用下面的按人分配区
+    perTicket = members.map(function () { return id; });
     Array.prototype.forEach.call(document.querySelectorAll(".tk-card"), function (el) {
       el.classList.toggle("selected", Number(el.getAttribute("data-tid")) === id);
     });
@@ -144,9 +196,14 @@
     });
     var tk = ticketById(id);
     var tip = document.getElementById("tkStudentTip");
-    if (tk && /学生|Student/i.test(String(tk.name))) {
+    var anyStudent = members.some(function (m, i) {
+      var t = ticketById(perTicket[i] || id);
+      return t && /学生|Student/i.test(String(t.name));
+    });
+    if (anyStudent) {
       tip.textContent = E.t("student_tip"); tip.classList.remove("hidden");
     } else { tip.classList.add("hidden"); }
+    renderAssign();
     renderFee();
   }
 
@@ -155,29 +212,53 @@
   function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
 
   function renderFee() {
-    var tk = ticketById(selectedId);
     var box = document.getElementById("tkFee");
-    if (!tk || !members.length) { box.innerHTML = ""; return; }
-    var unit = Number(tk.price) || 0;
-    var buyers = members.filter(function (m) { return !isFreeOf(m); });
-    // 票种本身 ¥0（学生票）时全员免票，购票数量为 0
-    var buyN = unit === 0 ? 0 : buyers.length;
+    if (!members.length) { box.innerHTML = ""; return; }
+
+    // 每人按自己选的票种计价：票种 ¥0（学生票）或命中邀约 → 该人不计费
+    var sub = [];   // [{tid, name, n, amt}]
+    var buyN = 0, raw = 0;
+    members.forEach(function (m, i) {
+      var tk = ticketById(perTicket[i] || selectedId);
+      if (!tk) return;
+      var unit = Number(tk.price) || 0;
+      if (isFreeOf(m) || unit === 0) return;
+      buyN++; raw += unit;
+      var row = null;
+      sub.forEach(function (s) { if (s.tid === tk.id) row = s; });
+      if (!row) { row = { tid: tk.id, name: tk.name, n: 0, amt: 0 }; sub.push(row); }
+      row.n++; row.amt += unit;
+    });
     var freeN = members.length - buyN;
-    var raw = unit * buyN;
+    // 折扣口径同后端 groupOrderService：按付费张数，3张9折 / 5张8折
     var rate = buyN >= 5 ? 0.8 : (buyN >= 3 ? 0.9 : 1.0);
     var total = Math.round(raw * rate * 100) / 100;
 
     var html = '<div>' + E.esc(E.t("tk_buy_line")
       .replace("{n}", members.length).replace("{f}", freeN).replace("{m}", buyN)) + '</div>';
-    html += '<div>' + E.esc(E.t("tk_fee_line")
-      .replace("{n}", buyN).replace("{ticket}", tk.name).replace("{amt}", total.toFixed(2))) +
-      (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
 
-    // 免票 / 购票 分别是哪些人（邀约嘉宾固定标准票），便于核对人数
+    if (sub.length === 1) {
+      // 单一票种：沿用原来的整句，读起来更顺
+      html += '<div>' + E.esc(E.t("tk_fee_line")
+        .replace("{n}", buyN).replace("{ticket}", sub[0].name).replace("{amt}", total.toFixed(2))) +
+        (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
+    } else if (sub.length > 1) {
+      // 混合票种：逐票种列小计，再给折后合计
+      sub.forEach(function (s) {
+        html += '<div>' + E.esc(E.t("tk_item_line")
+          .replace("{ticket}", s.name).replace("{n}", s.n).replace("{amt}", s.amt.toFixed(2))) + '</div>';
+      });
+      html += '<div class="tk-fee-total">' + E.esc(E.t("tk_total_line").replace("{amt}", total.toFixed(2))) +
+        (rate < 1 ? " " + E.discountText(rate) : "") + '</div>';
+    }
+
+    // 免票 / 购票 分别是哪些人，便于核对人数
     var freeNames = [], buyNames = [];
-    members.forEach(function (m) {
+    members.forEach(function (m, i) {
+      var tk = ticketById(perTicket[i] || selectedId);
+      var unit = tk ? (Number(tk.price) || 0) : 0;
       var nm = String(m.name || "").trim() || String(m.phone || "");
-      if (unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? E.t("invited_std_tag") : ""));
+      if (!tk || unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? E.t("invited_std_tag") : ""));
       else buyNames.push(nm);
     });
     if (freeNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("free_ticket_count").replace("{n}", freeNames.length)) + '：' + E.esc(freeNames.join("、")) + '</div>';
@@ -213,18 +294,19 @@
   document.getElementById("btnSubmit").addEventListener("click", function () {
     E.errPill("");
     if (!members.length) { E.errPill(E.t("err_required")); E.go("profile.html", { event_id: eventId }); return; }
-    if (!selectedId) { E.toast(E.t("ticket_title")); return; }
+    if (!selectedId || members.some(function (m, i) { return !perTicket[i]; })) { E.toast(E.t("ticket_title")); return; }
     if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
     var btn = this; btn.disabled = true;
     E.Api.submitGroup({
       event_id: Number(eventId),
       buyer_phone: E.S.phone,
-      members: members.map(function (m) {
+      members: members.map(function (m, i) {
         return {
           name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
           company: String(m.company || "").trim(), position: String(m.position || "").trim(),
           inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
-          session_id: Number(m.session_id) || 0, ticket_type_id: Number(selectedId)
+          session_id: Number(m.session_id) || 0,
+          ticket_type_id: Number(perTicket[i] || selectedId)
         };
       })
     }).then(function (d) {

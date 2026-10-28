@@ -1076,7 +1076,8 @@
       "saveFail": "Failed to save",
       "enabled": "Enabled",
       "disabled": "Disabled",
-      "remark": "Remark"
+      "remark": "Remark",
+      "none": "Not eligible"
     },
     "session": {
       "title": "Session Name",

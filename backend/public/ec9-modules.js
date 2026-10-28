@@ -1333,7 +1333,7 @@ function drRenderRows() {
             </td>
             <td><input type="text" class="dr-remark" data-idx="${i}" value="${ec9Esc(r.remark || '')}"
                        data-i18n-ph="ec9.dr.remarkPh" placeholder="选填" style="width:100%;padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;"></td>
-            <td><button class="btn btn-outline btn-sm" onclick="removeDiscountRuleRow(${i})"><span data-i18n="ec9.field.delete">删除</span></button></td>
+            <td><button class="btn btn-outline btn-sm" onclick="removeDiscountRuleRow(${i})"><span data-i18n="ec9.action.delete">删除</span></button></td>
         </tr>`).join('');
     // 让 i18n 扫描器接管表格里的 option / placeholder 文案
     if (typeof window.I18N !== 'undefined' && window.I18N.apply) window.I18N.apply();

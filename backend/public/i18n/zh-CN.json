@@ -1076,7 +1076,8 @@
       "saveFail": "保存失败",
       "enabled": "启用",
       "disabled": "停用",
-      "remark": "备注"
+      "remark": "备注",
+      "none": "不参与"
     },
     "session": {
       "title": "场次名称",

@@ -548,7 +548,8 @@ async function getGroup(groupNo) {
     order: [['id', 'ASC']],
     include: [
       { model: Guest, as: 'guest', attributes: ['id', 'name', 'company', 'position'] },
-      { model: TicketType, as: 'ticketType', attributes: ['id', 'name', 'price', 'is_student'] }
+      // is_standard 必须带上：折扣判定以属性为准，漏了就会退化成按名称匹配
+      { model: TicketType, as: 'ticketType', attributes: ['id', 'name', 'price', 'is_student', 'is_standard'] }
     ]
   });
   if (!regs.length) return { ok: false, error: '报名单不存在' };

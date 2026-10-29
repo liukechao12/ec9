@@ -102,9 +102,12 @@ GuestM.hasMany(CheckinM, { as: 'checkins', foreignKey: 'guest_id' });
 EventM.hasMany(CheckinM, { as: 'checkins', foreignKey: 'event_id' });
 
 // ---- 报名 → 票种（EC8 叫 ticket） ----
+// ⚠️ 这里**刻意不给 Guest 挂 TicketType 别名**：Guest 与票种没有直接外键关系
+//    （Guest 表连 event_id 都没有）。硬挂 hasMany 会生成 `TicketType.event_id = Guest.id`
+//    这种 SQL——不报错，但静默返回完全错误的票种，比直接报错危险得多。
+//    要拿「某嘉宾买了什么票」，请经 Registration 中转：Guest → registrations → ticketType。
 RegistrationM.belongsTo(TicketTypeM, { as: 'ticket', foreignKey: 'ticket_type_id' });
 EventM.hasMany(TicketTypeM, { as: 'tickets', foreignKey: 'event_id' });
-GuestM.hasMany(TicketTypeM, { as: 'tickets', foreignKey: 'event_id' });
 
 // ---- 管理员 → 操作日志 ----
 AdminM.hasMany(OperationLogM, { as: 'logs', foreignKey: 'admin_id' });

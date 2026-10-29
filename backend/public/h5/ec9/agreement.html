@@ -102,8 +102,9 @@
         if (tip && doc.used !== E.S.lang) notice = '<div class="legal-notice">' + E.esc(tip) + '</div>';
         body.innerHTML = '<div class="agree-body">' + notice + sanitizeLegalHtml(doc.html) + '</div>';
       }).catch(function () {
-        body.innerHTML = '<div class="agree-body" style="white-space:pre-line">' +
-          E.esc(name === "user" ? E.t("agreement_sample") : E.t("privacy_sample")) + '</div>';
+        // 这里以前放的是「示例文本」兜底，正式稿已上线，会误导用户以为还没替换，整段删掉。
+        body.innerHTML = '<div class="agree-body">' +
+          E.esc(E.t("legal_load_failed")) + '</div>';
       });
     } else if (name === "refund") {
       // 退款政策是设计稿给死的文案（客户定稿），不走法务文档接口

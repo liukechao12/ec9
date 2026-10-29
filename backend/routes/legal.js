@@ -20,10 +20,14 @@ const path = require('path');
 const BASE_DIR = path.join(__dirname, '..');
 const SUPPORTED = ['zh-CN', 'zh-Hant', 'en'];
 
-// 每种文档：优先新版，其次 EC8 旧版
+// 每种文档：依次找，命中第一个存在的文件即生效。
+// ⚠️ 新增版本请插到数组**最前面**——这里是「优先新版，其次旧版」的顺序，
+//    放在后面就永远不会被选中（只有前面的文件都不存在才会轮到它）。
+// 英文/繁体版本不需要在这里登记：文件名加了语言后缀（见 fileCandidates）会自动被识别，
+// 例：EC9-用户协议-20261029终稿.en.docx 会被 lang=en 命中。
 const DOC_FILES = {
-    user: ['用户协议-20260312更新.docx', 'EC8-用户协议-20251216更新.docx'],
-    privacy: ['隐私政策-20260312更新.docx', 'EC8-隐私政策-20251216更新.docx']
+    user: ['EC9-用户协议-20261029终稿.docx', '用户协议-20260312更新.docx', 'EC8-用户协议-20251216更新.docx'],
+    privacy: ['EC9-隐私政策-20261029终稿.docx', '隐私政策-20260312更新.docx', 'EC8-隐私政策-20251216更新.docx']
 };
 
 const TITLES = {
@@ -73,10 +77,10 @@ async function loadDoc(kind, lang) {
     return entry;
 }
 
-function pageHtml(title, bodyHtml) {
+function pageHtml(title, bodyHtml, lang) {
     return `
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang || 'zh-CN'}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -219,7 +223,8 @@ function serve(kind) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             // 前端靠这个头判断要不要挂「暂无该语言版本」说明
             res.setHeader('X-Legal-Lang', doc.lang);
-            res.send(pageHtml(TITLES[kind][lang] || TITLES[kind]['zh-CN'], doc.html));
+            // lang 要传实际返回的语言（英文页面若仍写 zh-CN，浏览器会按中文字体渲染）
+            res.send(pageHtml(TITLES[kind][lang] || TITLES[kind]['zh-CN'], doc.html, doc.lang));
         } catch (error) {
             console.error('Error serving legal doc:', kind, error && error.message);
             res.status(500).json({ error: 'Failed to load ' + kind });

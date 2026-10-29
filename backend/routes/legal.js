@@ -3,6 +3,7 @@ const router = express.Router();
 const mammoth = require('mammoth');
 const fs = require('fs');
 const path = require('path');
+const { renderDocx } = require('../services/legalDocx');
 
 /* ============================================================
    法务文档（用户协议 / 隐私政策）
@@ -59,20 +60,37 @@ async function loadDoc(kind, lang) {
     const hit = files.find(function (f) { return fs.existsSync(f); });
     if (!hit) throw new Error('legal doc not found: ' + kind);
 
-    const result = await mammoth.convertToHtml({ path: hit }, {
-        includeDefaultStyleMap: true,
-        convertImage: mammoth.images.imgElement(function (image) {
-            return image.read("base64").then(function (imageBuffer) {
-                return {
-                    src: "data:" + image.contentType + ";base64," + imageBuffer
-                };
-            });
-        })
-    });
+    // 优先用自研解析器：它能读 word/numbering.xml，按 Word 的计数器语义
+    // 还原多级自动编号（1. / 2.1. / 2.1.1.）。mammoth 不读 numbering.xml，
+    // 会把每个列表交给浏览器 <ol> 自动数，导致一级标题反复从 1. 开始、
+    // 子级丢掉父级前缀——这正是线上「编号错误」的根因。
+    // renderDocx 返回 null 表示文档没有自动编号定义（或含表格/图片），交回 mammoth。
+    let html = null;
+    let engine = 'mammoth';
+    try {
+        html = await renderDocx(hit);
+        if (html) engine = 'legalDocx';
+    } catch (e) {
+        console.error('[legal] renderDocx failed, fallback to mammoth:', hit, e && e.message);
+    }
+
+    if (!html) {
+        const result = await mammoth.convertToHtml({ path: hit }, {
+            includeDefaultStyleMap: true,
+            convertImage: mammoth.images.imgElement(function (image) {
+                return image.read("base64").then(function (imageBuffer) {
+                    return {
+                        src: "data:" + image.contentType + ";base64," + imageBuffer
+                    };
+                });
+            })
+        });
+        html = result.value;
+    }
 
     // 命中的是`<stem>.<lang>.docx`才算真正拿到该语言，否则说明走的是简体兜底
     const isLocalized = lang !== 'zh-CN' && hit.indexOf('.' + lang + '.docx') > -1;
-    const entry = { html: result.value, lang: isLocalized ? lang : 'zh-CN' };
+    const entry = { html: html, lang: isLocalized ? lang : 'zh-CN', engine: engine };
     cache[key] = entry;
     return entry;
 }
@@ -223,6 +241,7 @@ function serve(kind) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             // 前端靠这个头判断要不要挂「暂无该语言版本」说明
             res.setHeader('X-Legal-Lang', doc.lang);
+            res.setHeader('X-Legal-Engine', doc.engine || 'mammoth');
             // lang 要传实际返回的语言（英文页面若仍写 zh-CN，浏览器会按中文字体渲染）
             res.send(pageHtml(TITLES[kind][lang] || TITLES[kind]['zh-CN'], doc.html, doc.lang));
         } catch (error) {

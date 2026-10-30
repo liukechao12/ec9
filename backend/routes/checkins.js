@@ -313,32 +313,35 @@ router.post('/event-checkin', async (req, res) => {
       return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
     }
     
-    // 查找邀约（已报名状态）
-    const invitation = await Invitation.findOne({
-      where: {
-        guest_id: guest.id,
-        event_id,
-        is_valid: 1
-      }
+    // ⚠️ EC9 主链路是「自主报名」：报名落在 ec9_registrations，多数参会人**根本没有邀约记录**。
+    //    旧逻辑只查 ec9_invitations，自主报名成功的人一律被判「未报名或手机号错误」。
+    //    现在以报名记录为准（status=paid 才算报名成功），邀约仅作老链路兼容回退。
+    let reg = await Registration.findOne({
+      where: { guest_id: guest.id, event_id, status: 'paid' }
     });
-    
-    if (!invitation) {
-      return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
+
+    // 兼容老邀约链路：有邀约且已报名成功时，用邀约反查报名记录
+    let invitation = null;
+    if (!reg) {
+      invitation = await Invitation.findOne({
+        where: { guest_id: guest.id, event_id, is_valid: 1 }
+      });
+      if (!invitation) {
+        return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
+      }
+      // 必须报名成功才能签到
+      if (invitation.registration_status !== 2) {
+        return res.status(403).json({ code: 403, message: '未报名成功，不能签到' });
+      }
+      reg = await Registration.findOne({ where: { invitation_id: invitation.id } });
     }
-    
-    // 必须报名成功才能签到
-    if (invitation.registration_status !== 2) {
-      return res.status(403).json({ code: 403, message: '未报名成功，不能签到' });
-    }
-    
+
     // 检查是否已签到（首次签到 vs 重复签到要区分，前端据此显示不同结果卡）
+    // 自主报名没有邀约，所以优先按报名记录查
     let checkin = await Checkin.findOne({
-      where: { invitation_id: invitation.id }
+      where: reg ? { registration_id: reg.id } : { invitation_id: invitation.id }
     });
     const already = !!checkin;
-
-    // 报名记录（首次签到要用来反查签到码，返回体也要带上票种名）
-    const reg = await Registration.findOne({ where: { invitation_id: invitation.id } });
 
     if (!checkin) {
       const code = reg
@@ -351,9 +354,9 @@ router.post('/event-checkin', async (req, res) => {
         });
       }
 
-      // 创建签到记录
+      // 创建签到记录（自主报名没有邀约，invitation_id 允许为 null）
       checkin = await Checkin.create({
-        invitation_id: invitation.id,
+        invitation_id: invitation ? invitation.id : null,
         registration_id: reg.id,
         checkin_code_id: code.id,
         event_id,
@@ -371,7 +374,7 @@ router.post('/event-checkin', async (req, res) => {
         await SmsService.sendMessage(MESSAGE_TYPES.CHECKIN_SUCCESS, { lang: SmsService.normalizeLang(req.body && req.body.lang),
           guestId: guest.id,
           eventId: event_id,
-          invitationId: invitation.id
+          invitationId: invitation ? invitation.id : undefined
         });
       } catch (e) {
         console.error('触发登记成功短信失败:', e);

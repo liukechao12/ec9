@@ -27,6 +27,7 @@ const Invitation = require('../models/Invitation');
 const { encryptPhone, hmacPhone, decryptPhone } = require('../utils/phoneCrypto');
 const { validateSelection } = require('./ticketBinding');
 const { sendBusinessSms } = require('./verificationSmsService');
+const { SmsService } = require('./SmsService');
 const config = require('../config');
 
 // ---------- 折扣 ----------
@@ -487,6 +488,8 @@ async function createGroup({ buyerPhone, eventId, members }) {
   if (!needAudit.length) {
     const ord = await createGroupOrder({ groupNo, eventId, quote: finalQuote, buyerPhone });
     if (!ord.ok) return ord;
+    // 全员在邀约名单内 → 提交即通过，订单已建，通知每位成员「审核通过请付款」（失败不阻塞）
+    await sendGroupApprovedSms(groupNo, eventId, created);
     return {
       ok: true, group_no: groupNo, quote: finalQuote, registrations: created,
       auto_approved: true, paid: false, pending_payment: true,
@@ -622,6 +625,8 @@ async function auditGroup({ groupNo, action, reason, operator }) {
 
   const ord = await createGroupOrder({ groupNo, eventId: event_id, quote, buyerPhone, remark: `多人代报 ${regs.length} 人` });
   if (!ord.ok) return ord;
+  // 后台审批通过、订单已建 → 通知每位成员「审核通过请付款」（含邀约免审成员，失败不阻塞）
+  await sendGroupApprovedSms(groupNo, event_id, regs);
   return { ok: true, action: 'approved', group_no: groupNo, order: ord.order, pay_url: ord.pay_url };
 }
 
@@ -816,6 +821,39 @@ async function markGroupPaid(order, { transaction: t = null } = {}) {
   return results;
 }
 
+/**
+ * 审核通过短信 —— 每个参会成员各 1 条（模板：参会申请已审核通过，请尽快完成付款）
+ *
+ * 触发口径（昊哥 2026-10-30）：只要整单进入「待支付」，无论后台审批通过还是提交时自动通过，
+ * 都给每个参会成员各发一条。订单建好之后才发，避免提前催款却无处可付。
+ *
+ * ⚠️ 应付 0 元的免票单不调用本函数 —— 它不需要付款，发了反而是误导。
+ *
+ * 模板 CODE 走 SmsService 的「业务类型 + 场景 + 语种」查表（REG_APPROVED），
+ * 不写死在代码里，后台「短信模板」页可换；查不到模板只会打 warn，不阻塞报名。
+ *
+ * @param {string} groupNo  团号（仅日志用）
+ * @param {number} eventId  活动 ID
+ * @param {Array}  regs     成员列表，元素需带 guest_id
+ */
+async function sendGroupApprovedSms(groupNo, eventId, regs) {
+  const list = (regs || []).filter(r => r && r.guest_id);
+  if (!list.length) return;
+  for (const r of list) {
+    try {
+      const res = await SmsService.sendByBusinessType(
+        SmsService.MESSAGE_TYPES.REG_APPROVED,
+        { guestId: r.guest_id, eventId, lang: 'zh-CN' }
+      );
+      if (!(res && res.success)) {
+        console.warn(`[sendGroupApprovedSms] 团 ${groupNo} 成员 guest#${r.guest_id} 短信未送出：${(res && (res.error || res.errorMessage)) || '未知错误'}`);
+      }
+    } catch (e) {
+      console.warn(`[sendGroupApprovedSms] 团 ${groupNo} 成员 guest#${r.guest_id} 异常（不阻塞）:`, e.message);
+    }
+  }
+}
+
 /** 全员订票成功短信（事务提交后调用） */
 async function sendGroupPaidSms(order) {
   const regs = await Registration.findAll({ where: { group_no: order.group_no } });
@@ -867,5 +905,5 @@ module.exports = {
   calcDiscount, applyDiscount, isStandardType,
   pickTier, rateToZhe, fetchDiscountRules, DEFAULT_TIERS, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
-  markGroupPaid, sendGroupPaidSms, releaseGroupStock, sellGroupStock, genCheckinCode
+  markGroupPaid, sendGroupPaidSms, sendGroupApprovedSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

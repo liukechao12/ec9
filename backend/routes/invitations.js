@@ -71,14 +71,16 @@ async function approveInvitationCore(invitation, user, opts = {}) {
     need_pay: needPay
   });
 
-  // 报名成功短信（按「业务类型+场景+语种」选模板，失败不阻塞审批）
+  // 审核通过短信（按「业务类型+场景+语种」选模板，失败不阻塞审批）
+  // 口径（昊哥 2026-10-30）：需付款 → 发「参会申请已审核通过，请尽快完成付款」；
+  //                        免票（need_pay=0）→ 不发催款短信，仍走原「报名成功」模板
   try {
     const { SmsService } = require('../services/SmsService');
     const event = await Event.findByPk(invitation.event_id);
     let sceneHint = null;
     if (event && event.page_url && String(event.page_url).includes('performance')) sceneHint = 'PERFORMANCE';
     const result = await SmsService.sendByBusinessType(
-      SmsService.MESSAGE_TYPES.REG_SUCCESS,
+      needPay === 1 ? SmsService.MESSAGE_TYPES.REG_APPROVED : SmsService.MESSAGE_TYPES.REG_SUCCESS,
       { guestId: invitation.guest_id, eventId: invitation.event_id, invitationId: invitation.id, lang: lang || null },
       sceneHint
     );

@@ -6,6 +6,7 @@
  *    而且后台改完凭证后必须能立刻生效。这里改成「按配置指纹惰性重建」。
  */
 const smsConfig = require('../services/smsConfigService');
+const { sendSmsRpc } = require('./aliyunSmsRpc');
 
 let DysmsClient = null;
 let SendSmsRequest = null;
@@ -49,7 +50,28 @@ function getClient() {
 async function sendSms({ PhoneNumbers, SignName, TemplateCode, TemplateParam }) {
   const client = getClient();
   if (!client || !SendSmsRequest) {
-    // 没有真实客户端：仅打印日志，方便本地开发，也防止启动报错
+    // SDK 不在（生产 @alicloud 未安装）→ 回退自研 RPC，绝不能静默 mock：
+    // 那样日志写着"发送成功"，实际一条都没发出去，排查时极易被误导。
+    const c = smsConfig.get();
+    if (Number(c.enabled) === 1 && c.access_key_id && c.access_key_secret && SignName && TemplateCode) {
+      try {
+        let parsed = null;
+        if (TemplateParam) { try { parsed = JSON.parse(TemplateParam); } catch (e) { parsed = null; } }
+        console.log('[AliyunRpc] sendSms（SDK 缺失，走自研 RPC）:', { PhoneNumbers, SignName, TemplateCode });
+        return await sendSmsRpc({
+          accessKeyId: c.access_key_id,
+          accessKeySecret: c.access_key_secret,
+          region: c.region,
+          phone: PhoneNumbers,
+          signName: SignName,
+          templateCode: TemplateCode,
+          templateParam: parsed
+        });
+      } catch (e) {
+        return { Code: 'EXCEPTION', Message: e.message };
+      }
+    }
+    // 真的没配通道（开发期）：仅打印日志，方便本地开发，也防止启动报错
     console.log('[MockSms] sendSms:', { PhoneNumbers, SignName, TemplateCode, TemplateParam });
     return { Code: 'OK', Message: 'Mock send success' };
   }

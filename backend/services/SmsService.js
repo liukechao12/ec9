@@ -1,6 +1,7 @@
 const { SmsTemplate, SmsRule, SmsLog, Guest, Event, Invitation } = require('../models');
 const { sendSms } = require('../utils/aliyunSmsClient');
 const { hashPhone, decryptPhone } = require('../utils/phoneCrypto');
+const smsConfig = require('./smsConfigService');
 
 const MESSAGE_TYPES = {
   REG_SUCCESS: 'REG_SUCCESS',
@@ -527,13 +528,21 @@ class SmsService {
     let errorCode = null;
     let errorMessage = null;
     try {
-      console.log(`[SmsService.sendByTemplateId] 准备发送短信，模板CODE: ${template.aliyun_template_code}, 签名: ${template.sign_name}, 参数:`, filteredParams);
-      
+      // 模板 CODE 取自 ec9_sms_templates.template_code（表里没有 aliyun_template_code 列）；
+      // 签名是账号级的，取自短信通道配置（表里也没有 sign_name 列）。
+      const sc = await smsConfig.load();
+      const signName = template.sign_name || sc.sign_name || '';
+      // 无变量模板（正文里没有 ${xxx}）不能带 TemplateParam，否则可能被判 TEMPLATE_PARAMS_ILLEGAL
+      const hasVars = /\$\{[^}]+\}/.test(template.content || '');
+      const templateParam = hasVars ? JSON.stringify(filteredParams) : null;
+
+      console.log(`[SmsService.sendByTemplateId] 准备发送短信，模板CODE: ${template.template_code}, 签名: ${signName}, 变量: ${templateParam || '(无)'}`);
+
       resp = await sendSms({
         PhoneNumbers: resolvedPhone,
-        SignName: template.sign_name,
-        TemplateCode: template.aliyun_template_code,
-        TemplateParam: JSON.stringify(filteredParams)
+        SignName: signName,
+        TemplateCode: template.template_code,
+        TemplateParam: templateParam
       });
 
       const respCode = resp?.Code || resp?.code || resp?.body?.Code || resp?.body?.code;

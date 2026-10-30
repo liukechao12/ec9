@@ -475,24 +475,31 @@ select.input.filled { color: #1D2129; }
 .invoice-page .btn-primary { margin-top: 169px; }
 
 /* ---------- Toast ---------- */
+/* 居中方式用 left:0/right:0 + margin:auto，不用 left:50%。
+   用 left:50% 时元素的可用宽度只剩半屏（50vw），max-width:80% 永远轮不到生效，
+   长文案（如未勾选协议的提示）会被挤成 5 行的窄高条。 */
 .ec9-toast {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 12%;
-  transform: translate(-50%, 10px);
+  margin: 0 auto;
+  width: -webkit-fit-content;
+  width: fit-content;
+  max-width: 80%;
+  transform: translateY(10px);
   background: rgba(0,0,0,.82);
   color: #fff;
   font-size: 14px;
   padding: 10px 20px;
   border-radius: 8px;
-  max-width: 80%;
   text-align: center;
   opacity: 0;
   transition: opacity .25s, transform .25s;
   z-index: 999;
   pointer-events: none;
 }
-.ec9-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.ec9-toast.show { opacity: 1; transform: translateY(0); }
 
 /* ---------- 返回栏 ---------- */
 .back-bar { padding: 12px 16px 0; }

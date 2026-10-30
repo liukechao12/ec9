@@ -13,6 +13,10 @@ const { testConnection } = require('./config/database');
 const app = express();
 const PORT = config.server.port;
 
+// 部署在 Nginx 反向代理后面：信任一层代理，
+// 让 req.ip / req.secure / req.protocol 取 X-Forwarded-* 的真实值（否则全是 127.0.0.1）
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: config.server.corsOrigin, credentials: true }));
 
 // 微信支付回调：必须用原始报文验签，先于 JSON parser 挂 raw

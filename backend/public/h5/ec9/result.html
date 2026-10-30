@@ -62,8 +62,20 @@
   var main = document.getElementById("btnMain");
   var second = document.getElementById("btnSecond");
 
-  function setMain(txt, fn) { main.textContent = txt; main.addEventListener("click", fn); }
-  function setSecond(txt, fn) { second.textContent = txt; second.classList.remove("hidden"); second.addEventListener("click", fn); }
+  // btnMain 带着 data-i18n="back_home"，而 common.js 的 MutationObserver 一旦检测到
+  // DOM 新增节点就会重跑 applyLang()，把所有 data-i18n 元素重置回字典值。
+  // 于是「先填 groupBox → 触发监听 → 排期 applyLang」之后，setMain 刚写的文案
+  // （如「查看电子票」）会被覆盖回「回到首页」，和第二个按钮重复。
+  // 这两个按钮的文案由业务状态动态决定，不属于静态词条，所以要摘掉 data-i18n。
+  // 切语言走 location.reload()，会重新走一遍流程，不受影响。
+  function setMain(txt, fn) {
+    main.removeAttribute("data-i18n");
+    main.textContent = txt; main.addEventListener("click", fn);
+  }
+  function setSecond(txt, fn) {
+    second.removeAttribute("data-i18n");
+    second.textContent = txt; second.classList.remove("hidden"); second.addEventListener("click", fn);
+  }
 
   /* ---------- 多人代报结果：按整单实时状态渲染 ---------- */
   function renderGroup(g) {
@@ -113,8 +125,8 @@
 
     // 按钮
     if (allPaid) {
-      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId }); });
-      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+      // 设计稿「成功」页只有 1 个按钮：回到首页
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     } else if (anyRejected) {
       setMain(E.t("resubmit"), function () { E.go("profile.html", { event_id: eventId }); });
       setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
@@ -156,8 +168,8 @@
     if (st === "paid" || (st === "approved" && price === 0)) {
       // 已支付 / 免费票 → 报名成功，看电子票
       if (st === "approved") showStatus("approved");
-      setMain(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId, reg_id: rid }); });
-      setSecond(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
+      // 设计稿「成功」页只有 1 个按钮：回到首页
+      setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     } else if (st === "rejected") {
       setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
       setSecond(E.t("re_edit"), function () { E.go("profile.html", { event_id: eventId }); });
@@ -216,9 +228,8 @@
       setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
     });
   } else if (type === "checkin") {
-    // 签到结果：回首页 / 看电子票
+    // 签到结果：设计稿「签到成功」页只有 1 个按钮：回到首页
     setMain(E.t("back_home"), function () { E.go("index.html", { event_id: eventId }); });
-    setSecond(E.t("view_eticket"), function () { E.go("eticket.html", { event_id: eventId }); });
   } else if (regId) {
     loadSingleRealtime();
   } else {

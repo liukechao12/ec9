@@ -333,7 +333,7 @@
     E.errPill("");
     if (!members.length) { E.errPill(E.t("err_required")); E.go("profile.html", { event_id: eventId }); return; }
     if (!selectedId || members.some(function (m, i) { return !perTicket[i]; })) { E.toast(E.t("ticket_title")); return; }
-    if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
+    if (!agreed) { E.toast(E.t("agree_required_tip")); return; }
     var btn = this; btn.disabled = true;
     E.Api.submitGroup({
       event_id: Number(eventId),

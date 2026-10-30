@@ -67,7 +67,7 @@
   });
 
   document.getElementById("btnRegister").addEventListener("click", function () {
-    if (!agreed) { E.toast(E.t("agree_prefix") + E.t("user_agreement")); return; }
+    if (!agreed) { E.toast(E.t("agree_required_tip")); return; }
     E.go("signup.html", { event_id: eventId });
   });
 

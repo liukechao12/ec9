@@ -854,21 +854,27 @@ async function sendGroupApprovedSms(groupNo, eventId, regs) {
   }
 }
 
-/** 全员订票成功短信（事务提交后调用） */
+/** 全员订票成功短信（事务提交后调用）
+ *
+ * 模板 SMS_512532136（EC9-报名成功2，无变量纯文本）。
+ * 与「审核通过」短信同口径走 SmsService：按「业务类型 + 场景 + 语种」查表，
+ * 这样能写进 ec9_sms_logs 便于追溯，且复用已修好的真实发送通道。
+ */
 async function sendGroupPaidSms(order) {
   const regs = await Registration.findAll({ where: { group_no: order.group_no } });
-  const event = await Event.findByPk(order.event_id);
-  const eventName = event ? event.name : 'EC9 大会';
   for (const r of regs) {
+    if (!r || !r.guest_id) continue;
     try {
-      const guest = await Guest.findByPk(r.guest_id);
-      if (!guest || !guest.phone) continue;
-      const phone = decryptPhone(guest.phone);
-      const cc = await CheckinCode.findOne({ where: { registration_id: r.id } });
-      await sendBusinessSms(phone, 'REG_SUCCESS', {
-        event: eventName, code: cc ? cc.code : ''
-      }, 'zh-CN');
-    } catch (e) { console.warn('[sendGroupPaidSms] 短信失败（不阻塞）:', e.message); }
+      const res = await SmsService.sendByBusinessType(
+        SmsService.MESSAGE_TYPES.REG_SUCCESS,
+        { guestId: r.guest_id, eventId: order.event_id, lang: 'zh-CN' }
+      );
+      if (!(res && res.success)) {
+        console.warn(`[sendGroupPaidSms] 团 ${order.group_no} 成员 guest#${r.guest_id} 短信未送出：${(res && (res.error || res.errorMessage)) || '未知错误'}`);
+      }
+    } catch (e) {
+      console.warn(`[sendGroupPaidSms] 团 ${order.group_no} 成员 guest#${r.guest_id} 异常（不阻塞）:`, e.message);
+    }
   }
 }
 

@@ -13,7 +13,8 @@
        HTTP(80) 301 跳转      （HTTPS 由 Nginx 终结，Node 只处理明文）
 ```
 
-- **证书**：Let's Encrypt 免费 DV 证书，由 acme.sh 签发，有效期 90 天，**全自动续期**
+- **证书（主用）**：`*.51world.com.cn` 通配符 DV 证书（Xcc Trust / Certum 根），**2026-12-23 到期，需手动续**
+- **证书（热备）**：Let's Encrypt 证书由 acme.sh 自动续期，放在 `le-ec9.*`，一条命令可切回
 - **HTTPS 终结在 Nginx**，Node 不再直接对外，只监听 `127.0.0.1:3000`
 - `app.set('trust proxy', 1)` 已开 → `req.ip` 取 `X-Forwarded-For` 真实 IP
 
@@ -23,7 +24,8 @@
 |---|---|
 | 站点配置 | `/etc/nginx/conf.d/ec9.conf` |
 | Nginx 主配置 | `/etc/nginx/nginx.conf`（默认 server 已挪到 8081 让出 80） |
-| 证书文件 | `/etc/nginx/ssl/ec9.crt`（fullchain）、`/etc/nginx/ssl/ec9.key` |
+| 证书文件（主用） | `/etc/nginx/ssl/ec9.crt`（fullchain）、`/etc/nginx/ssl/ec9.key` → **51world 通配符证书** |
+| 证书文件（热备） | `/etc/nginx/ssl/le-ec9.crt`、`/etc/nginx/ssl/le-ec9.key` → Let's Encrypt，acme.sh 自动续 |
 | acme.sh | `/root/.acme.sh/acme.sh`（域名目录 `/root/.acme.sh/ec9.51world.com.cn/`） |
 | ACME 校验目录 | `/var/www/html/.well-known/acme-challenge/`（80 端口**不跳转**，续期靠它） |
 | 后端 .env | `/opt/ec9/backend/.env`（`PORT=3000` `HOST=127.0.0.1` `FRONTEND_URL=https://ec9.51world.com.cn`） |
@@ -31,22 +33,56 @@
 
 ## 三、证书信息
 
+### 主用：51world 通配符证书（2026-10-30 18:07 换上）
+
+```
+subject = CN = *.51world.com.cn
+SAN     = *.51world.com.cn, 51world.com.cn   ← 覆盖 ec9.51world.com.cn
+issuer  = Beijing Xinchacha Credit Management Co., Ltd. / Xcc Trust DV SSL CA
+根证书  = Certum Trusted Network CA
+签发    = 2025-12-23 03:03 GMT
+到期    = 2026-12-23 03:03 GMT   ⚠️ 只剩约 53 天（从 2026-10-30 算）
+```
+
+来源：`51world.com.cn.zip` → `nginx/51world.com.cn.pem`（fullchain，含用户证书+中级+根）+ `nginx/51world.com.cn.key`（RSA 2048，未加密）。
+私钥与证书已核对配对（modulus MD5 一致 `bdb36ed7...`）。
+
+⚠️ **这份证书没有自动续期**，是企业自行申请的 DV 证书。到期前必须：
+1. 找证书提供方续期，拿到新的 pem/key 后重走下面「四、常用命令」里的换证书流程；
+2. 或执行「切回 Let's Encrypt 热备证书」（见下）。
+
+### 热备：Let's Encrypt 证书（acme.sh 自动续期）
+
 ```
 subject = CN = ec9.51world.com.cn
 issuer  = C=US, O=Let's Encrypt, CN=YR1
-签发    = 2026-10-30 09:03 GMT
-到期    = 2027-01-28 09:03 GMT   （90 天）
-协议    = TLS 1.2 / TLS 1.3，关闭 TLS 1.0/1.1 与会话票据
+文件    = /etc/nginx/ssl/le-ec9.crt、/etc/nginx/ssl/le-ec9.key
 ```
 
-**续期机制**：acme.sh 安装时已写入 crontab，每天 03:19 / 09:19 / 15:19 / 21:19 检查：
+acme.sh 的 crontab 每天 03:19 / 09:19 / 15:19 / 21:19 检查，到期前 30 天自动续期，续完写入 `le-ec9.*`，
+**reloadcmd 已改成只打印日志、不 reload nginx**（避免覆盖线上的 51world 证书）。
 
-```
-19 3,9,15,21 * * * "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" > /dev/null
+**切回热备证书（一条命令）**：
+
+```bash
+cp /etc/nginx/ssl/le-ec9.crt /etc/nginx/ssl/ec9.crt
+cp /etc/nginx/ssl/le-ec9.key /etc/nginx/ssl/ec9.key
+nginx -t && systemctl reload nginx
 ```
 
-到期前 30 天内才会真正续期；续完自动 `--install-cert` 覆盖 `/etc/nginx/ssl/` 并 `systemctl reload nginx`，**不中断服务**。
-（`crond` 已确认 enabled + running；2026-10-30 已做过一次 `--renew --force` 演练，链路验证通过。）
+**换上新证书（通用流程）**：
+
+```bash
+cp 新证书.pem /etc/nginx/ssl/ec9.crt
+cp 新私钥.key /etc/nginx/ssl/ec9.key
+chmod 644 /etc/nginx/ssl/ec9.crt; chmod 600 /etc/nginx/ssl/ec9.key
+# 校验配对（两个 md5 必须相同）
+openssl x509 -noout -modulus -in /etc/nginx/ssl/ec9.crt | openssl md5
+openssl rsa  -noout -modulus -in /etc/nginx/ssl/ec9.key | openssl md5
+nginx -t && systemctl reload nginx
+```
+
+TLS 协议：TLS 1.2 / TLS 1.3，关闭 TLS 1.0/1.1 与会话票据；`crond` 已确认 enabled + running。
 
 ## 四、常用命令
 

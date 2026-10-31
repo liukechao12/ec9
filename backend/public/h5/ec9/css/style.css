@@ -685,6 +685,7 @@ html[lang="en"] .tk-col-h { font-size: 12px; }
 .tk-assign-hint { font-size: 11px; color: #86909C; margin-top: 4px; line-height: 1.5; }
 .tk-a-row {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;   /* 学生票的身份证输入要独占一行，不能和票种按钮挤在一起 */
   padding: 9px 0; border-top: 1px solid #F2F3F5;
 }
 .tk-a-row:first-child { border-top: none; }

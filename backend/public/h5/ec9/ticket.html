@@ -163,7 +163,9 @@
   /* ---------- 按人分配票种 ---------- */
   function renderAssign() {
     var box = document.getElementById("tkAssign");
-    if (!members.length || tickets.length < 2) { box.classList.add("hidden"); return; }
+    // 原本只有「票种 ≥2」才显示分配区；但只要有人选了学生票就必须显示（要填身份证号）
+    var needIdCard = members.some(function (m, i) { return isStudentTicket(perTicket[i] || selectedId); });
+    if (!members.length || (tickets.length < 2 && !needIdCard)) { box.classList.add("hidden"); return; }
     box.classList.remove("hidden");
     var list = document.getElementById("tkAssignList");
     list.innerHTML = members.map(function (m, i) {

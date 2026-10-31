@@ -172,9 +172,19 @@
         return '<span class="tk-a-btn' + (perTicket[i] === tk.id ? " on" : "") +
           '" data-i="' + i + '" data-tid="' + tk.id + '">' + E.esc(tk.name) + '</span>';
       }).join("");
+      // 学生票：多出身份证号输入（用于学籍在线核验，只做资格判断，不做他用）
+      var isStu = isStudentTicket(perTicket[i]);
+      var idBox = isStu
+        ? '<div class="tk-a-idcard">' +
+            '<input class="input tk-idcard" data-i="' + i + '" maxlength="18" autocomplete="off" ' +
+              'placeholder="' + E.esc(E.t("student_idcard_ph")) + '" value="' + E.esc(m.id_card || "") + '">' +
+            '<div class="tk-a-tip">' + E.esc(E.t("student_idcard_tip")) + '</div>' +
+          '</div>'
+        : '';
       return '<div class="tk-a-row">' +
         '<div class="tk-a-name">' + E.esc(nm) + (isFreeOf(m) ? '<span class="tk-a-free">' + E.esc(E.t("invited_std_tag")) + '</span>' : '') + '</div>' +
         '<div class="tk-a-btns">' + btns + '</div>' +
+        idBox +
       '</div>';
     }).join("");
     Array.prototype.forEach.call(list.querySelectorAll(".tk-a-btn"), function (el) {
@@ -183,6 +193,28 @@
         renderAssign(); renderFee();
       });
     });
+    Array.prototype.forEach.call(list.querySelectorAll(".tk-idcard"), function (el) {
+      el.addEventListener("input", function () {
+        var i = Number(el.getAttribute("data-i"));
+        members[i].id_card = String(el.value || "").trim().toUpperCase();
+      });
+    });
+  }
+
+  /** 该票种是不是学生票：先看后台属性 is_student，老数据没这个字段才按名称兜底 */
+  function isStudentTicket(tid) {
+    var tk = ticketById(tid);
+    if (!tk) return false;
+    if (tk.is_student !== undefined && tk.is_student !== null && String(tk.is_student) !== "") {
+      return Number(tk.is_student) === 1;
+    }
+    return /学生|學生|student/i.test(String(tk.name || ""));
+  }
+
+  /** 校验没过时把页面滚到那一位的身份证输入框，别让用户自己找 */
+  function btnScrollToId(i) {
+    var el = document.querySelector('.tk-idcard[data-i="' + i + '"]');
+    if (el) { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} el.focus(); }
   }
 
   function select(id) {
@@ -198,8 +230,7 @@
     var tk = ticketById(id);
     var tip = document.getElementById("tkStudentTip");
     var anyStudent = members.some(function (m, i) {
-      var t = ticketById(perTicket[i] || id);
-      return t && /学生|Student/i.test(String(t.name));
+      return isStudentTicket(perTicket[i] || id);
     });
     if (anyStudent) {
       tip.textContent = E.t("student_tip"); tip.classList.remove("hidden");
@@ -334,18 +365,27 @@
     if (!members.length) { E.errPill(E.t("err_required")); E.go("profile.html", { event_id: eventId }); return; }
     if (!selectedId || members.some(function (m, i) { return !perTicket[i]; })) { E.toast(E.t("ticket_title")); return; }
     if (!agreed) { E.toast(E.t("agree_required_tip")); return; }
+    // 学生票：提交前先在本地拦一道，别让用户白等一趟接口
+    for (var k = 0; k < members.length; k++) {
+      if (!isStudentTicket(perTicket[k] || selectedId)) continue;
+      var idc = String(members[k].id_card || "").trim();
+      if (!idc) { E.toast(E.t("err_student_idcard_required")); btnScrollToId(k); return; }
+      if (!/^\d{17}[\dXx]$/.test(idc)) { E.toast(E.t("err_student_idcard_format")); btnScrollToId(k); return; }
+    }
     var btn = this; btn.disabled = true;
     E.Api.submitGroup({
       event_id: Number(eventId),
       buyer_phone: E.S.phone,
       members: members.map(function (m, i) {
-        return {
+        var o = {
           name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
           company: String(m.company || "").trim(), position: String(m.position || "").trim(),
           inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
           session_id: Number(m.session_id) || 0,
           ticket_type_id: Number(perTicket[i] || selectedId)
         };
+        if (isStudentTicket(o.ticket_type_id)) o.id_card = String(m.id_card || "").trim().toUpperCase();
+        return o;
       })
     }).then(function (d) {
       E.S.patch({ group_no: d.group_no, quote: d.quote, draft_members: null });

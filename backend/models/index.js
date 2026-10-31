@@ -24,6 +24,8 @@ const OperationLog = require('./OperationLog');
 const LegalDoc = require('./LegalDoc');
 const PaymentConfig = require('./PaymentConfig');
 const DiscountRule = require('./DiscountRule');
+const StudentVerifyConfig = require('./StudentVerifyConfig');
+const { StudentVerification, VERIFY_STATUS } = require('./StudentVerification');
 
 // 关联定义（放在最后，避免循环依赖）
 require('./associations');
@@ -47,6 +49,7 @@ module.exports = {
   VerificationCode, VerificationToken,
   OperationLog, LegalDoc, PaymentConfig,
   DiscountRule,
+  StudentVerifyConfig, StudentVerification, VERIFY_STATUS,
 
   // ==================== EC8 兼容别名 ====================
   // EC8 后台用 Ticket（门票）；EC9 升级为 TicketType（票种+场次+库存），

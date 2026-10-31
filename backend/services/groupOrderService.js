@@ -24,6 +24,7 @@ const TicketType = require('../models/TicketType');
 const Event = require('../models/Event');
 const CheckinCode = require('../models/CheckinCode');
 const Invitation = require('../models/Invitation');
+const { StudentVerification } = require('../models');
 const { encryptPhone, hmacPhone, decryptPhone } = require('../utils/phoneCrypto');
 const { validateSelection } = require('./ticketBinding');
 const { sendBusinessSms } = require('./verificationSmsService');
@@ -398,6 +399,39 @@ async function createGroup({ buyerPhone, eventId, members }) {
   const now = new Date();
   const created = [];
 
+  // ===== 学生票学籍核验（天远 API）=====
+  // 省钱口径：同一人（姓名+身份证）的核验结果入库复用 N 天，命中就不调接口。
+  // 通道未启用或未配凭证 → 整段跳过，维持原来的「现场核验学生证」，绝不阻断报名。
+  const studentVerify = require('./studentVerifyService');
+  const svCfg = await studentVerify.loadConfig();
+  const svReady = await studentVerify.isReady();
+  const svMap = new Map();          // phone → 核验结论
+  if (svReady) {
+    for (const m of norm) {
+      const ttId = Number(m.ticket_type_id) || 0;
+      const tt = ttId ? await TicketType.findByPk(ttId) : null;
+      if (!tt || Number(tt.is_student) !== 1) continue;   // 非学生票不核验
+
+      const idCard = String(m.id_card || '').trim();
+      if (!idCard) {
+        return { ok: false, error: `${m.name}：学生票需填写身份证号以完成学籍核验` };
+      }
+      const r = await studentVerify.verify({ name: m.name, idCard, eventId, groupNo });
+      svMap.set(String(m.phone), r);
+
+      // 明确不在籍 → 不允许买学生票（默认）
+      if (r.status === 'not_enrolled' && svCfg.on_not_enrolled === 'reject') {
+        return { ok: false, error: `${m.name}：学籍核验未通过，学生票仅限在读学生购买` };
+      }
+      // 接口异常/无法判断 ≠ 不是学生：默认转人工，只有显式配 reject 才拒绝
+      if ((r.status === 'unknown' || r.status === 'error') && r.code !== 'not_configured') {
+        if (svCfg.on_unknown === 'reject') {
+          return { ok: false, error: `${m.name}：学籍状态暂时无法核验，请稍后重试或联系主办方` };
+        }
+      }
+    }
+  }
+
   for (const m of norm) {
     const phone = String(m.phone);
     const ph = hmacPhone(phone);
@@ -451,9 +485,28 @@ async function createGroup({ buyerPhone, eventId, members }) {
         is_buyer: phone === String(buyerPhone),
         is_invited: isInvited,
         audit_exempt: isInvited,
-        need_pay: invNeedPay
+        need_pay: invNeedPay,
+        // 学生票学籍核验结论（enrolled / not_enrolled / unknown / error）
+        ...(svMap.has(phone) ? {
+          student_verify: svMap.get(phone).status,
+          student_verify_id: svMap.get(phone).verificationId || null,
+          student_verify_msg: svMap.get(phone).message || '',
+          student_verify_cached: !!svMap.get(phone).fromCache
+        } : {})
       }
     });
+
+    // 核验流水回填报名信息（便于按报名/订单追溯，身份证只在流水里加密存一份）
+    const sv = svMap.get(phone);
+    if (sv && sv.verificationId) {
+      try {
+        await StudentVerification.update(
+          { registration_id: reg.id, guest_id: guest.id, group_no: groupNo },
+          { where: { id: sv.verificationId } }
+        );
+      } catch (e) { /* 回填失败不影响报名 */ }
+    }
+
     created.push({
       registration_id: reg.id,
       guest_id: guest.id,

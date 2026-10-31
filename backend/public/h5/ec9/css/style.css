@@ -704,6 +704,15 @@ html[lang="en"] .tk-col-h { font-size: 12px; }
 html[lang="en"] .tk-a-row { flex-direction: column; align-items: stretch; gap: 6px; }
 html[lang="en"] .tk-a-name { max-width: none; }
 html[lang="en"] .tk-a-btns { justify-content: flex-start; }
+/* 学生票：选中后多出身份证号输入（学籍核验用），整行独占一行避免和票种按钮挤在一起 */
+.tk-a-idcard { flex-basis: 100%; margin-top: 6px; }
+.tk-a-idcard .tk-idcard {
+  width: 100%; font-size: 12px; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.tk-a-idcard .tk-a-tip {
+  font-size: 10px; color: #86909C; margin-top: 4px; line-height: 1.5;
+}
 .tk-fee-total { font-weight: 700; margin-top: 2px; }
 .tk-bar { width: 20px; flex: none; }
 .tk-bar.g1 { background: #83B931; }

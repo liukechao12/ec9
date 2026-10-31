@@ -27,8 +27,8 @@ const SUPPORTED = ['zh-CN', 'zh-Hant', 'en'];
 // 英文/繁体版本不需要在这里登记：文件名加了语言后缀（见 fileCandidates）会自动被识别，
 // 例：EC9-用户协议-20261029终稿.en.docx 会被 lang=en 命中。
 const DOC_FILES = {
-    user: ['EC9-用户协议-20261029终稿.docx', '用户协议-20260312更新.docx', 'EC8-用户协议-20251216更新.docx'],
-    privacy: ['EC9-隐私政策-20261029终稿.docx', '隐私政策-20260312更新.docx', 'EC8-隐私政策-20251216更新.docx']
+    user: ['EC9-用户协议-20261030终稿.docx', 'EC9-用户协议-20261029终稿.docx', '用户协议-20260312更新.docx', 'EC8-用户协议-20251216更新.docx'],
+    privacy: ['EC9-隐私政策-20261030终稿.docx', 'EC9-隐私政策-20261029终稿.docx', '隐私政策-20260312更新.docx', 'EC8-隐私政策-20251216更新.docx']
 };
 
 const TITLES = {

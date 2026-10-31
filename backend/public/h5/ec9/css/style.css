@@ -30,18 +30,31 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* --vh：JS 写入的真实可视高度（window.innerHeight）。
+   微信里 100vh 含浏览器 UI 与底部安全区，比可视区高一截，直接用会把底部按钮顶出屏幕。
+   JS 没跑起来时（脚本报错/极老 WebView）退回 100vh，表现和改之前一致。 */
+:root { --vh: 100vh; }
+
 html, body {
   height: 100%;
+  /* ⚠️ 这里千万不要加 overflow-x: hidden。
+     它会把 overflow-y 从 visible 强制成 auto，滚动容器从 documentElement 变成 body，
+     documentElement.scrollHeight 会缩回一屏高、window.scrollY 恒为 0
+     （键盘回弹复位、滚动定位全部失效，iOS 上还会丢惯性滚动）。
+     横向溢出的正解在 common.js：transform 分支用负 marginRight 吃掉布局盒多出的宽度。 */
   background: var(--page-bg);
   font-family: "PingFang SC", "PingFang TC", "MiSans", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   color: #1D2129;
+  /* 微信「字体大小」设置 / 横屏切换会按文字自动缩放撑破版式，这里锁死 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* 等比适配：页面始终按 375 设计稿宽度布局，再由 JS 整体缩放（common.js fitViewport）
    100vh 会被缩放放大，因此统一用 calc(100vh / var(--z,1)) 抵消 */
 #app {
   width: 375px; max-width: 375px; margin: 0 auto;
-  min-height: calc(100vh / var(--z, 1));
+  min-height: calc(var(--vh, 100vh) / var(--z, 1));
   background: var(--page-bg); position: relative;
   transform-origin: top center;
 }
@@ -75,7 +88,8 @@ html, body {
 }
 .lang-switch .globe { width: 20px; height: 20px; border: 1.6px solid #fff; border-radius: 50%; position: relative; display: inline-block; }
 .lang-switch .globe::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  /* inset 简写要 Chrome 87+，微信 Android 的 X5 内核偏老，展开写更保险 */
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 50%;
   border-left-color: transparent; border-right-color: transparent;
   border: 1.6px solid #fff; clip-path: inset(0 22% 0 22%);
 }
@@ -102,6 +116,8 @@ html, body {
   z-index: 1;
   min-height: calc(100vh / var(--z, 1) - 164px);
   padding: 26px 20px 40px;
+  /* iPhone X 及以上：微信里底部有 34px 小黑条，不加安全区最后一行内容会被压在下面 */
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
 }
 .sheet--flush { min-height: 0; }
 .sheet--black { background: transparent; border-radius: 0; padding-top: 1px; }
@@ -368,7 +384,7 @@ select.input.filled { color: #1D2129; }
 .result-page .btn-primary + .btn-primary { margin-top: 12px; }
 
 /* ---------- 电子票（设计稿：蓝底品牌区+白卡 y193 浮起，行距40，状态值大字） ---------- */
-.eticket-wrap { background: var(--brand-blue); padding: 0 12px 30px; min-height: calc(100vh / var(--z, 1)); position: relative; }
+.eticket-wrap { background: var(--brand-blue); padding: 0 12px 30px; min-height: calc(var(--vh, 100vh) / var(--z, 1)); position: relative; padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
 #app.eticket-wrap .btn-primary { margin-top: 12px; }
 #app.eticket-wrap div > .btn-primary:first-child { margin-top: 18px; }
 .eticket {
@@ -412,7 +428,7 @@ select.input.filled { color: #1D2129; }
 #app.agree-page { background: var(--brand-blue); }
 .agree-page .brand::before { display: none; }
 .agree-page .lang-switch { top: 24px; }
-.agree-page { min-height: calc(100vh / var(--z, 1)); padding: 64px 12px 30px; position: relative; }
+.agree-page { min-height: calc(var(--vh, 100vh) / var(--z, 1)); padding: 64px 12px 30px; position: relative; padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
 .agree-page .back-btn { color: #4E5969; }
 .agree-page .back-btn:active { color: #1D2129; }
 .agree-card { background: #fff; border-radius: 16px; padding: 0 0 30px; overflow: hidden; }
@@ -483,6 +499,7 @@ select.input.filled { color: #1D2129; }
   left: 0;
   right: 0;
   bottom: 12%;
+  bottom: calc(12% + env(safe-area-inset-bottom, 0px));
   margin: 0 auto;
   width: -webkit-fit-content;
   width: fit-content;
@@ -598,7 +615,7 @@ select.input.filled { color: #1D2129; }
    灰底 #EDEDED，无品牌头；标题 y70-92 / 三卡 y114-541 / 权益面板
    y562-889 / 协议 y950-963 / 提交按钮 y984-1021 / 退款说明 y1061-1069
    ============================================================ */
-#app.tk-page { background: #EDEDED; min-height: calc(100vh / var(--z, 1)); padding: 69px 0 30px; }
+#app.tk-page { background: #EDEDED; min-height: calc(var(--vh, 100vh) / var(--z, 1)); padding: 69px 0 30px; padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
 /* 门票页没有蓝色品牌条（设计稿此处是浅灰底），所以只保留语言切换浮层并改成深色，
    否则白色图标落在灰底上等于看不见 */
 #app.tk-page #header { height: 0; }

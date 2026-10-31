@@ -34,7 +34,18 @@
      zoom 会被算进布局（浏览器原生缩放）；不支持的旧 WebView 退化为 transform scale + 占位补偿。 */
   var DESIGN_W = 375;
   var MAX_SCALE = 1.6;              // 宽屏（含桌面预览）上限，避免字被拉得过大
+  var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var zoomSupported = (w.CSS && CSS.supports) ? CSS.supports("zoom", "1.5") : false;
+
+  /* 微信（iOS/Android）里 100vh 是「含浏览器 UI 与底部安全区」的大视口高度，
+     比真正能看见的区域高一截（iOS 微信约高 80~130px），直接拿它做 min-height
+     会把页面底部按钮顶到微信工具栏/小黑条底下，用户以为「按钮没了」。
+     这里用 window.innerHeight（真实可视高度）写一份 --vh 给 CSS 用。 */
+  function isTyping() {
+    var a = document.activeElement;
+    return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
+  }
 
   function fitViewport() {
     var app = document.getElementById("app");
@@ -43,24 +54,93 @@
     if (!vw) return;
     var s = Math.min(vw / DESIGN_W, MAX_SCALE);
     document.documentElement.style.setProperty("--z", s);
+    // 键盘弹起时 innerHeight 会缩水，此时不要改 --vh（否则页面上跳）
+    var vh = w.innerHeight;
+    if (vh && !isTyping()) document.documentElement.style.setProperty("--vh", vh + "px");
     if (zoomSupported) {
       app.style.zoom = s;
     } else {
       app.style.transform = "scale(" + s + ")";
-      app.style.transformOrigin = "top center";
-      // transform 不占布局空间，用负外边距把被缩掉的高度补回来
+      /* 必须用 top left，不能用 top center：#app 的布局盒是死的 375px，
+         在窄屏（360/320）上盒比视口宽，再以盒中心为原点缩放，视觉上会右移
+         (375 - 375*s)/2 ≈ 8px —— 页面右边多出一截，微信里能左右拖动。
+         改 top left 后再用 marginLeft 抵消宽屏时的居中需求（s 被 MAX_SCALE 卡住时）。 */
+      app.style.transformOrigin = "top left";
+      var occupied = DESIGN_W * s;
+      app.style.marginLeft = Math.max(0, (vw - occupied) / 2) + "px";
+      /* 布局盒仍是死的 375px，窄屏（360/320）上它比视口宽 → 页面能左右拖。
+         用负的 marginRight 把多出来的那截吃掉，body 就不会出现横向滚动。
+         （不能用 html/body{overflow-x:hidden}，那会把滚动容器挪到 body，见 style.css） */
+      app.style.marginRight = Math.min(0, vw - DESIGN_W) + "px";
+      // transform 不占布局空间，用外边距把被缩掉的高度补回来
       app.style.marginBottom = ((s - 1) * app.offsetHeight) + "px";
     }
+    // 回弹露白：iOS 微信上下橡皮筋会露出 html/body 的底色（默认白），
+    // 在蓝底页面（协议/结果/电子票）上就是两条白边。让 body 跟着页面底色走。
+    try {
+      var bg = w.getComputedStyle(app).backgroundColor;
+      if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+        document.documentElement.style.backgroundColor = bg;
+        document.body.style.backgroundColor = bg;
+      }
+    } catch (e) {}
+  }
+
+  var fitPending = false;
+  function fitViewportSoon() {
+    if (fitPending) return;
+    fitPending = true;
+    (w.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); })(function () {
+      fitPending = false;
+      fitViewport();
+    });
   }
 
   fitViewport();
   w.addEventListener("resize", fitViewport);
   w.addEventListener("orientationchange", function () { setTimeout(fitViewport, 120); });
   w.addEventListener("load", fitViewport);
+  // 微信 iOS 走 bfcache 返回时不会触发 load，页面尺寸可能已经变了
+  w.addEventListener("pageshow", function (e) { if (e.persisted) fitViewport(); });
   document.addEventListener("DOMContentLoaded", fitViewport);
   // 字体/图片到位后高度会变，再补一次
   setTimeout(fitViewport, 300);
   setTimeout(fitViewport, 1200);
+
+  /* 内容异步到位后高度会变（法务文档是 fetch 回来的、图片解码、列表渲染）。
+     transform 分支的 marginBottom 补偿如果不跟着重算，页面底部就有一截滚不到
+     —— Android 微信（X5 内核不支持 zoom）上协议页「看不完全文」就是这个原因，
+     弱网时 fetch 晚于上面的 1200ms 兜底必踩。用 ResizeObserver 兜住所有情况。 */
+  if (w.ResizeObserver) {
+    var roTick = null;
+    try {
+      var ro = new w.ResizeObserver(function () { fitViewportSoon(); });
+      var appEl = document.getElementById("app");
+      if (appEl) ro.observe(appEl);
+      // 观察不到就等 DOM 就绪再挂一次（脚本可能在 #app 之前执行）
+      if (!appEl) document.addEventListener("DOMContentLoaded", function () {
+        var a = document.getElementById("app");
+        if (a) ro.observe(a);
+      });
+    } catch (e) { /* 老 WebView 没有就算了，上面的定时器兜底 */ }
+  }
+
+  /* iOS 微信：软键盘弹起会把页面上顶，收起后 WKWebView 不自动复位，
+     页面底部留一条空白、fixed 元素（toast）错位。
+     这里在输入框失焦后把滚动位置还原，并重新算一次适配。 */
+  var kbScrollY = 0;
+  document.addEventListener("focusin", function (e) {
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) kbScrollY = w.scrollY || 0;
+  }, true);
+  document.addEventListener("focusout", function (e) {
+    var t = e.target;
+    if (!t || (t.tagName !== "INPUT" && t.tagName !== "TEXTAREA")) return;
+    setTimeout(function () {
+      if (isIOS) { try { w.scrollTo(0, kbScrollY); } catch (err) {} }
+      fitViewport();
+    }, 150);
+  }, true);
 
   /* ---------- 三语 ---------- */
   function t(k) {

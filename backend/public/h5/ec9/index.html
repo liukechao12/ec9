@@ -61,7 +61,11 @@
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var agreed = false;
   var ck = document.getElementById("agreeCk");
-  ck.addEventListener("click", function () { agreed = ck.classList.toggle("checked"); });
+  /* 勾选框只有 14px，手机上很难点中；把点击热区扩到整行（协议链接除外，照常跳转） */
+  ck.parentElement.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("a")) return;
+    agreed = ck.classList.toggle("checked");
+  });
 
   document.getElementById("btnContact").addEventListener("click", function () {
     E.go("agreement.html", { tab: "contact", event_id: eventId, redirect: "index.html" });

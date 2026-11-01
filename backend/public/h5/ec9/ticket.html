@@ -71,8 +71,11 @@
     a.setAttribute("href", base + (base.indexOf("?") > -1 ? "&" : "?") + "redirect=" + encodeURIComponent(selfUrl));
   });
 
-  document.getElementById("agreeCk").addEventListener("click", function () {
-    agreed = this.classList.toggle("checked");
+  /* 勾选框只有 12px，手机上很难点中；把点击热区扩到整行（协议链接除外，照常跳转） */
+  var agreeCk = document.getElementById("agreeCk");
+  agreeCk.parentElement.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("a")) return;
+    agreed = agreeCk.classList.toggle("checked");
   });
 
   /* ---------- 工具 ---------- */

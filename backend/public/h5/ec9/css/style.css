@@ -280,6 +280,15 @@ select.input.filled { color: #1D2129; }
 }
 .agree-row a { color: var(--blue); text-decoration: none; }
 
+/* 移动端触摸热区增强：协议行 / 「开票·退款」这类行内链接本身只有 13~21px 高，
+   真机上很难点中。行内元素的竖直 padding 不撑行高、水平 padding 用负 margin 抵消，
+   所以「padding + 负 margin」能原地把热区上下各扩 12px、左右各扩 4px，视觉与排版完全不变。 */
+.agree-row a,
+.tk-agree-row a,
+.et-foot a {
+  padding: 12px 4px; margin: 0 -4px;
+}
+
 /* 首页协议勾选（蓝底上：白色圆角方块，贴合设计稿 y632） */
 #app.home .agree-row {
   position: absolute; left: 0; right: 0; top: 590px;

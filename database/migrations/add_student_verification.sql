@@ -3,6 +3,14 @@
 -- 用法：psql -h <host> -U ec9 -d ec9 -f database/migrations/add_student_verification.sql
 -- ============================================================
 
+-- updated_at 自动更新函数（老库可能没建过，这里补上；已存在则覆盖为同一实现）
+CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ------------------------------------------------------------
 -- 1. 学籍核验通道配置（单行 name='tianyuan'，后台可改，热更新）
 -- ------------------------------------------------------------

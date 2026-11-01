@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS ec9_registrations (
   registration_time TIMESTAMP,
   focus VARCHAR(200),
   group_no VARCHAR(40),
+  session_all INT2 NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
 CREATE INDEX IF NOT EXISTS idx_ec9_reg_event ON public.ec9_registrations USING btree (event_id);

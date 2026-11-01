@@ -350,7 +350,7 @@ const clip = (v, n) => (v == null ? '' : String(v).slice(0, n));
  * @param {Object} p
  * @param {string} p.buyerPhone  购票人（已手机验证）
  * @param {number} p.eventId
- * @param {Array}  p.members  [{name, phone, company, position, inviter, focus, session_id, ticket_type_id}]
+ * @param {Array}  p.members  [{name, phone, company, position, inviter, focus, session_id, session_all, ticket_type_id}]
  * @returns {ok, group_no, quote, registrations:[{registration_id, name, phone}]}
  */
 async function createGroup({ buyerPhone, eventId, members }) {
@@ -470,6 +470,8 @@ async function createGroup({ buyerPhone, eventId, members }) {
     const reg = await Registration.create({
       event_id: eventId,
       session_id: Number(m.session_id) || 0,
+      // 「全部论坛」也要落库：它与「未选」都是 session_id=0，不记这一位导出名单就分不出来
+      session_all: Number(m.session_all) === 1 ? 1 : 0,
       ticket_type_id: effTicketId,
       guest_id: guest.id,
       invitation_id: invId || (isInvited ? invitedMap.get(phone).invitation_id : null),

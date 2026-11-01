@@ -55,6 +55,34 @@ function applySelectionPatch(payload, sel) {
   return payload;
 }
 
+/** 论坛展示名：「全部论坛」与「未选」在库里都是 session_id=0，靠 session_all 分开 */
+const SESSION_ALL_LABEL = '全部论坛';
+const SESSION_NONE_LABEL = '未选';
+
+/**
+ * 报名记录 → 论坛展示名
+ * @param {object} reg   需含 session_id / session_all
+ * @param {object} sMap  { sessionId: name }，一次性建好避免 N+1
+ */
+function sessionLabelOf(reg, sMap) {
+  if (!reg) return SESSION_NONE_LABEL;
+  if (Number(reg.session_all) === 1) return SESSION_ALL_LABEL;
+  const sid = Number(reg.session_id) || 0;
+  if (sid > 0) return (sMap && sMap[sid]) || SESSION_NONE_LABEL;
+  return SESSION_NONE_LABEL;
+}
+
+/** 批量报名 → { sessionId: name }，只查一次库 */
+async function buildSessionMap(regs) {
+  const { Session } = require('../models');
+  const ids = [...new Set(regs.map(r => Number(r.session_id) || 0).filter(x => x > 0))];
+  if (!ids.length) return {};
+  const rows = await Session.findAll({ where: { id: ids }, attributes: ['id', 'name'] });
+  const map = {};
+  rows.forEach(s => { map[s.id] = s.name; });
+  return map;
+}
+
 /** 报名表单扩展字段（H5 提交）：关注方向 focus、论坛/场次已由 session_id 承载 */
 function applyFormPatch(payload, body) {
   if (body && body.focus !== undefined && body.focus !== null) {
@@ -130,6 +158,7 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
           { model: Guest, as: 'guest', required: false }
         ]
       });
+      const groupSMap = await buildSessionMap(members);
       group = {
         group_no: reg.group_no,
         is_buyer: !!(reg.extra_fields && reg.extra_fields.is_buyer),
@@ -138,6 +167,8 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
           registration_id: m.id,
           name: m.guest ? m.guest.name : null,
           ticket_name: m.ticketType ? m.ticketType.name : null,
+          session_all: Number(m.session_all) === 1 ? 1 : 0,
+          session_name: sessionLabelOf(m, groupSMap),
           price: m.ticketType ? Number(m.ticketType.price) : null,
           is_student: m.ticketType ? Number(m.ticketType.is_student) === 1 : false,
           status: m.status,
@@ -167,7 +198,9 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
         ticket_name: reg.ticketType ? reg.ticketType.name : null,
         price: reg.ticketType ? Number(reg.ticketType.price) : null,
         session_id: reg.session_id,
-        session_name: reg.session ? reg.session.name : null,
+        // 选了「全部论坛」的人 session_id 也是 0，前端要按 session_all 才能显示对
+        session_all: Number(reg.session_all) === 1 ? 1 : 0,
+        session_name: sessionLabelOf(reg, reg.session ? { [reg.session.id]: reg.session.name } : {}),
         focus: reg.focus || null,
         name: guest.name,
         company: guest.company,
@@ -1064,6 +1097,7 @@ router.get('/group/:groupNo', async (req, res) => {
     (g.order && Array.isArray(g.order.price_detail) ? g.order.price_detail : []).forEach(d => {
       pdMap.set(Number(d.registration_id), d);
     });
+    const gSessionMap = await buildSessionMap(g.registrations);
     res.json({
       code: 0, message: 'ok',
       data: {
@@ -1091,6 +1125,8 @@ router.get('/group/:groupNo', async (req, res) => {
           ticket_name: r.ticketType ? r.ticketType.name : null,
           price: r.ticketType ? Number(r.ticketType.price) : null,
           is_student: r.ticketType ? Number(r.ticketType.is_student) === 1 : false,
+          session_all: Number(r.session_all) === 1 ? 1 : 0,
+          session_name: sessionLabelOf(r, gSessionMap),
           focus: r.focus, is_buyer: !!ef.is_buyer
           };
         }),
@@ -1159,6 +1195,8 @@ router.get('/group-list', authenticate, async (req, res) => {
         { model: TicketType, as: 'ticketType', required: false }
       ]
     });
+    // 论坛名一次性取好（否则整单列表会 N+1 把 PG 打爆）
+    const sMap = await buildSessionMap(regs);
     // 按 group_no 聚合
     const groups = new Map();
     for (const r of regs) {
@@ -1182,6 +1220,8 @@ router.get('/group-list', authenticate, async (req, res) => {
         })(),
         ticket_name: r.ticketType ? r.ticketType.name : '',
         price: r.ticketType ? Number(r.ticketType.price) : 0,
+        session_all: Number(r.session_all) === 1 ? 1 : 0,
+        session_name: sessionLabelOf(r, sMap),
         is_std: isStandardType(r.ticketType),
         focus: r.focus, status: r.status, reject_reason: r.reject_reason,
         is_invited: !!(r.extra_fields && r.extra_fields.is_invited),
@@ -1228,6 +1268,128 @@ router.get('/group-list', authenticate, async (req, res) => {
     res.json({ code: 0, message: 'ok', data: { list } });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+/**
+ * GET /api/registrations/export   管理员：导出报名名单 Excel（一人一行）
+ *
+ * 后台「报名审核」是按整单看的，但名单是给人用的（现场核对、发资料），
+ * 所以导出按人铺开，一行一个人。
+ *
+ * ⚠️ 论坛列是这次单独加 session_all 的原因：「全部论坛」和「未选」存到库里
+ *    都是 session_id=0，不记这一位就只能显示成「未选」，名单等于废一半。
+ *
+ * query: event_id? status?(submitted/approved/paid/rejected) keyword?(组号/姓名/手机/公司) group_no?
+ */
+router.get('/export', authenticate, operationLog('registrations', '导出报名名单Excel'), async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const { event_id, status, keyword, group_no } = req.query || {};
+    const where = { group_no: { [Op.ne]: null } };
+    if (event_id) where.event_id = Number(event_id) || 0;
+    if (group_no) where.group_no = String(group_no);
+
+    const regs = await Registration.findAll({
+      where,
+      order: [['id', 'ASC']],
+      limit: 20000,
+      include: [
+        { model: Guest, as: 'guest', required: false },
+        { model: TicketType, as: 'ticketType', required: false }
+      ]
+    });
+
+    // 论坛名 / 活动名一次取全，避免逐行查库
+    const sMap = await buildSessionMap(regs);
+    const evMap = {};
+    const evs = await Event.findAll({ attributes: ['id', 'name'] });
+    evs.forEach(e => { evMap[e.id] = e.name; });
+
+    // 整单聚合：筛选口径与后台一致（有 submitted → 待审核；全 rejected → 已驳回；全 paid → 已支付）
+    const groups = new Map();
+    for (const r of regs) {
+      if (!groups.has(r.group_no)) groups.set(r.group_no, { sts: [] });
+      groups.get(r.group_no).sts.push(r.status);
+    }
+    const groupStatus = (sts) => sts.includes('submitted') ? 'submitted'
+      : (sts.every(s => s === 'rejected') ? 'rejected'
+        : (sts.every(s => s === 'paid') ? 'paid' : 'approved'));
+
+    const { decryptPhone } = require('../utils/phoneCrypto');
+    const phoneOf = (r) => {
+      if (!r.guest || !r.guest.phone) return '';
+      try { return decryptPhone(r.guest.phone) || ''; } catch (e) { return ''; }
+    };
+
+    const kw = String(keyword || '').trim();
+    const kwHit = new Set();
+    if (kw) {
+      for (const r of regs) {
+        if ((r.group_no || '').indexOf(kw) > -1
+          || phoneOf(r).indexOf(kw) > -1
+          || String(r.guest && r.guest.name || '').indexOf(kw) > -1
+          || String(r.guest && r.guest.company || '').indexOf(kw) > -1) {
+          kwHit.add(r.group_no);
+        }
+      }
+    }
+
+    // 关键词按整单命中：一个人命中就把整单都导出来，别把同一单的人拆散
+    const keep = new Set();
+    groups.forEach((g, gno) => {
+      if (status && groupStatus(g.sts) !== status) return;
+      if (kw && !kwHit.has(gno)) return;
+      keep.add(gno);
+    });
+
+    const STATUS_CN = {
+      submitted: '待审核', pending_audit: '待审核', approved: '待支付',
+      paid: '已支付', rejected: '已驳回', closed: '已关闭', cancelled: '已取消'
+    };
+    const p2 = (n) => String(n).padStart(2, '0');
+    const fmt = (d) => {
+      if (!d) return '';
+      const t = new Date(d);
+      return `${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}:${p2(t.getMinutes())}:${p2(t.getSeconds())}`;
+    };
+
+    const data = [];
+    for (const r of regs) {
+      if (!keep.has(r.group_no)) continue;
+      const phone = phoneOf(r);
+      const ef = r.extra_fields || {};
+      data.push({
+        报名单号: r.group_no || '',
+        活动: evMap[r.event_id] || '',
+        姓名: (r.guest && r.guest.name) || '',
+        手机号: phone,
+        公司: (r.guest && r.guest.company) || '',
+        职务: (r.guest && r.guest.position) || '',
+        票种: r.ticketType ? r.ticketType.name : '',
+        票价: r.ticketType ? Number(r.ticketType.price) : 0,
+        论坛: sessionLabelOf(r, sMap),
+        关注方向: r.focus || '',
+        邀请人: r.source_bd || '',
+        成员身份: ef.is_buyer ? '购票人' : '同行人',
+        邀约免票: ef.is_invited ? '是' : '否',
+        报名状态: STATUS_CN[r.status] || r.status || '',
+        提交时间: fmt(r.registration_time || r.submitted_at)
+      });
+    }
+
+    const XLSX = require('xlsx');
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '报名名单');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Disposition', `attachment; filename="registrations_${Date.now()}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return res.send(buffer);
+  } catch (e) {
+    console.error('导出报名名单失败:', e);
+    res.status(500).json({ code: 500, message: '导出失败', error: e.message });
   }
 });
 

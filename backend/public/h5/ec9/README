@@ -146,6 +146,7 @@ checkin.html  签到 → result.html?type=checkin&status=...
 | 邀请人 `#pInviter` | `inviter` | `inviter` | `ec9_invitations.source_bd` | varchar(100) |
 | 关注方向 `#pFocus` | `focus` | `focus` | `ec9_registrations.focus` | varchar(200) |
 | 论坛/场次 `#pSession` | `session_id` | `session_id` | `ec9_registrations.session_id` | int NOT NULL DEFAULT 0 |
+| 论坛 = 全部论坛 | `session_all=1` | `session_all` | `ec9_registrations.session_all` | smallint NOT NULL DEFAULT 0（1=全部论坛，`session_id` 同为 0，靠它和「未选」区分） |
 | 票种（卡片点选） | `ticket_type_id` | `ticket_type_id` | `ec9_registrations.ticket_type_id` | int NOT NULL DEFAULT 0 |
 | 活动（URL） | `event_id` | `event_id` | `ec9_registrations.event_id` | int NOT NULL |
 | 协议勾选 | 不传 | — | — | 仅前端门禁 |

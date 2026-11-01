@@ -490,13 +490,30 @@ node scripts/init-sms-config.js [--force]   # 加列 + 从 .env 播种（--force
 |---|---|---|
 | 嘉宾 | `/api/guests` | 列表/详情/增删改/导入/修改历史 |
 | 邀约 | `/api/invitations` | 列表/详情/批量/审批/拒绝/失效/换会/座位/住宿/导出/待审批/来源BD |
-| 报名 | `/api/registrations` | 列表/`submit`/`by-phone`/`submit-by-phone`/`submit-performance` |
+| 报名 | `/api/registrations` | 列表/`submit`/`by-phone`/`submit-by-phone`/`submit-performance`/`submit-group`/`group-list`/`export` |
 | 签到 | `/api/checkins` | 列表/`admin-checkin`/`by-phone`/`event-checkin`/`statistics` |
 | 签到码 | `/api/checkin-codes` | 列表/新建/删除/改状态/重生成二维码 |
 | 短信 | `/api/sms` | 模板 CRUD/规则 CRUD/发送/自动发送/发送日志 |
 | 操作日志 | `/api/operation-logs` | 列表/详情/统计 |
 | 法务文档 | `/api/legal` | 用户协议/隐私政策 |
 | 验证码 | `/api/verification` | 发码/验码 |
+
+### 报名名单导出 `/api/registrations/export`（2026-11-01 新增）
+
+报名审核页是按整单看的，导出的名单按**人**铺开，一行一个人（现场核对/BD 跟进用）。
+沿用页面当前的筛选条件（`status` / `keyword`，另支持 `event_id` / `group_no`），
+命中一个人的关键词会把整单都导出来，避免同一单的人被拆散。
+
+列：报名单号 / 活动 / 姓名 / 手机 / 公司 / 职务 / 票种 / 票价 / **论坛** / 关注方向 /
+邀请人 / 成员身份 / 邀约免票 / 报名状态 / 提交时间。
+
+论坛列由 `ec9_registrations.session_all` 判定：
+
+| session_all | session_id | 导出显示 |
+|---|---|---|
+| 1 | 0 | 全部论坛 |
+| 0 | >0 | 具体论坛名 |
+| 0 | 0 | 未选（只有直接打接口才会出现） |
 
 ---
 

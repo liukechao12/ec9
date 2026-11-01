@@ -31,6 +31,12 @@ const Registration = sequelize.define('Registration', {
   source_bd: DataTypes.STRING(100),
   // H5 报名表单：关注方向（设计稿「关注方向」字段）
   focus: DataTypes.STRING(200),
+  // 「全部论坛」标记：H5 上「全部论坛」和「未选」提交过来都是 session_id=0，
+  // 光看 session_id 分不出来（导出名单会显示成未选），这个位才是真正的口径：
+  //   session_all=1                → 全部论坛
+  //   session_all=0 且 session_id>0 → 具体论坛
+  //   两者皆为 0                    → 未选（只有直接打接口才会出现）
+  session_all: { type: DataTypes.SMALLINT, defaultValue: 0, comment: '1=选了「全部论坛」' },
   extra_fields: DataTypes.JSON
 }, {
   tableName: 'ec9_registrations',

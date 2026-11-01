@@ -1119,13 +1119,14 @@
                     <button class="btn btn-primary btn-sm" onclick="loadRegAudit()">查询</button>
                     <button class="btn btn-outline btn-sm" onclick="regAuditBulk('approve')">批量通过</button>
                     <button class="btn btn-outline btn-sm" onclick="regAuditBulk('reject')">批量驳回</button>
+                    <button class="btn btn-outline btn-sm" onclick="exportRegistrations()">导出名单</button>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
                                 <th><input type="checkbox" id="regAuditCkAll"></th>
-                                <th>组号</th><th>填报人</th><th>购票人手机</th><th>票种</th><th>人数</th><th>状态</th><th>提交时间</th><th>操作</th>
+                                <th>组号</th><th>填报人</th><th>购票人手机</th><th>票种</th><th>论坛</th><th>人数</th><th>状态</th><th>提交时间</th><th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="regAuditBody"></tbody>

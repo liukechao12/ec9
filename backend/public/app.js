@@ -6259,18 +6259,20 @@ async function loadRegAudit() {
     const keyword = document.getElementById('regAuditKeyword').value.trim();
     const body = document.getElementById('regAuditBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="9">加载中…</td></tr>';
+    body.innerHTML = '<tr><td colspan="10">加载中…</td></tr>';
     try {
         const res = await apiRequest(`/registrations/group-list?status=${encodeURIComponent(status)}&keyword=${encodeURIComponent(keyword)}`);
         regAuditCache = (res.data && res.data.list) || [];
         if (!regAuditCache.length) {
-            body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999">暂无数据</td></tr>';
+            body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999">暂无数据</td></tr>';
             return;
         }
         const stMap = { submitted: '<span style="color:#E8A33D">待审核</span>', approved: '<span style="color:#3056D4">待支付</span>', paid: '<span style="color:#00B42A">已支付</span>', rejected: '<span style="color:#E34D59">已驳回</span>' };
         body.innerHTML = regAuditCache.map((g, i) => {
             const names = g.members.map(m => m.name + (m.is_buyer ? '(购票人)' : '') + (m.is_invited ? '<span style="color:#00B42A;font-size:11px">[邀约免票]</span>' : '<span style="color:#E8A33D;font-size:11px">[需购票]</span>')).join('、');
             const tickets = [...new Set(g.members.map(m => m.ticket_name))].join('/');
+            // 论坛：整单里各人可能选得不一样，去重后并列；「全部论坛」由后端按 session_all 判出来的
+            const forums = [...new Set(g.members.map(m => m.session_name || '未选'))].join('/');
             const canAudit = g.status === 'submitted';
             // 多人一起审核：只有「全部通过」和「全部驳回」两种结果；满3张9折、满5张8折
             const disc = (g.paid_count >= 5) ? '满5张8折' : (g.paid_count >= 3 ? '满3张9折' : '');
@@ -6281,6 +6283,7 @@ async function loadRegAudit() {
                 <td style="max-width:260px" title="${names}">${names}</td>
                 <td>${g.submitter_phone || '-'}</td>
                 <td>${tickets}</td>
+                <td>${forums}</td>
                 <td>${g.members.length}<br><span style="font-size:11px;color:#6B7280">邀约 ${g.invited_count || 0} · 需付款 ${g.paid_count || 0}</span>${cntTip}</td>
                 <td>${stMap[g.status] || g.status}${g.members.some(m => m.reject_reason) ? '<br><span style="font-size:11px;color:#E34D59">' + (g.members.find(m => m.reject_reason) || {}).reject_reason + '</span>' : ''}</td>
                 <td style="font-size:12px">${g.submitted_at ? new Date(g.submitted_at).toLocaleString() : '-'}</td>
@@ -6294,7 +6297,7 @@ async function loadRegAudit() {
             document.querySelectorAll('#regAuditBody .reg-audit-ck:not(:disabled)').forEach(c => c.checked = ckAll.checked);
         };
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="9" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="10" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
     }
 }
 
@@ -6345,4 +6348,44 @@ async function regAuditBulk(action) {
     }
     alert(`批量${action === 'approve' ? '通过' : '驳回'}完成：成功 ${ok}/${gnos.length}` + (failMsgs.length ? '\n失败：\n' + failMsgs.join('\n') : ''));
     loadRegAudit();
+}
+
+/**
+ * 导出报名名单 Excel（报名审核页）
+ *
+ * 名单按「人」铺开，一行一个人 —— 审核页是按整单看的，但名单是给现场和 BD 用的。
+ * 导出沿用当前筛选条件（状态 / 关键词），所见即所得。
+ * 论坛列是这次单独加 session_all 的意义所在：「全部论坛」和「未选」在库里都是
+ * session_id=0，后端靠 session_all 才能给出「全部论坛 / 论坛名 / 未选」。
+ */
+async function exportRegistrations() {
+    try {
+        const params = new URLSearchParams();
+        const statusEl = document.getElementById('regAuditStatus');
+        const kwEl = document.getElementById('regAuditKeyword');
+        if (statusEl && statusEl.value) params.set('status', statusEl.value);
+        if (kwEl && kwEl.value.trim()) params.set('keyword', kwEl.value.trim());
+
+        const url = `${API_BASE}/registrations/export${Array.from(params.keys()).length ? '?' + params.toString() : ''}`;
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${currentToken || ''}` }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || '导出失败');
+        }
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `registrations_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        console.error('导出报名名单失败:', error);
+        alert(error.message || '导出失败，请稍后重试');
+    }
 }

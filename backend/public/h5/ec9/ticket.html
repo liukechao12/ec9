@@ -57,7 +57,12 @@
   E.mountHeader(document.getElementById("header"), false);
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var tickets = [];
-  var members = (E.S.data && E.S.data.draft_members) || [];
+  // 旧草稿（session_all 还没这个字段时存的）里 session_id=0 只可能是「全部论坛」：
+  // 论坛是必填项，未选根本过不了上一页的校验，直接补上，别让老草稿退化成「未选」
+  var members = ((E.S.data && E.S.data.draft_members) || []).map(function (m) {
+    if (m.session_all === undefined && !Number(m.session_id)) m.session_all = true;
+    return m;
+  });
   var selectedId = 0;          // 默认票种：点上方票卡会批量套用给所有人
   var perTicket = [];          // 每人票种，下标与 members 对齐
   var agreed = false;
@@ -387,6 +392,8 @@
           company: String(m.company || "").trim(), position: String(m.position || "").trim(),
           inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
           session_id: Number(m.session_id) || 0,
+          // 「全部论坛」在后端也是 session_id=0，必须单独传这一位才能和「未选」区分开
+          session_all: m.session_all ? 1 : 0,
           ticket_type_id: Number(perTicket[i] || selectedId)
         };
         if (isStudentTicket(o.ticket_type_id)) o.id_card = String(m.id_card || "").trim().toUpperCase();

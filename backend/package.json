@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "dev:h5": "node dev-h5.js",
     "schema": "node scripts/run-schema.js",
     "schema:check": "node scripts/run-schema.js --check",
     "seed": "node scripts/seed.js",

@@ -246,6 +246,11 @@ select.input.filled { color: #1D2129; }
 /* 首页文字（绝对定位贴合设计稿 1x 坐标：标题151 / 英标语204 / 中文语228 / 6651.HK 258） */
 .home-ticker { top: 258px; text-align: center; color: #fff; font-size: 15px; letter-spacing: 1.5px; font-weight: 700; line-height: 1; }
 .home-title { top: 151px; text-align: center; font-size: 26px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 5px; text-indent: 5px; line-height: 1.1; white-space: nowrap; }
+/* 首页标题默认按中文视觉量身定制；英文活动名更长，继续用 26px + 5px 字距会被 375 画布裁掉。 */
+.home-title--latin { font-size: 24px; letter-spacing: 1px; text-indent: 1px; }
+.home-title--latin .home-nine { font-size: 35px; transform: translateY(3px); }
+.home-title--latin.home-title--long { font-size: 21px; letter-spacing: .5px; text-indent: .5px; }
+.home-title--latin.home-title--long .home-nine { font-size: 31px; transform: translateY(2px); }
 .home-nine { display: inline-block; font-size: 38px; font-weight: 400; font-style: normal; color: rgba(255,255,255,.42); letter-spacing: 0; transform: translateY(3px); }
 .home-tagline-en { top: 204px; text-align: center; color: #fff; font-size: 12.5px; font-weight: 600; letter-spacing: 3px; text-indent: 3px; line-height: 1; text-transform: uppercase; white-space: nowrap; }
 .home-tagline-cn { top: 228px; text-align: center; color: #fff; font-size: 13.5px; letter-spacing: 5px; text-indent: 5px; line-height: 1; white-space: nowrap; }
@@ -368,7 +373,7 @@ select.input.filled { color: #1D2129; }
 .price .cny { font-size: 30px; }
 
 /* 退款提示 */
-.refund-tip { font-size: 11px; color: #86909C; margin-top: 22px; line-height: 1.6; white-space: pre-line; }
+.refund-tip { font-size: 11px; color: #86909C; margin-top: 22px; line-height: 1.6; white-space: normal; }
 
 /* ---------- 状态结果页（设计稿：图标区 y234 Ø252，标题字形带 y553 h34，按钮 y697） ---------- */
 .result-page { text-align: center; padding-top: 26px; }
@@ -560,6 +565,16 @@ select.input.filled { color: #1D2129; }
 .member-card .mc-remove:active { color: var(--red); }
 .member-card .form-row { margin-bottom: 10px; }
 .member-card .form-label { width: 78px; flex: none; font-size: 13px; color: var(--title-gray); }
+.required-note {
+  font-size: 12px;
+  color: var(--red);
+  margin: -4px 0 12px;
+}
+.required-star {
+  color: var(--red);
+  font-weight: 700;
+  margin-left: 2px;
+}
 .add-member-btn {
   width: 100%; height: 46px; border: 1.4px dashed var(--blue);
   border-radius: 12px; background: rgba(48, 86, 212, .04);
@@ -589,7 +604,7 @@ select.input.filled { color: #1D2129; }
 .group-tip.ok { background: #E8FFEA; color: #008A20; }
 .group-tip.warn { background: #FDECEC; color: #C2404F; }
 
-.refund-note { font-size: 11px; color: var(--label-gray); line-height: 1.6; margin: 10px 2px 4px; white-space: pre-line; }
+.refund-note { font-size: 11px; color: var(--label-gray); line-height: 1.6; margin: 10px 2px 4px; white-space: normal; }
 
 /* 票种行内选择（member card 内） */
 .ticket-select-row .select-wrap::after { border-color: var(--blue); }

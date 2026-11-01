@@ -694,14 +694,6 @@ router.post('/submit-by-phone', async (req, res) => {
       });
     }
 
-    // 邀请人必填
-    if (!inviter || !inviter.trim()) {
-      return res.status(400).json({
-        code: 400,
-        message: '邀请人不能为空'
-      });
-    }
-    
     if (!event_id) {
       return res.status(400).json({
         code: 400,

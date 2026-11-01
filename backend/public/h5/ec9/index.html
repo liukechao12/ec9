@@ -46,6 +46,7 @@
 <script>
 (function () {
   var E = window.EC9;
+  var evNameEl = document.getElementById("evName");
   E.mountHeader(document.getElementById("header"), true);
 
   /* 语言切换挂到 375px 舞台内：贴设计稿坐标（#app 在宽屏下有 480px 居中，挂在 header 会偏出舞台） */
@@ -71,12 +72,23 @@
     E.go("signup.html", { event_id: eventId });
   });
 
+  function renderEventName(name) {
+    var raw = String(name || "");
+    var isLatin = /[A-Za-z]/.test(raw);
+    var plainLen = raw.replace(/\s+/g, " ").trim().length;
+    evNameEl.classList.remove("home-title--latin", "home-title--long");
+    if (isLatin) {
+      evNameEl.classList.add("home-title--latin");
+      if (plainLen >= 20) evNameEl.classList.add("home-title--long");
+    }
+    evNameEl.innerHTML = E.esc(raw).replace(/(\d+)\s*$/, '<span class="home-nine">$1</span>');
+  }
+
   E.Api.event(eventId).then(function (d) {
     var ev = d.event || d;
     if (ev.name) {
       document.title = ev.name;
-      var nameHtml = E.esc(ev.name).replace(/(\d+)\s*$/, '<span class="home-nine">$1</span>');
-      document.getElementById("evName").innerHTML = nameHtml;
+      renderEventName(ev.name);
     }
     if (ev.start_time) {
       // 日期格式随语言走：中文「2026年12月4日」，英文「December 4, 2026」
@@ -87,8 +99,7 @@
   }).catch(function (e) {
     E.toast(e.message || E.t("err_event_load"));
     // 活动信息取不到时也要按当前语言显示名称/地址兜底（字典里有三语版本）
-    document.getElementById("evName").innerHTML =
-      E.esc(E.t("home_title")) + '<span class="home-nine">9</span>';
+    renderEventName(E.t("home_title") + " 9");
     document.title = E.t("index_title");
   });
 })();

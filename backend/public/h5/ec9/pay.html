@@ -57,9 +57,13 @@
     document.getElementById("orderNo").textContent = orderNo;
 
     function renderGroupOrder(d) {
-      document.getElementById("tkName").textContent = E.t("group_order_title").replace("{n}", (d.price_detail || []).length);
+      var detail = d.price_detail || [];
+      var count = detail.length;
+      var first = detail[0] || {};
+      document.getElementById("tkName").textContent =
+        count <= 1 ? (first.ticket_name || "—") : E.t("group_order_title").replace("{n}", count);
       var html = "";
-      (d.price_detail || []).forEach(function (it) {
+      detail.forEach(function (it) {
         html += '<div class="fee-row"><span>' + E.esc(it.ticket_name || "") + '</span><span>' +
           (it.is_free ? '<span class="free-mark">¥0.00</span>' : '¥' + Number(it.price).toFixed(2)) + '</span></div>';
       });

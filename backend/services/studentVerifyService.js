@@ -39,6 +39,12 @@ let cache = null;
 let loaded = false;
 let cacheSource = 'env';
 
+// 各通道的默认地址/产品号（后台可改 endpoint 覆盖）
+const PROVIDER_DEFAULTS = {
+  tianyuan: { endpoint: 'https://api.tianyuanapi.com', product_code: 'IVYZX7J9' },
+  jumdata: { endpoint: 'https://api.jumdata.com', product_code: 'student_status' }
+};
+
 const DEFAULT_ROW = {
   name: 'tianyuan',
   provider: 'tianyuan',
@@ -79,12 +85,14 @@ async function loadConfig() {
         const raw = decryptSecret(p.config_encrypted);
         if (raw) cred = JSON.parse(raw);
       } catch (e) { /* 凭证损坏 → 当作没配 */ }
+      const prov = p.provider || 'tianyuan';
+      const pd = PROVIDER_DEFAULTS[prov] || PROVIDER_DEFAULTS.tianyuan;
       cache = {
         id: p.id,
         name: p.name,
-        provider: p.provider || 'tianyuan',
-        product_code: p.product_code || 'IVYZX7J9',
-        endpoint: p.endpoint || DEFAULT_ROW.endpoint,
+        provider: prov,
+        product_code: p.product_code || pd.product_code,
+        endpoint: p.endpoint || pd.endpoint,
         access_id: p.access_id || '',
         enabled: Number(p.enabled) === 1 ? 1 : 0,
         reuse_days: Number(p.reuse_days) || 30,
@@ -326,6 +334,69 @@ function normalize(outer, inner) {
   return { status: VERIFY_STATUS.UNKNOWN, apiCode: String(code ?? ''), message: String(msg || '返回格式未识别'), tx };
 }
 
+// ==================== 聚美智数通道（jumdata） ====================
+/**
+ * POST 聚美智数：application/x-www-form-urlencoded
+ * 签名 sign = sha256(appId + appSecret + timestamp)，timestamp 为毫秒
+ * productCode 固定 student_status；status 传 1 表示「查是否在籍」
+ */
+function postJumdata({ endpoint, accessId, accessKey, payload, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    const ts = Date.now();
+    const sign = crypto.createHash('sha256')
+      .update(String(accessId) + String(accessKey) + String(ts)).digest('hex');
+    const body = new URLSearchParams({
+      appId: String(accessId),
+      timestamp: String(ts),
+      sign,
+      productCode: 'student_status',
+      name: String(payload.name || ''),
+      idcard: String(payload.id_card || ''),
+      status: '1'
+    }).toString();
+    const u = new URL(`${String(endpoint).replace(/\/+$/, '')}/student-status/query`);
+    const req = https.request({
+      hostname: u.hostname,
+      port: u.port || 443,
+      path: u.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body)
+      },
+      timeout: timeoutMs
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
+    });
+    req.on('timeout', () => { req.destroy(new Error('接口超时')); });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/** 聚美智数返回归一（明文 JSON，无需解密） */
+function normalizeJumdata(o) {
+  const code = o && o.code !== undefined ? o.code : null;
+  const msg = (o && (o.msg || o.message)) || '';
+  const tx = (o && (o.taskNo || o.transaction_id)) || '';
+  if (String(code) === '200') {
+    const r = o && o.data && o.data.result;
+    if (String(r) === '1') return { status: VERIFY_STATUS.ENROLLED, apiCode: '200', message: '在籍', tx };
+    if (String(r) === '2') return { status: VERIFY_STATUS.NOT_ENROLLED, apiCode: '200', message: '不在籍', tx };
+    return { status: VERIFY_STATUS.UNKNOWN, apiCode: '200', message: '返回结果未识别', tx };
+  }
+  // 201 查无记录：不是接口故障，按「无法判断」处理（复用 7 天，别反复查）
+  if (String(code) === '201') {
+    return { status: VERIFY_STATUS.UNKNOWN, apiCode: '201', message: String(msg || '查无记录'), tx };
+  }
+  // 501 数据源维护 / 502 网络不稳 / 606 超限 / 609 过频 / 610 超时 → 值得重试
+  const retryable = ['501', '502', '606', '609', '610'].indexOf(String(code)) > -1;
+  return { status: VERIFY_STATUS.ERROR, apiCode: String(code ?? ''), message: String(msg || '接口异常'), tx, retryable };
+}
+
 // ==================== 落库 ====================
 /**
  * 按结论算「复用截止时间」
@@ -445,34 +516,46 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
   const MAX_TRY = 3;
   for (let attempt = 1; attempt <= MAX_TRY; attempt++) {
     try {
-      const res = await postTianyuan({
-        endpoint: cfg.endpoint,
-        productCode: cfg.product_code,
-        accessId: cfg.access_id,
-        accessKey: cfg.access_key,
-        payload: { name: String(name || '').trim(), id_card: idVal },
-        timeoutMs: Number(cfg.timeout_ms) || 8000
-      });
+      const isJumdata = cfg.provider === 'jumdata';
+      const res = isJumdata
+        ? await postJumdata({
+          endpoint: cfg.endpoint,
+          accessId: cfg.access_id,
+          accessKey: cfg.access_key,
+          payload: { name: nameVal, id_card: idVal },
+          timeoutMs: Number(cfg.timeout_ms) || 8000
+        })
+        : await postTianyuan({
+          endpoint: cfg.endpoint,
+          productCode: cfg.product_code,
+          accessId: cfg.access_id,
+          accessKey: cfg.access_key,
+          payload: { name: nameVal, id_card: idVal },
+          timeoutMs: Number(cfg.timeout_ms) || 8000
+        });
       rawText = res.body;
       let outer = {};
       try { outer = JSON.parse(res.body || '{}'); } catch (e) { outer = {}; }
-      let inner = null;
-      if (outer && outer.data) {
-        try { inner = JSON.parse(decryptPayload(outer.data, cfg.access_key)); } catch (e) {
-          try { inner = JSON.parse(Buffer.from(outer.data, 'base64').toString('utf8')); } catch (e2) { inner = null; }
-        }
-      }
       if (res.statusCode >= 400) {
         normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'http_' + res.statusCode, message: '接口返回 HTTP ' + res.statusCode, tx: '' };
+      } else if (isJumdata) {
+        normalized = normalizeJumdata(outer);
       } else {
+        let inner = null;
+        if (outer && outer.data) {
+          try { inner = JSON.parse(decryptPayload(outer.data, cfg.access_key)); } catch (e) {
+            try { inner = JSON.parse(Buffer.from(outer.data, 'base64').toString('utf8')); } catch (e2) { inner = null; }
+          }
+        }
         normalized = normalize(outer, inner);
       }
-      if (!inner && !outer.code && !res.body) {
+      if (!outer.code && !res.body) {
         normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'empty_response', message: '接口返回为空', tx: '' };
       }
       normalized.attempts = attempt;
-      // 只有 1001（接口异常）值得重试；其它结论（含成功 / 1000 查询为空）直接用
-      if (normalized.apiCode !== '1001') break;
+      // 天远 1001（接口异常）或聚美标记 retryable 的临时故障才重试；
+      // 其余结论（含成功 / 查无记录 / 参数错 / 余额不足 / IP 未白名单）不重试，避免白烧钱
+      if (normalized.apiCode !== '1001' && !normalized.retryable) break;
       if (attempt < MAX_TRY) await new Promise(r => setTimeout(r, 600 * attempt));
     } catch (e) {
       normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'exception', message: String(e.message || e), tx: '', attempts: attempt };
@@ -539,5 +622,5 @@ module.exports = {
   verify, validateIdCard, maskIdCard, hmacIdCard,
   listVerifications, VERIFY_STATUS,
   // 供联调脚本自测（不对外暴露）
-  _internals: { encryptPayload, decryptPayload, normalize, aesKey, idCardCheckBit }
+  _internals: { encryptPayload, decryptPayload, normalize, normalizeJumdata, aesKey, idCardCheckBit, postJumdata }
 };

@@ -61,6 +61,10 @@
   // 论坛是必填项，未选根本过不了上一页的校验，直接补上，别让老草稿退化成「未选」
   var members = ((E.S.data && E.S.data.draft_members) || []).map(function (m) {
     if (m.session_all === undefined && !Number(m.session_id)) m.session_all = true;
+    // 老草稿只有单选结果，补成数组，别让多选改造把它们清空
+    if (!Array.isArray(m.session_ids) || !m.session_ids.length) {
+      m.session_ids = Number(m.session_id) > 0 ? [Number(m.session_id)] : [];
+    }
     return m;
   });
   var selectedId = 0;          // 默认票种：点上方票卡会批量套用给所有人
@@ -391,9 +395,16 @@
           name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
           company: String(m.company || "").trim(), position: String(m.position || "").trim(),
           inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
-          session_id: Number(m.session_id) || 0,
-          // 「全部论坛」在后端也是 session_id=0，必须单独传这一位才能和「未选」区分开
+          // 论坛是**多选**：session_ids 是所选全部；session_all=1 表示全选
+          session_ids: (Array.isArray(m.session_ids) && m.session_ids.length)
+            ? m.session_ids.map(Number).filter(function (x) { return x > 0; })
+            : (Number(m.session_id) > 0 ? [Number(m.session_id)] : []),
           session_all: m.session_all ? 1 : 0,
+          // session_id 只剩兼容回退（写所选第一个），后端以 session_ids + session_all 为准
+          session_id: (function () {
+            var ids = (Array.isArray(m.session_ids) && m.session_ids.length) ? m.session_ids : [];
+            return Number(ids[0] || m.session_id) || 0;
+          })(),
           ticket_type_id: Number(perTicket[i] || selectedId)
         };
         if (isStudentTicket(o.ticket_type_id)) o.id_card = String(m.id_card || "").trim().toUpperCase();

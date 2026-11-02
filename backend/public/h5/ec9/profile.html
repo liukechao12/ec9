@@ -43,13 +43,31 @@
   var seq = 0;
   var members = [];
 
+  /* ---------- 论坛多选 ----------
+     一个人可以选任意多个论坛：只去上午、上午+一个下午、全去都行。
+     「全部论坛」是快捷项：勾上 = 全勾；手动勾满也等价（session_all=1）。
+     内存态：m.session_ids = [所选 id...]；m.session_all = 是否勾满 */
+  function pickedIds(m) {
+    if (Array.isArray(m.session_ids) && m.session_ids.length) return m.session_ids.slice();
+    // 老草稿只有 session_id / session_all
+    if (m.session_all) return sessions.map(function (s) { return s.id; });
+    return Number(m.session_id) > 0 ? [Number(m.session_id)] : [];
+  }
+
+  function sessionPicksHtml(m) {
+    var ids = pickedIds(m);
+    var items = '<label class="sp-item sp-all"><input type="checkbox" class="f-sess-all"' +
+      (ids.length > 0 && ids.length >= sessions.length && sessions.length > 0 ? " checked" : "") + '>' +
+      '<span>' + E.esc(E.t("forum_all")) + '</span></label>';
+    items += sessions.map(function (s) {
+      return '<label class="sp-item"><input type="checkbox" class="f-sess" value="' + s.id + '"' +
+        (ids.indexOf(s.id) > -1 ? " checked" : "") + '><span>' + E.esc(s.name) + '</span></label>';
+    }).join("");
+    return '<div class="sess-picks">' + items + '</div>';
+  }
+
   function memberCardHtml(m, idx) {
     var isBuyer = idx === 0;
-    var sessOpts = '<option value=""' + (!m.session_all && !Number(m.session_id) ? " selected" : "") + '>' + E.esc(E.t("forum_ph")) + '</option>' +
-      '<option value="0"' + (m.session_all ? " selected" : "") + '>' + E.esc(E.t("forum_all")) + '</option>' +
-      sessions.map(function (s) {
-        return '<option value="' + s.id + '"' + (Number(m.session_id) === s.id ? " selected" : "") + '>' + E.esc(s.name) + '</option>';
-      }).join("");
     return '<div class="member-card" data-mid="' + m.id + '">' +
       '<div class="mc-head">' +
         '<div><span class="mc-title">' + E.t("member_card").replace("{n}", idx + 1) + '</span>' +
@@ -68,10 +86,26 @@
         '<div class="form-field"><input class="input f-inviter" maxlength="100" data-i18n="inviter_ph" value="' + E.esc(m.inviter) + '"></div></div>' +
       '<div class="form-row"><div class="form-label"><span data-i18n="focus">关注方向：</span></div>' +
         '<div class="form-field"><input class="input f-focus" maxlength="200" data-i18n="focus_ph" value="' + E.esc(m.focus) + '"></div></div>' +
-      '<div class="form-row"><div class="form-label"><span data-i18n="forum">论坛：</span><span class="required-star">*</span></div>' +
-        '<div class="form-field select-wrap"><select class="input f-session filled">' + sessOpts + '</select></div></div>' +
+      '<div class="form-row form-row-col"><div class="form-label"><span data-i18n="forum">论坛：</span><span class="required-star">*</span></div>' +
+        '<div class="form-field">' + sessionPicksHtml(m) + '</div></div>' +
       '<div class="invited-tip hidden"></div>' +
     '</div>';
+  }
+
+  /** 把卡片上的勾选同步回内存态 */
+  function syncSessions(card, idx) {
+    var m = members[idx];
+    if (!m) return;
+    var ids = [];
+    Array.prototype.forEach.call(card.querySelectorAll(".f-sess"), function (b) {
+      if (b.checked) ids.push(Number(b.value));
+    });
+    m.session_ids = ids;
+    // 勾满 = 全部论坛（与快捷项等价）
+    m.session_all = sessions.length > 0 && ids.length >= sessions.length;
+    m.session_id = ids.length ? ids[0] : 0;   // 兼容回退：老字段只留第一个
+    var allBox = card.querySelector(".f-sess-all");
+    if (allBox) allBox.checked = !!m.session_all;
   }
 
   function render() {
@@ -88,10 +122,19 @@
       card.querySelector(".f-position").addEventListener("input", function () { members[idx].position = this.value; });
       card.querySelector(".f-inviter").addEventListener("input", function () { members[idx].inviter = this.value; });
       card.querySelector(".f-focus").addEventListener("input", function () { members[idx].focus = this.value; });
-      card.querySelector(".f-session").addEventListener("change", function () {
-        members[idx].session_all = this.value === "0";
-        members[idx].session_id = this.value && this.value !== "0" ? Number(this.value) || 0 : 0;
+      // 论坛多选：具体项变化时重算「是否勾满」；勾满即等价「全部论坛」
+      Array.prototype.forEach.call(card.querySelectorAll(".f-sess"), function (box) {
+        box.addEventListener("change", function () { syncSessions(card, idx); });
       });
+      // 「全部论坛」快捷项：勾上全勾、取消全消
+      var allBox = card.querySelector(".f-sess-all");
+      if (allBox) {
+        allBox.addEventListener("change", function () {
+          var on = this.checked;
+          Array.prototype.forEach.call(card.querySelectorAll(".f-sess"), function (b) { b.checked = on; });
+          syncSessions(card, idx);
+        });
+      }
     });
     Array.prototype.forEach.call(box.querySelectorAll("[data-remove]"), function (btn) {
       btn.addEventListener("click", function () {
@@ -170,7 +213,7 @@
 
   document.getElementById("btnAddMember").addEventListener("click", function () {
     if (members.length >= MAX) { E.toast(E.t("err_max_member")); return; }
-    members.push({ id: ++seq, name: "", phone: "", company: "", position: "", inviter: members[0] ? members[0].inviter : "", focus: "", session_id: 0, session_all: false });
+    members.push({ id: ++seq, name: "", phone: "", company: "", position: "", inviter: members[0] ? members[0].inviter : "", focus: "", session_ids: [], session_id: 0, session_all: false });
     render();
   });
 
@@ -178,7 +221,7 @@
   E.Api.event(eventId).then(function (ev) {
     var e = ev.event || ev;
     sessions = ev.sessions || e.sessions || [];
-    members.push({ id: ++seq, name: (E.S.data && E.S.data.name) || "", phone: buyerPhone, company: (E.S.data && E.S.data.company) || "", position: (E.S.data && E.S.data.position) || "", inviter: "", focus: (E.S.data && E.S.data.focus) || "", session_id: 0, session_all: false });
+    members.push({ id: ++seq, name: (E.S.data && E.S.data.name) || "", phone: buyerPhone, company: (E.S.data && E.S.data.company) || "", position: (E.S.data && E.S.data.position) || "", inviter: "", focus: (E.S.data && E.S.data.focus) || "", session_ids: [], session_id: 0, session_all: false });
     render();
     checkInvited();
   }).catch(function (e) { E.errPill(e.message || E.t("err_profile_load")); });
@@ -191,7 +234,8 @@
       if (!String(m.name).trim() || !String(m.company).trim() || !String(m.position).trim()) {
         E.errPill(E.t("err_required")); return;
       }
-      if (!m.session_all && !Number(m.session_id)) {
+      // 论坛至少选一个（多选）
+      if (!pickedIds(m).length) {
         E.errPill(E.t("err_required")); return;
       }
       if (!/^1[3-9]\d{9}$/.test(String(m.phone))) { E.errPill(E.t("err_phone_bad")); return; }

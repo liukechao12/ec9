@@ -16,6 +16,7 @@ const OrderM = require('./Order').Order;
 const PaymentM = require('./Payment');
 const CheckinCodeM = require('./CheckinCode');
 const CheckinM = require('./Checkin');
+const RegistrationSessionM = require('./RegistrationSession').RegistrationSession;
 const SmsProviderM = require('./SmsProvider');
 const SmsTemplateM = require('./SmsTemplate');
 const AutoAuditRuleM = require('./AutoAuditRule');
@@ -100,6 +101,13 @@ CheckinM.belongsTo(InvitationM, { as: 'invitation', foreignKey: 'invitation_id' 
 // ---- 嘉宾 → 签到 ----
 GuestM.hasMany(CheckinM, { as: 'checkins', foreignKey: 'guest_id' });
 EventM.hasMany(CheckinM, { as: 'checkins', foreignKey: 'event_id' });
+
+// ---- 报名 → 论坛（多选，经 ec9_registration_sessions 关联表） ----
+// 真正的论坛口径在这张表 + registrations.session_all 上，
+// registrations.session_id 只剩兼容回退（写所选第一个，全选时写 0）。
+RegistrationM.hasMany(RegistrationSessionM, { as: 'regSessions', foreignKey: 'registration_id' });
+RegistrationSessionM.belongsTo(RegistrationM, { as: 'registration', foreignKey: 'registration_id' });
+RegistrationSessionM.belongsTo(SessionM, { as: 'session', foreignKey: 'session_id' });
 
 // ---- 报名 → 票种（EC8 叫 ticket） ----
 // ⚠️ 这里**刻意不给 Guest 挂 TicketType 别名**：Guest 与票种没有直接外键关系

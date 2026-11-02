@@ -24,7 +24,7 @@ const TicketType = require('../models/TicketType');
 const Event = require('../models/Event');
 const CheckinCode = require('../models/CheckinCode');
 const Invitation = require('../models/Invitation');
-const { StudentVerification } = require('../models');
+const { StudentVerification, RegistrationSession, Session } = require('../models');
 const { encryptPhone, hmacPhone, decryptPhone } = require('../utils/phoneCrypto');
 const { validateSelection } = require('./ticketBinding');
 const { sendBusinessSms } = require('./verificationSmsService');
@@ -350,9 +350,27 @@ const clip = (v, n) => (v == null ? '' : String(v).slice(0, n));
  * @param {Object} p
  * @param {string} p.buyerPhone  购票人（已手机验证）
  * @param {number} p.eventId
- * @param {Array}  p.members  [{name, phone, company, position, inviter, focus, session_id, session_all, ticket_type_id}]
+ * @param {Array}  p.members  [{name, phone, company, position, inviter, focus, ticket_type_id,
+ *                              session_ids?: number[], session_all?: 0|1, session_id?: number}]
+ *                            论坛是**多选**：session_ids 是所选全部论坛；session_all=1 表示全选
+ *                            （此时 session_ids 可不传，后端按该活动启用场次展开）。
+ *                            session_id 仅作老客户端兼容（只认第一个）。
  * @returns {ok, group_no, quote, registrations:[{registration_id, name, phone}]}
  */
+/**
+ * 归一化一个人所选的论坛（多选）
+ * 老客户端只传 session_id（单选），新客户端传 session_ids + session_all。
+ * @returns {{ all: boolean, ids: number[] }}
+ */
+function pickSessions(m) {
+  const all = Number(m.session_all) === 1;
+  const raw = Array.isArray(m.session_ids) ? m.session_ids : [];
+  let ids = raw.map(x => Number(x)).filter(x => Number.isInteger(x) && x > 0);
+  // 老客户端没有 session_ids 时退回 session_id
+  if (!ids.length && !all && Number(m.session_id) > 0) ids = [Number(m.session_id)];
+  return { all, ids: Array.from(new Set(ids)) };
+}
+
 async function createGroup({ buyerPhone, eventId, members }) {
   if (!Array.isArray(members) || members.length < 1) return { ok: false, error: '至少填报一位报名人' };
   if (members.length > 10) return { ok: false, error: '单次最多代报 10 人' };
@@ -369,14 +387,25 @@ async function createGroup({ buyerPhone, eventId, members }) {
     seen.add(m.phone);
   }
 
+  // 论坛多选：全选时后端按该活动启用场次展开，不依赖前端传全
+  const enabledSessions = await Session.findAll({
+    where: { event_id: eventId, status: 1 },
+    order: [['sort', 'ASC'], ['id', 'ASC']]
+  });
+  const enabledIds = enabledSessions.map(s => Number(s.id));
+
   // 邀约名单 + 标准票：邀约嘉宾一律「标准票」（免票），不跟随购票人给同行人选的票种
   const invitedMap = await findInvited(members.map(m => String(m.phone)), eventId);
   const stdTicketId = await standardTicketId();
   const norm = members.map(m => {
     const invited = invitedMap.has(String(m.phone));
+    const pick = pickSessions(m);
     return {
       ...m,
       is_invited: invited,
+      // 全选 → 展开成所有启用场次；否则用所选列表（已去重）
+      session_pick: pick.all ? enabledIds.slice() : pick.ids,
+      session_all: pick.all ? 1 : 0,
       ticket_type_id: (invited && stdTicketId) ? stdTicketId : (Number(m.ticket_type_id) || 0)
     };
   });
@@ -384,11 +413,12 @@ async function createGroup({ buyerPhone, eventId, members }) {
   const quote = await quoteGroup(eventId, norm);
   if (!quote.ok) return quote;
 
-  // 规则 A：限场次票种必须同时选对应场次（每人独立校验，用生效票种）
+  // 规则 A：限场次票种必须选对应场次（多选口径：所选列表里必须包含它）
   for (const m of norm) {
     const sel = await validateSelection({
       ticketTypeId: Number(m.ticket_type_id) || 0,
-      sessionId: Number(m.session_id) || 0,
+      sessionId: (m.session_pick && m.session_pick[0]) || 0,
+      sessionIds: m.session_pick || [],
       eventId,
       requireTicket: true
     });
@@ -469,8 +499,9 @@ async function createGroup({ buyerPhone, eventId, members }) {
     // 邀约名单内：免审核直接通过（audit_exempt 标记，驳回重提时仍免审）
     const reg = await Registration.create({
       event_id: eventId,
-      session_id: Number(m.session_id) || 0,
-      // 「全部论坛」也要落库：它与「未选」都是 session_id=0，不记这一位导出名单就分不出来
+      // ⚠️ session_id 从此只作兼容回退（写所选第一个，全选时写 0）；
+      //    真正的论坛口径在 ec9_registration_sessions + session_all 上
+      session_id: (m.session_pick && m.session_pick[0]) || 0,
       session_all: Number(m.session_all) === 1 ? 1 : 0,
       ticket_type_id: effTicketId,
       guest_id: guest.id,
@@ -497,6 +528,18 @@ async function createGroup({ buyerPhone, eventId, members }) {
         } : {})
       }
     });
+
+    // 论坛多选落关联表（一人多行）。失败不回滚报名——论坛可以在后台补选，
+    // 但报名本身不能因为关联表写入失败就丢掉。
+    const picked = Array.isArray(m.session_pick) ? m.session_pick : [];
+    if (picked.length) {
+      try {
+        await RegistrationSession.bulkCreate(
+          picked.map(sid => ({ registration_id: reg.id, session_id: sid })),
+          { ignoreDuplicates: true }
+        );
+      } catch (e) { /* 忽略：口径以 session_all / 后台补选为准 */ }
+    }
 
     // 核验流水回填报名信息（便于按报名/订单追溯，身份证只在流水里加密存一份）
     const sv = svMap.get(phone);

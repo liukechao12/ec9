@@ -327,6 +327,21 @@ CREATE INDEX IF NOT EXISTS idx_ec9_reg_status ON public.ec9_registrations USING 
 CREATE INDEX IF NOT EXISTS idx_ec9_reg_session ON public.ec9_registrations USING btree (session_id);
 CREATE INDEX IF NOT EXISTS idx_reg_group_no ON public.ec9_registrations USING btree (group_no);
 
+-- ---------- ec9_registration_sessions（报名所选论坛，多选） ----------
+CREATE SEQUENCE IF NOT EXISTS ec9_registration_sessions_id_seq;
+CREATE TABLE IF NOT EXISTS ec9_registration_sessions (
+  id INT4 NOT NULL DEFAULT nextval('ec9_registration_sessions_id_seq'::regclass),
+  registration_id INT4 NOT NULL,
+  session_id INT4 NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  PRIMARY KEY (id)
+);
+COMMENT ON TABLE ec9_registration_sessions IS '报名选择的论坛（多选，一人可多行）';
+-- ⚠️ 论坛口径：session_all=1 → 全部论坛；否则看本表的若干行。
+--    ec9_registrations.session_id 只剩兼容回退（写所选第一个），别拿它当口径。
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ec9_reg_sess ON public.ec9_registration_sessions USING btree (registration_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_ec9_reg_sess_session ON public.ec9_registration_sessions USING btree (session_id);
+
 -- ---------- ec9_sessions ----------
 CREATE SEQUENCE IF NOT EXISTS ec9_sessions_id_seq;
 CREATE TABLE IF NOT EXISTS ec9_sessions (

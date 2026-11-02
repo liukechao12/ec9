@@ -60,24 +60,56 @@ const SESSION_ALL_LABEL = '全部论坛';
 const SESSION_NONE_LABEL = '未选';
 
 /**
- * 报名记录 → 论坛展示名
- * @param {object} reg   需含 session_id / session_all
+ * 报名记录 → 论坛展示名（多选，多个用「 / 」连接）
+ *
+ * 口径：session_all=1 → 全部论坛（不逐条枚举）；否则取关联表里所选的若干个。
+ * ⚠️ 不要只读 session_id —— 它现在只是兼容回退（写所选第一个）。
+ *
+ * @param {object} reg   需含 session_all；多选 id 由 attachSessionPicks() 挂到 reg.__sessionIds
  * @param {object} sMap  { sessionId: name }，一次性建好避免 N+1
  */
 function sessionLabelOf(reg, sMap) {
   if (!reg) return SESSION_NONE_LABEL;
   if (Number(reg.session_all) === 1) return SESSION_ALL_LABEL;
-  const sid = Number(reg.session_id) || 0;
-  if (sid > 0) return (sMap && sMap[sid]) || SESSION_NONE_LABEL;
-  return SESSION_NONE_LABEL;
+  const ids = Array.isArray(reg.__sessionIds)
+    ? reg.__sessionIds
+    : (Number(reg.session_id) > 0 ? [Number(reg.session_id)] : []);
+  const names = ids.map(id => (sMap && sMap[id]) || null).filter(Boolean);
+  return names.length ? names.join(' / ') : SESSION_NONE_LABEL;
+}
+
+/**
+ * 批量报名 → 从关联表 ec9_registration_sessions 取每人所选论坛，
+ * 挂到 reg.__sessionIds 上（避免 N+1）。必须在 buildSessionMap 之前调用。
+ */
+async function attachSessionPicks(regs) {
+  const list = Array.isArray(regs) ? regs.filter(r => r && r.id) : [];
+  if (!list.length) return;
+  const { RegistrationSession } = require('../models');
+  const rows = await RegistrationSession.findAll({
+    where: { registration_id: list.map(r => Number(r.id)) },
+    attributes: ['registration_id', 'session_id']
+  });
+  const map = new Map();
+  rows.forEach(x => {
+    const k = Number(x.registration_id);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(Number(x.session_id));
+  });
+  list.forEach(r => { r.__sessionIds = map.get(Number(r.id)) || []; });
 }
 
 /** 批量报名 → { sessionId: name }，只查一次库 */
 async function buildSessionMap(regs) {
   const { Session } = require('../models');
-  const ids = [...new Set(regs.map(r => Number(r.session_id) || 0).filter(x => x > 0))];
-  if (!ids.length) return {};
-  const rows = await Session.findAll({ where: { id: ids }, attributes: ['id', 'name'] });
+  const ids = new Set();
+  (Array.isArray(regs) ? regs : []).forEach(r => {
+    const sid = Number(r.session_id) || 0;
+    if (sid > 0) ids.add(sid);
+    (r.__sessionIds || []).forEach(x => ids.add(Number(x)));
+  });
+  if (!ids.size) return {};
+  const rows = await Session.findAll({ where: { id: [...ids] }, attributes: ['id', 'name'] });
   const map = {};
   rows.forEach(s => { map[s.id] = s.name; });
   return map;
@@ -158,6 +190,7 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
           { model: Guest, as: 'guest', required: false }
         ]
       });
+      await attachSessionPicks(members);
       const groupSMap = await buildSessionMap(members);
       group = {
         group_no: reg.group_no,
@@ -168,6 +201,7 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
           name: m.guest ? m.guest.name : null,
           ticket_name: m.ticketType ? m.ticketType.name : null,
           session_all: Number(m.session_all) === 1 ? 1 : 0,
+          session_ids: m.__sessionIds || [],
           session_name: sessionLabelOf(m, groupSMap),
           price: m.ticketType ? Number(m.ticketType.price) : null,
           is_student: m.ticketType ? Number(m.ticketType.is_student) === 1 : false,
@@ -186,6 +220,9 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
       };
     }
 
+    await attachSessionPicks([reg]);
+    const regSMap = await buildSessionMap([reg]);
+
     res.json({
       code: 0,
       message: 'ok',
@@ -198,9 +235,11 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
         ticket_name: reg.ticketType ? reg.ticketType.name : null,
         price: reg.ticketType ? Number(reg.ticketType.price) : null,
         session_id: reg.session_id,
-        // 选了「全部论坛」的人 session_id 也是 0，前端要按 session_all 才能显示对
+        // 论坛是多选：session_ids 是所选全部；session_all=1 表示全选
+        // （session_id 只剩兼容回退，别拿它当口径）
         session_all: Number(reg.session_all) === 1 ? 1 : 0,
-        session_name: sessionLabelOf(reg, reg.session ? { [reg.session.id]: reg.session.name } : {}),
+        session_ids: reg.__sessionIds || [],
+        session_name: sessionLabelOf(reg, regSMap),
         focus: reg.focus || null,
         name: guest.name,
         company: guest.company,
@@ -1097,6 +1136,7 @@ router.get('/group/:groupNo', async (req, res) => {
     (g.order && Array.isArray(g.order.price_detail) ? g.order.price_detail : []).forEach(d => {
       pdMap.set(Number(d.registration_id), d);
     });
+    await attachSessionPicks(g.registrations);
     const gSessionMap = await buildSessionMap(g.registrations);
     res.json({
       code: 0, message: 'ok',
@@ -1126,6 +1166,7 @@ router.get('/group/:groupNo', async (req, res) => {
           price: r.ticketType ? Number(r.ticketType.price) : null,
           is_student: r.ticketType ? Number(r.ticketType.is_student) === 1 : false,
           session_all: Number(r.session_all) === 1 ? 1 : 0,
+          session_ids: r.__sessionIds || [],
           session_name: sessionLabelOf(r, gSessionMap),
           focus: r.focus, is_buyer: !!ef.is_buyer
           };
@@ -1196,6 +1237,7 @@ router.get('/group-list', authenticate, async (req, res) => {
       ]
     });
     // 论坛名一次性取好（否则整单列表会 N+1 把 PG 打爆）
+    await attachSessionPicks(regs);
     const sMap = await buildSessionMap(regs);
     // 按 group_no 聚合
     const groups = new Map();
@@ -1221,6 +1263,7 @@ router.get('/group-list', authenticate, async (req, res) => {
         ticket_name: r.ticketType ? r.ticketType.name : '',
         price: r.ticketType ? Number(r.ticketType.price) : 0,
         session_all: Number(r.session_all) === 1 ? 1 : 0,
+        session_ids: r.__sessionIds || [],
         session_name: sessionLabelOf(r, sMap),
         is_std: isStandardType(r.ticketType),
         focus: r.focus, status: r.status, reject_reason: r.reject_reason,
@@ -1301,6 +1344,7 @@ router.get('/export', authenticate, operationLog('registrations', '导出报名�
     });
 
     // 论坛名 / 活动名一次取全，避免逐行查库
+    await attachSessionPicks(regs);
     const sMap = await buildSessionMap(regs);
     const evMap = {};
     const evs = await Event.findAll({ attributes: ['id', 'name'] });

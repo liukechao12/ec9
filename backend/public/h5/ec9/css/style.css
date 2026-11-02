@@ -592,6 +592,27 @@ select.input.filled { color: #1D2129; }
 }
 .add-member-btn:active { background: rgba(48, 86, 212, .1); }
 
+/* ---------- 论坛多选（一人可选多个论坛） ----------
+   论坛名较长（如「下午 · 具身智能数据•模型•仿真闭环论坛」），
+   所以整行改成竖排：标签在上、勾选项逐行铺开，避免挤压换行 */
+.member-card .form-row-col { display: block; }
+.member-card .form-row-col .form-label { width: auto; margin-bottom: 8px; }
+.sess-picks { display: flex; flex-direction: column; gap: 8px; }
+.sess-picks .sp-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 9px 11px; border: 1.2px solid var(--line-gray, #E5E7EB);
+  border-radius: 10px; font-size: 13px; line-height: 1.45;
+  color: var(--title-gray); cursor: pointer;
+  background: #fff;
+}
+.sess-picks .sp-item:active { background: rgba(48, 86, 212, .04); }
+.sess-picks .sp-item input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--blue); }
+.sess-picks .sp-item span { flex: 1; word-break: break-word; }
+.sess-picks .sp-item:has(input:checked) { border-color: var(--blue); background: rgba(48, 86, 212, .05); }
+/* 「全部论坛」快捷项单独提亮，跟具体论坛区分开 */
+.sess-picks .sp-all { font-weight: 600; background: rgba(48, 86, 212, .03); }
+.sess-picks .sp-all:has(input:checked) { background: rgba(48, 86, 212, .1); border-color: var(--blue); }
+
 .fee-box {
   background: #fff; border-radius: 16px; padding: 14px 16px; margin: 6px 0 14px;
 }

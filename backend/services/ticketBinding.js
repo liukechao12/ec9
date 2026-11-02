@@ -37,9 +37,14 @@ function toSid(v, def = 0) {
  * @returns {Promise<{ok:boolean, error?:string, code?:string, ticketType?:object, sessionId:number}>}
  *          error 已按「简体中文 + 英文」拼好，供三语接口直接选用
  */
-async function validateSelection({ ticketTypeId, sessionId, eventId, requireTicket = false }) {
+async function validateSelection({ ticketTypeId, sessionId, sessionIds, eventId, requireTicket = false }) {
   const ttId = toSid(ticketTypeId, 0);
   const wantSid = toSid(sessionId, 0);
+  // 多选用例（论坛改成多选后）：sessionIds 是这个人选的全部论坛。
+  // 不传时退化成单选，行为与原来完全一致。
+  const pick = Array.isArray(sessionIds) && sessionIds.length
+    ? Array.from(new Set(sessionIds.map(x => toSid(x, 0)).filter(x => x > 0)))
+    : (wantSid > 0 ? [wantSid] : []);
 
   if (!ttId) {
     if (requireTicket) {
@@ -65,25 +70,26 @@ async function validateSelection({ ticketTypeId, sessionId, eventId, requireTick
   const ttSid = toSid(tt.session_id, 0);
 
   // ── 规则 A 主体：场次票必须选对应场次 ──
+  // 多选时口径是「所选列表里必须包含这个场次」，不是「唯一选择等于它」
   if (ttSid > 0) {
-    if (wantSid <= 0) {
+    if (!pick.length) {
       return {
         ok: false, code: 'SESSION_REQUIRED',
         error: `该门票限「${tt.name}」场次使用，请先选择场次 / This ticket is only valid for session "${tt.name}", please select a session first`
       };
     }
-    if (wantSid !== ttSid) {
-      const s = await Session.findByPk(wantSid);
+    if (!pick.includes(ttSid)) {
+      const s = await Session.findByPk(pick[0]);
       return {
         ok: false, code: 'SESSION_MISMATCH',
-        error: `该门票限「${tt.name}」场次使用，不能用于「${s ? s.name : wantSid}」场次 / This ticket is only valid for session "${tt.name}"`
+        error: `该门票限「${tt.name}」场次使用，所选场次不含它 / This ticket is only valid for session "${tt.name}", your selection does not include it`
       };
     }
   }
 
-  // 活动票：场次可填可不填，但填了必须属于本活动
-  if (wantSid > 0) {
-    const s = await Session.findByPk(wantSid);
+  // 活动票：场次可填可不填，但填了必须属于本活动（多选时逐个校验）
+  for (const sid of pick) {
+    const s = await Session.findByPk(sid);
     if (!s || Number(s.status) !== 1) {
       return { ok: false, code: 'SESSION_NOT_FOUND', error: '场次不存在 / Session not found' };
     }
@@ -95,7 +101,7 @@ async function validateSelection({ ticketTypeId, sessionId, eventId, requireTick
     }
   }
 
-  return { ok: true, sessionId: wantSid, ticketType: tt };
+  return { ok: true, sessionId: wantSid, sessionIds: pick, ticketType: tt };
 }
 
 /**

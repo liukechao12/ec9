@@ -20,7 +20,7 @@
       <div class="tk-tab" data-tab="agenda" data-i18n="tab_agenda">论坛议程</div>
     </div>
     <div class="tk-cols" id="tkCols"></div>
-    <div class="tk-agenda hidden" id="tkAgenda" data-i18n="agenda_content"></div>
+    <div class="tk-agenda hidden" id="tkAgenda"></div>
   </div>
 
   <div class="tk-assign hidden" id="tkAssign">
@@ -52,6 +52,8 @@
 <script>
 (function () {
   var E = window.EC9;
+  // 论坛议程新稿（卡片式）在此渲染；语言切换走 reload，字典按当前语言取词
+  document.getElementById("tkAgenda").innerHTML = E.agendaHtml();
   // 门票页底色是浅灰（无蓝色品牌条），但语言切换入口必须有：
   // 这里挂 header 后在 CSS 里隐藏 .brand、只留右上角的切换浮层并改成深色。
   E.mountHeader(document.getElementById("header"), false);

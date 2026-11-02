@@ -183,6 +183,40 @@
     if (val === "") { if (el.style.display !== "none") el.style.display = "none"; }
     else if (el.style.display === "none") el.style.display = "";
   }
+  /* ---------- 论坛议程卡片（2026-11-02 新稿）----------
+     票选择页 / 电子票页共用：三列 上午·下午·晚间，胶囊块横跨整行表示全天时段。
+     文案全部走字典，语言切换走 reload，页面初始化时按当前语言取词即可。 */
+  function agendaHtml() {
+    var pill = function (key, cls) {
+      return '<span class="agenda-pill ' + cls + '">' + esc(t(key)) + '</span>';
+    };
+    return '<div class="agenda-card">' +
+      '<div class="agenda-heads">' +
+        '<div>' + esc(t("ag_am")) + '</div>' +
+        '<div>' + esc(t("ag_pm")) + '</div>' +
+        '<div>' + esc(t("ag_eve")) + '</div>' +
+      '</div>' +
+      '<div class="agenda-grid">' +
+        '<div class="agenda-row">' +
+          '<div class="agenda-cell">' + pill("ag_keynote", "ag-blue") + '</div>' +
+          '<div class="agenda-cell">' + pill("ag_forums", "ag-violet") + '</div>' +
+          '<div class="agenda-cell"></div>' +
+        '</div>' +
+        '<div class="agenda-row agenda-row--full">' +
+          '<div class="agenda-full">' + pill("ag_open", "ag-sky") + '</div>' +
+        '</div>' +
+        '<div class="agenda-row agenda-row--full">' +
+          '<div class="agenda-full">' + pill("ag_expo", "ag-sky") + '</div>' +
+        '</div>' +
+        '<div class="agenda-row">' +
+          '<div class="agenda-cell"></div>' +
+          '<div class="agenda-cell"></div>' +
+          '<div class="agenda-cell">' + pill("ag_night", "ag-night") + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
   function applyLang(root) {
     document.documentElement.lang = S.lang === "zh-Hant" ? "zh-Hant" : (S.lang === "en" ? "en" : "zh-CN");
     var scope = root || document;
@@ -419,7 +453,7 @@
   }
 
   w.EC9 = {
-    S: S, t: t, esc: esc, applyLang: applyLang, Api: Api,
+    S: S, t: t, esc: esc, applyLang: applyLang, Api: Api, agendaHtml: agendaHtml,
     toast: toast, errPill: errPill, header: header, mountHeader: mountHeader,
     param: param, go: go, codeCountdown: codeCountdown,
     fmtDate: fmtDate, discountText: discountText, localizeMsg: localizeMsg,

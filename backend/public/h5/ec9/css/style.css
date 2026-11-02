@@ -71,6 +71,9 @@ html, body {
   position: relative;
   overflow: hidden;
 }
+/* 2026-11-02 新稿：共用蓝带分中/英两版。applyLang 会把 <html lang> 写成
+   en / zh-CN / zh-Hant，English 换英文版切图，繁體沿用中文版。 */
+html[lang="en"] .brand { background-image: url(../img/signup_bg_en.png); }
 /* ---------- 语言切换（产品功能入口，设计稿未画；坐标贴设计稿风格） ---------- */
 /* 位置贴页面右上角：状态栏删除后整条上移，右侧留 12px（首页另有设计稿坐标，见下方 #app.home 覆盖） */
 .lang-switch {
@@ -810,7 +813,44 @@ html[lang="en"] .tk-a-btns { justify-content: flex-start; }
 .tk-ben { margin-top: 15px; list-style: none; padding: 0; }
 .tk-ben li { font-size: 10px; line-height: 12px; color: #1D2129; margin-bottom: 21px; }
 .tk-ben li.tk-p { font-weight: 700; color: #383838; }
-.tk-agenda { margin-top: 18px; font-size: 10px; line-height: 20px; color: #1D2129; white-space: pre-line; }
+.tk-agenda { margin-top: 18px; }
+
+/* ---------- 论坛议程卡片（2026-11-02 新稿）----------
+   票选择 / 电子票 两个 tab 共用：三列 上午·下午·晚间 + 胶囊块。
+   胶囊横跨整行 = 全天开放（展区），落在某一列 = 该时段专场。 */
+.agenda-card { width: 100%; }
+.agenda-heads { display: flex; border-bottom: 1px dashed #D8DBE3; }
+.agenda-heads > div {
+  flex: 1; text-align: center; font-size: 12px; font-weight: 600;
+  color: #7E828F; padding: 4px 0 10px; position: relative; line-height: 1.2;
+}
+.agenda-heads > div + div::before {
+  content: ""; position: absolute; left: 0; top: -2px; bottom: 0;
+  border-left: 1px dashed #E0E3EA;
+}
+.agenda-grid {
+  padding-top: 12px;
+  background: linear-gradient(90deg, #FFFCF2 0 66.66%, #FFFFFF 66.66% 100%);
+}
+.agenda-row { display: flex; min-height: 44px; align-items: center; }
+.agenda-row + .agenda-row { margin-top: 8px; }
+.agenda-cell { flex: 1; padding: 0 5px; position: relative; text-align: center; }
+.agenda-cell + .agenda-cell::before {
+  content: ""; position: absolute; left: 0; top: -6px; bottom: -6px;
+  border-left: 1px dashed #E0E3EA;
+}
+.agenda-full { width: 100%; padding: 0 5px; }
+.agenda-pill {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 34px; box-sizing: border-box;
+  border-radius: 8px; padding: 7px 5px;
+  font-size: 12px; font-weight: 600; line-height: 1.3; color: #fff;
+  text-align: center; word-break: break-word;
+}
+.agenda-pill.ag-blue   { background: #2B4BC8; }
+.agenda-pill.ag-violet { background: #9A8AE6; }
+.agenda-pill.ag-sky    { background: #6BA6E8; }
+.agenda-pill.ag-night  { background: #6F4FC0; }
 
 /* ---------- 协议 / 提交 / 退款说明 ---------- */
 #app.tk-page .tk-agree-row {

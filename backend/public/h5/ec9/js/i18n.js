@@ -119,6 +119,10 @@ const I18N = {
     tab_agenda: "论坛议程",
     benefits_content: "· 大会全体会议入场资格\n· 全部平行论坛参与资格\n· 展区参观与导览\n· 会议资料包\n· 茶歇与午餐",
     agenda_content: "上午   主题演讲\n下午   具身智能数据•模型•仿真闭环论坛\n下午   智驾安全与全球准入论坛\n下午   Physical AI 产业创新与资本赋能论坛\n展区   Open Tech Show · 产品体验区\n晚间   EC 科技之夜",
+    /* 论坛议程卡片（2026-11-02 新稿）文案，结构见 common.js agendaHtml() */
+    ag_am: "上午", ag_pm: "下午", ag_eve: "晚间",
+    ag_keynote: "主题演讲", ag_forums: "三大平行论坛",
+    ag_open: "Open Tech Show", ag_expo: "产品体验区", ag_night: "EC科技之夜",
     et_foot: "如需开票/退款",
     // 开发票
     invoice_tip: "\u201c如需开票/退款，请添加公司对接人联系\u201d",
@@ -330,6 +334,10 @@ const I18N = {
     tab_agenda: "論壇議程",
     benefits_content: "· 大會全體會議入場資格\n· 全部平行論壇參與資格\n· 展區參觀與導覽\n· 會議資料包\n· 茶歇與午餐",
     agenda_content: "上午   主題演講\n下午   具身智能數據•模型•仿真閉環論壇\n下午   智駕安全與全球准入論壇\n下午   Physical AI 產業創新與資本賦能論壇\n展區   Open Tech Show · 產品體驗區\n晚間   EC 科技之夜",
+    /* 論壇議程卡片（2026-11-02 新稿）文案 */
+    ag_am: "上午", ag_pm: "下午", ag_eve: "晚間",
+    ag_keynote: "主題演講", ag_forums: "三大平行論壇",
+    ag_open: "Open Tech Show", ag_expo: "產品體驗區", ag_night: "EC科技之夜",
     et_foot: "如需開票/退款",
     invoice_tip: "\u201c如需開票/退款，請添加公司對接人聯繫\u201d",
     contact_prefix: "如需",
@@ -536,6 +544,10 @@ const I18N = {
     tab_agenda: "Agenda",
     benefits_content: "· Access to the keynote session\n· Access to all parallel forums\n· Exhibition visit & guided tour\n· Conference materials\n· Coffee breaks & lunch",
     agenda_content: "AM   Keynote Speeches\nPM   Embodied AI: Data · Model · Simulation\nPM   Intelligent Driving Safety & Global Access\nPM   Physical AI: Innovation & Capital Empowerment\nExpo   Open Tech Show · Product Experience Zone\nEvening   EC Tech Night",
+    /* Agenda card copy (2026-11-02 redesign) */
+    ag_am: "AM", ag_pm: "PM", ag_eve: "Evening",
+    ag_keynote: "Keynote", ag_forums: "3 Parallel Forums",
+    ag_open: "Open Tech Show", ag_expo: "Product Experience Zone", ag_night: "EC Tech Night",
     et_foot: "For invoice / refund",
     invoice_tip: "\u201cFor invoice or refund, please add our company contact\u201d",
     contact_prefix: "For ",

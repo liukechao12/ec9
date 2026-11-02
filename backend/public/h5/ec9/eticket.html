@@ -108,7 +108,13 @@
     el.addEventListener("click", function () {
       Array.prototype.forEach.call(document.querySelectorAll(".et-tab"), function (x) { x.classList.remove("active"); });
       el.classList.add("active");
-      panel.textContent = el.dataset.tab === "b" ? E.t("benefits_content") : E.t("agenda_content");
+      if (el.dataset.tab === "b") {
+        panel.style.whiteSpace = "pre-line";
+        panel.textContent = E.t("benefits_content");
+      } else {
+        panel.style.whiteSpace = "normal";
+        panel.innerHTML = E.agendaHtml();
+      }
     });
   });
 

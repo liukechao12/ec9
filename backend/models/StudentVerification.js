@@ -12,7 +12,7 @@ const VERIFY_STATUS = {
   ENROLLED: 'enrolled',        // 在籍（是学生）
   NOT_ENROLLED: 'not_enrolled',// 不在籍（不是学生）
   UNKNOWN: 'unknown',          // 接口返回「无法判断」
-  ERROR: 'error'               // 接口异常/超时/未启用（不落库，仅进程内返回）
+  ERROR: 'error'               // 接口异常/超时/参数错（同样落库，短 TTL，避免反复重试烧钱）
 };
 
 const StudentVerification = sequelize.define('StudentVerification', {
@@ -32,7 +32,8 @@ const StudentVerification = sequelize.define('StudentVerification', {
   registration_id: DataTypes.INTEGER,
   group_no: DataTypes.STRING(40),
   verified_at: DataTypes.DATE,
-  expires_at: { type: DataTypes.DATE, comment: '复用截止，过期重新调 API' }
+  expires_at: { type: DataTypes.DATE, comment: '复用截止，过期重新调 API' },
+  reuse_count: { type: DataTypes.INTEGER, defaultValue: 0, comment: '被复用的次数（命中缓存不新增行，只累加）' }
 }, {
   tableName: 'ec9_student_verifications',
   timestamps: true,

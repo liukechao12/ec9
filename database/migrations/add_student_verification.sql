@@ -81,3 +81,12 @@ CREATE TRIGGER trg_ec9_sv_updated BEFORE UPDATE ON ec9_student_verifications FOR
 -- 老库补列（幂等）
 ALTER TABLE ec9_student_verify_configs ADD COLUMN IF NOT EXISTS on_unknown VARCHAR(20) NOT NULL DEFAULT 'manual';
 ALTER TABLE ec9_student_verify_configs ADD COLUMN IF NOT EXISTS timeout_ms INT NOT NULL DEFAULT 8000;
+-- 复用策略：明确结论复用天数 / 无法判断复用天数 / 接口异常复用分钟数
+ALTER TABLE ec9_student_verify_configs ADD COLUMN IF NOT EXISTS reuse_unknown_days INT NOT NULL DEFAULT 7;
+ALTER TABLE ec9_student_verify_configs ADD COLUMN IF NOT EXISTS error_reuse_minutes INT NOT NULL DEFAULT 10;
+COMMENT ON COLUMN ec9_student_verify_configs.reuse_unknown_days IS '「无法判断」结果的复用天数（0=不复用，每次重调）';
+COMMENT ON COLUMN ec9_student_verify_configs.error_reuse_minutes IS '接口异常结果的复用分钟数（0=不复用，防接口故障时反复重试烧钱）';
+
+-- 流水的复用计数：命中缓存不新增行，只累加 reuse_count（看得出省了多少钱）
+ALTER TABLE ec9_student_verifications ADD COLUMN IF NOT EXISTS reuse_count INT NOT NULL DEFAULT 0;
+COMMENT ON COLUMN ec9_student_verifications.reuse_count IS '该结论被后续请求复用的次数';

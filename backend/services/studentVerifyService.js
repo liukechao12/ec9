@@ -2,9 +2,15 @@
  * 学生票学籍核验服务（天远 API · 学籍核验政务V1 / 产品号 IVYZX7J9）
  *
  * ── 省钱设计（昊哥明确要求）────────────────────────────
- *   同一人（姓名+身份证号）的核验结果落库并设有效期（默认 30 天）：
- *   命中且未过期 → 直接复用，**不调 API**；只有查不到或过期才真调一次。
+ *   同一人（姓名+身份证号）的核验结果落库并设有效期：
+ *     在籍/不在籍  → 复用 reuse_days 天（默认 30 天）
+ *     无法判断     → 复用 reuse_unknown_days 天（默认 7 天）
+ *     接口异常     → 复用 error_reuse_minutes 分钟（默认 10 分钟，防接口挂掉时反复重试烧钱）
+ *     身份证格式错 → 同接口异常（短 TTL）
+ *   命中且未过期 → 直接复用，**不调 API**（只累加 reuse_count）；只有查不到或过期才真调一次。
  *   每次真实调用写一行流水（transaction_id 用于对账）。
+ *   ⚠️ 「不管什么结果都要落库」是硬要求：成功/失败/异常/参数错一律写流水，
+ *      唯一例外是通道压根没配（not_configured），那时根本没发起核验，写了没意义。
  *
  * ── 接口规格 ─────────────────────────────────────────
  *   POST {endpoint}/api/v1/{productCode}?t=<13位毫秒时间戳>
@@ -41,6 +47,8 @@ const DEFAULT_ROW = {
   access_id: '',
   enabled: 0,
   reuse_days: 30,
+  reuse_unknown_days: 7,
+  error_reuse_minutes: 10,
   timeout_ms: 8000,
   on_not_enrolled: 'reject',
   on_unknown: 'manual',
@@ -80,6 +88,10 @@ async function loadConfig() {
         access_id: p.access_id || '',
         enabled: Number(p.enabled) === 1 ? 1 : 0,
         reuse_days: Number(p.reuse_days) || 30,
+        reuse_unknown_days: p.reuse_unknown_days === undefined || p.reuse_unknown_days === null
+          ? 7 : (Number(p.reuse_unknown_days) || 0),
+        error_reuse_minutes: p.error_reuse_minutes === undefined || p.error_reuse_minutes === null
+          ? 10 : (Number(p.error_reuse_minutes) || 0),
         timeout_ms: Number(p.timeout_ms) || 8000,
         on_not_enrolled: p.on_not_enrolled || 'reject',
         on_unknown: p.on_unknown || 'manual',
@@ -123,6 +135,8 @@ async function getConfigMasked() {
     access_key_set: !!c.access_key,
     enabled: c.enabled,
     reuse_days: c.reuse_days,
+    reuse_unknown_days: Number(c.reuse_unknown_days) || 0,
+    error_reuse_minutes: Number(c.error_reuse_minutes) || 0,
     timeout_ms: c.timeout_ms,
     on_not_enrolled: c.on_not_enrolled,
     on_unknown: c.on_unknown,
@@ -136,7 +150,8 @@ async function getConfigMasked() {
 async function saveConfig(patch = {}) {
   const EDITABLE = [
     'enabled', 'provider', 'product_code', 'endpoint', 'access_id',
-    'reuse_days', 'timeout_ms', 'on_not_enrolled', 'on_unknown', 'remark'
+    'reuse_days', 'reuse_unknown_days', 'error_reuse_minutes',
+    'timeout_ms', 'on_not_enrolled', 'on_unknown', 'remark'
   ];
   const cur = await loadConfig();
   let row = await StudentVerifyConfig.findOne({ where: { name: 'tianyuan' } });
@@ -147,7 +162,10 @@ async function saveConfig(patch = {}) {
   EDITABLE.forEach(k => {
     if (patch[k] === undefined) return;
     if (k === 'enabled') next[k] = Number(patch[k]) === 1 ? 1 : 0;
-    else if (k === 'reuse_days' || k === 'timeout_ms') next[k] = Number(patch[k]) || cur[k];
+    else if (['reuse_days', 'reuse_unknown_days', 'error_reuse_minutes', 'timeout_ms'].indexOf(k) > -1) {
+      const n = Number(patch[k]);
+      next[k] = Number.isFinite(n) && n >= 0 ? n : cur[k];
+    }
     else next[k] = String(patch[k] ?? '').trim();
   });
   // 凭证：只有真的传了新值（不是掩码）才覆盖
@@ -292,6 +310,41 @@ function normalize(outer, inner) {
   return { status: VERIFY_STATUS.UNKNOWN, apiCode: String(code ?? ''), message: String(msg || '返回格式未识别'), tx };
 }
 
+// ==================== 落库 ====================
+/**
+ * 按结论算「复用截止时间」
+ *   明确结论（在籍/不在籍）→ 复用 reuse_days 天
+ *   无法判断             → 复用 reuse_unknown_days 天
+ *   异常/参数错           → 复用 error_reuse_minutes 分钟（短，只防重复烧钱）
+ * 返回 null 表示「不复用」（下次重新核验）
+ */
+function computeExpires(status, cfg, now) {
+  if (status === VERIFY_STATUS.ENROLLED || status === VERIFY_STATUS.NOT_ENROLLED) {
+    return new Date(now.getTime() + (Number(cfg.reuse_days) || 30) * 86400000);
+  }
+  if (status === VERIFY_STATUS.UNKNOWN) {
+    const days = (cfg.reuse_unknown_days === undefined || cfg.reuse_unknown_days === null)
+      ? 7 : (Number(cfg.reuse_unknown_days) || 0);
+    return days > 0 ? new Date(now.getTime() + days * 86400000) : null;
+  }
+  const mins = (cfg.error_reuse_minutes === undefined || cfg.error_reuse_minutes === null)
+    ? 10 : (Number(cfg.error_reuse_minutes) || 0);
+  return mins > 0 ? new Date(now.getTime() + mins * 60000) : null;
+}
+
+/**
+ * 统一落库：不管结论是「在籍 / 不在籍 / 无法判断 / 接口异常 / 身份证格式错」都写一行流水。
+ * 写失败不能吞掉结论（钱已经花了），所以只记录 saveError。
+ */
+async function persist(row) {
+  try {
+    const rec = await StudentVerification.create(row);
+    return { row: rec, saveError: '' };
+  } catch (e) {
+    return { row: null, saveError: String(e.message || e) };
+  }
+}
+
 // ==================== 主入口 ====================
 /**
  * 核验一个学生票报名人
@@ -304,12 +357,12 @@ function normalize(outer, inner) {
  */
 async function verify({ name, idCard, guestId = null, eventId = null, registrationId = null, groupNo = null, force = false } = {}) {
   const chk = validateIdCard(idCard);
-  if (!chk.ok) return { status: VERIFY_STATUS.ERROR, fromCache: false, message: chk.error, code: 'bad_id_card' };
-  const idVal = chk.value;
+  const idVal = chk.ok ? chk.value : String(idCard || '').trim().toUpperCase();
   const hmac = hmacIdCard(name, idVal);
   const cfg = await loadConfig();
+  const nameVal = String(name || '').trim();
 
-  // ---- ① 先查库：命中未过期结果直接复用，不花钱 ----
+  // ---- ① 先查库：命中未过期结果直接复用，不花钱（任何结论都可复用，TTL 按结论长短不同） ----
   if (!force) {
     try {
       const hit = await StudentVerification.findOne({
@@ -318,16 +371,14 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
       });
       if (hit) {
         const exp = hit.expires_at ? new Date(hit.expires_at).getTime() : 0;
-        const fresh = exp > Date.now() &&
-          [VERIFY_STATUS.ENROLLED, VERIFY_STATUS.NOT_ENROLLED].indexOf(hit.status) > -1;
-        if (fresh) {
-          // 补关联（同一人换个活动/订单时把链路串起来）
-          const patch = {};
+        if (exp > Date.now()) {
+          // 补关联（同一人换个活动/订单时把链路串起来）+ 记一次复用
+          const patch = { reuse_count: (Number(hit.reuse_count) || 0) + 1 };
           if (guestId && !hit.guest_id) patch.guest_id = guestId;
           if (eventId && !hit.event_id) patch.event_id = eventId;
           if (registrationId && !hit.registration_id) patch.registration_id = registrationId;
           if (groupNo && !hit.group_no) patch.group_no = groupNo;
-          if (Object.keys(patch).length) await hit.update(patch).catch(() => {});
+          await hit.update(patch).catch(() => {});
           return {
             status: hit.status, fromCache: true, message: hit.api_message || '',
             transactionId: hit.transaction_id || '', apiCode: hit.api_code || '',
@@ -340,12 +391,37 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
     }
   }
 
-  // ---- ② 没命中 → 检查通道是否已配置 ----
+  // ---- ② 没命中 → 检查通道是否已配置（唯一不落库的分支：压根没发起核验） ----
   if (!(cfg.enabled === 1 && cfg.access_id && cfg.access_key)) {
     return { status: VERIFY_STATUS.ERROR, fromCache: false, message: '学籍核验通道未配置或未启用', code: 'not_configured' };
   }
 
-  // ---- ③ 真调 API ----
+  // ---- ③ 身份证格式错：也落库留痕（短 TTL，防同一错号反复进到这里） ----
+  if (!chk.ok) {
+    const now = new Date();
+    const saved = await persist({
+      name: nameVal,
+      id_card_hmac: hmac,
+      id_card_encrypted: encryptSecret(idVal),
+      id_card_mask: maskIdCard(idVal),
+      status: VERIFY_STATUS.ERROR,
+      api_code: 'bad_id_card',
+      api_message: chk.error,
+      transaction_id: '',
+      provider: cfg.provider || 'tianyuan',
+      product_code: cfg.product_code,
+      raw_response: { code: 'bad_id_card', message: chk.error, api_called: false },
+      guest_id: guestId, event_id: eventId, registration_id: registrationId, group_no: groupNo || null,
+      verified_at: now,
+      expires_at: computeExpires(VERIFY_STATUS.ERROR, cfg, now)
+    });
+    return {
+      status: VERIFY_STATUS.ERROR, fromCache: false, message: chk.error, code: 'bad_id_card',
+      verificationId: saved.row ? saved.row.id : null, saveError: saved.saveError || undefined
+    };
+  }
+
+  // ---- ④ 真调 API ----
   let normalized;
   let rawText = '';
   try {
@@ -378,42 +454,32 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
     normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'exception', message: String(e.message || e), tx: '' };
   }
 
-  // ---- ④ 落库（只有明确结论才设复用有效期；异常不缓存，下次可重试） ----
-  try {
-    const now = new Date();
-    const reusable = [VERIFY_STATUS.ENROLLED, VERIFY_STATUS.NOT_ENROLLED].indexOf(normalized.status) > -1;
-    const expires = reusable
-      ? new Date(now.getTime() + (Number(cfg.reuse_days) || 30) * 86400000)
-      : null;
-    const row = await StudentVerification.create({
-      name: String(name || '').trim(),
-      id_card_hmac: hmac,
-      id_card_encrypted: encryptSecret(idVal),
-      id_card_mask: maskIdCard(idVal),
-      status: normalized.status,
-      api_code: normalized.apiCode || '',
-      api_message: normalized.message || '',
-      transaction_id: normalized.tx || '',
-      provider: cfg.provider || 'tianyuan',
-      product_code: cfg.product_code,
-      raw_response: { code: normalized.apiCode, message: normalized.message, raw: String(rawText || '').slice(0, 2000) },
-      guest_id: guestId, event_id: eventId, registration_id: registrationId, group_no: groupNo || null,
-      verified_at: now,
-      expires_at: expires
-    });
-    return {
-      status: normalized.status, fromCache: false, message: normalized.message || '',
-      transactionId: normalized.tx || '', apiCode: normalized.apiCode || '',
-      verificationId: row.id, verifiedAt: now, expiresAt: expires
-    };
-  } catch (e) {
-    // 落库失败也不能吞掉核验结论（此时已花了钱）
-    return {
-      status: normalized.status, fromCache: false, message: normalized.message || '',
-      transactionId: normalized.tx || '', apiCode: normalized.apiCode || '',
-      verificationId: null, saveError: String(e.message || e)
-    };
-  }
+  // ---- ⑤ 落库：任何结论都写一行（在籍/不在籍/无法判断/异常），TTL 按结论长短不同 ----
+  const now = new Date();
+  const expires = computeExpires(normalized.status, cfg, now);
+  const saved = await persist({
+    name: nameVal,
+    id_card_hmac: hmac,
+    id_card_encrypted: encryptSecret(idVal),
+    id_card_mask: maskIdCard(idVal),
+    status: normalized.status,
+    api_code: normalized.apiCode || '',
+    api_message: normalized.message || '',
+    transaction_id: normalized.tx || '',
+    provider: cfg.provider || 'tianyuan',
+    product_code: cfg.product_code,
+    raw_response: { code: normalized.apiCode, message: normalized.message, raw: String(rawText || '').slice(0, 2000), api_called: true },
+    guest_id: guestId, event_id: eventId, registration_id: registrationId, group_no: groupNo || null,
+    verified_at: now,
+    expires_at: expires
+  });
+  // 落库失败也不能吞掉核验结论（此时已花了钱）
+  return {
+    status: normalized.status, fromCache: false, message: normalized.message || '',
+    transactionId: normalized.tx || '', apiCode: normalized.apiCode || '',
+    verificationId: saved.row ? saved.row.id : null, verifiedAt: now, expiresAt: expires,
+    saveError: saved.saveError || undefined
+  };
 }
 
 /** 后台列表：核验流水（身份证只回掩码） */

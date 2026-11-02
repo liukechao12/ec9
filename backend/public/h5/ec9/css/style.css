@@ -208,24 +208,22 @@ select.input.filled { color: #1D2129; }
 }
 .btn-primary:active { background: var(--blue-dark); }
 
-/* 首页报名按钮：设计稿切图（白色平行四边形，文字已剥离）+ 真文字叠放 */
+/* 首页报名按钮（2026-11-02 新稿：白色圆角胶囊 + 蓝字，不再用平行四边形切图） */
 .btn-register {
-  position: absolute; left: 63px; top: 628px;
+  position: absolute; left: 97px; top: 660px;
   display: block;
-  width: 249px;
-  height: 74px;
-  background: url(../img/btn_register.png) no-repeat center;
-  background-size: 249px 74px;
-  color: #2A54D8;
+  width: 180px;
+  height: 38px;
+  background: #fff;
+  color: var(--blue);
   border: none;
+  border-radius: 10px;
   padding: 0;
   font-family: inherit;
-  font-size: 28px;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: 5px;
-  text-indent: 5px;            /* 字距视觉居中补偿 */
-  line-height: 74px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 38px;
   text-align: center;
   cursor: pointer;
 }
@@ -243,24 +241,20 @@ select.input.filled { color: #1D2129; }
   text-align: center;
 }
 
-/* 首页文字（绝对定位贴合设计稿 1x 坐标：标题151 / 英标语204 / 中文语228 / 6651.HK 258） */
-.home-ticker { top: 258px; text-align: center; color: #fff; font-size: 15px; letter-spacing: 1.5px; font-weight: 700; line-height: 1; }
-.home-title { top: 151px; text-align: center; font-size: 26px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 5px; text-indent: 5px; line-height: 1.1; white-space: nowrap; }
-/* 首页标题默认按中文视觉量身定制；英文活动名更长，继续用 26px + 5px 字距会被 375 画布裁掉。 */
-.home-title--latin { font-size: 24px; letter-spacing: 1px; text-indent: 1px; }
-.home-title--latin .home-nine { font-size: 35px; transform: translateY(3px); }
-.home-title--latin.home-title--long { font-size: 21px; letter-spacing: .5px; text-indent: .5px; }
-.home-title--latin.home-title--long .home-nine { font-size: 31px; transform: translateY(2px); }
-.home-nine { display: inline-block; font-size: 38px; font-weight: 400; font-style: normal; color: rgba(255,255,255,.42); letter-spacing: 0; transform: translateY(3px); }
-.home-tagline-en { top: 204px; text-align: center; color: #fff; font-size: 12.5px; font-weight: 600; letter-spacing: 3px; text-indent: 3px; line-height: 1; text-transform: uppercase; white-space: nowrap; }
-.home-tagline-cn { top: 228px; text-align: center; color: #fff; font-size: 13.5px; letter-spacing: 5px; text-indent: 5px; line-height: 1; white-space: nowrap; }
-/* 时间/地址（label 441/498，value 463/521） */
-.home-meta .home-label { color: rgba(255,255,255,.62); font-size: 11px; line-height: 1; text-align: center; }
+/* 首页文字（2026-11-02 新稿：标题 / 中文副标语 / 英文副标语 / 地点 / 日期，绝对定位 1x 坐标） */
+.home-title { top: 126px; text-align: center; font-size: 34px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 4px; text-indent: 4px; line-height: 1.1; white-space: nowrap; }
+/* 首页标题默认按中文视觉量身定制；英文活动名更长，继续用 34px + 4px 字距会被 375 画布裁掉。 */
+.home-title--latin { font-size: 26px; letter-spacing: 1px; text-indent: 1px; }
+.home-title--latin .home-nine { font-size: 38px; transform: translateY(3px); }
+.home-title--latin.home-title--long { font-size: 22px; letter-spacing: .5px; text-indent: .5px; }
+.home-title--latin.home-title--long .home-nine { font-size: 32px; transform: translateY(2px); }
+.home-nine { display: inline-block; font-size: 44px; font-weight: 400; font-style: normal; color: rgba(255,255,255,.42); letter-spacing: 0; transform: translateY(3px); }
+.home-tagline-cn { top: 196px; text-align: center; color: #fff; font-size: 15px; font-weight: 600; letter-spacing: 2px; text-indent: 2px; line-height: 1; white-space: nowrap; }
+.home-tagline-en { top: 232px; text-align: center; color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-indent: 2px; line-height: 1; text-transform: uppercase; white-space: nowrap; }
+/* 地点 / 日期（新稿：居中两行，无「时间：」「地址：」标签、无 6651.HK） */
 .home-meta .home-value { color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 1px; line-height: 1; text-align: center; }
-.home-label1 { top: 439px; }
-.home-value1 { top: 461px; }
-.home-label2 { top: 496px; }
-.home-value2 { top: 519px; }
+.home-meta .home-loc { top: 330px; font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+.home-meta .home-date { top: 358px; font-size: 17px; font-weight: 700; font-style: italic; letter-spacing: 2px; }
 
 /* 协议勾选（基础样式：供 signup/profile 等页使用） */
 .agree-row {
@@ -291,7 +285,7 @@ select.input.filled { color: #1D2129; }
 
 /* 首页协议勾选（蓝底上：白色圆角方块，贴合设计稿 y632） */
 #app.home .agree-row {
-  position: absolute; left: 0; right: 0; top: 590px;
+  position: absolute; left: 0; right: 0; top: 628px;
   display: flex; align-items: center; justify-content: center;
   gap: 7px; font-size: 11px; color: #fff;
 }
@@ -315,15 +309,21 @@ select.input.filled { color: #1D2129; }
 }
 #app.home .lang-menu div { font-size: 14px; line-height: 14px; padding: 12px 0 12px 17px; }
 
-/* 首页底部联系我们按钮（设计稿切图：浅蓝平行四边形 + 真文字） */
+/* 首页联系我们（2026-11-02 新稿：白色文字链，不再用平行四边形切图） */
 #app.home .btn-contact {
-  position: absolute; left: 130px; top: 733px;
-  display: block; width: 122px; height: 52px; margin: 0; padding: 0;
-  background: url(../img/btn_contact.png) no-repeat center;
-  background-size: 122px 52px; border: none;
-  color: #fff; font-family: inherit; font-size: 13px; letter-spacing: 1px;
-  box-sizing: border-box; padding: 0 4px 8.5px 0;   /* 平行四边形视觉中心补偿（button 自带垂直居中，用 padding 收缩内容盒） */
-  line-height: 35px; text-align: center; cursor: pointer;
+  position: absolute; left: 0; right: 0; top: 740px;
+  display: block; width: auto; height: auto; margin: 0; padding: 0;
+  background: none; border: none;
+  color: #fff; font-family: inherit; font-size: 12px; letter-spacing: 1px;
+  line-height: 1; text-align: center; cursor: pointer;
+}
+
+/* 首页底部 51WORLD logo（2026-11-02 新稿） */
+.home-logo {
+  position: absolute; left: 0; right: 0; top: 770px;
+  text-align: center; color: #fff;
+  font-size: 15px; font-weight: 800; font-style: italic;
+  letter-spacing: 2px; line-height: 1;
 }
 
 /* ---------- 门票卡 ---------- */

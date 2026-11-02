@@ -13,16 +13,13 @@
   <div class="home-stage" id="homeStage">
     <div class="home-hero">
       <div class="home-title" id="evName">地球克隆计划<span class="home-nine">9</span></div>
-      <div class="home-tagline-en">JOIN PHYSICAL AI,HERE AND NOW</div>
-      <div class="home-tagline-cn" id="homeSloganCn" data-i18n="home_slogan_cn">拥抱物理AI&#12288;此刻即未来</div>
-      <div class="home-ticker">6651.HK</div>
+      <div class="home-tagline-cn" id="homeSloganCn" data-i18n="home_slogan_cn">拥抱物理AI，当下即未来</div>
+      <div class="home-tagline-en">JOIN PHYSICAL AI, HERE AND NOW</div>
     </div>
 
     <div class="home-meta">
-      <div class="home-label home-label1" data-i18n="home_date_label">时间：</div>
-      <div class="home-value home-value1" id="evDate" data-i18n="home_date">2026年12月4日</div>
-      <div class="home-label home-label2" data-i18n="home_loc_label">地址：</div>
-      <div class="home-value home-value2" id="evLocation" data-i18n="home_loc">中国·深圳</div>
+      <div class="home-value home-loc" id="evLocation" data-i18n="home_loc">深圳 · 前海国际会议中心</div>
+      <div class="home-value home-date" id="evDate" data-i18n="home_date">2026.12.04</div>
     </div>
 
     <div class="home-bottom">
@@ -37,6 +34,7 @@
 
       <button class="btn-register" id="btnRegister" data-i18n="register_now">立即报名</button>
       <button class="btn-contact" id="btnContact" data-i18n="contact_us">联系我们</button>
+      <div class="home-logo">51WORLD</div>
     </div>
   </div>
 </div>
@@ -95,8 +93,11 @@
       renderEventName(ev.name);
     }
     if (ev.start_time) {
-      // 日期格式随语言走：中文「2026年12月4日」，英文「December 4, 2026」
-      document.getElementById("evDate").textContent = E.fmtDate(new Date(ev.start_time));
+      // 设计稿口径：统一 2026.12.04（不带「时间：」标签）
+      var dt = new Date(ev.start_time);
+      var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+      document.getElementById("evDate").textContent =
+        dt.getFullYear() + "." + pad(dt.getMonth() + 1) + "." + pad(dt.getDate());
     }
     if (ev.location) document.getElementById("evLocation").textContent = ev.location;
     E.S.patch({ event_id: eventId, event_name: ev.name || "" });

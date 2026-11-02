@@ -1553,6 +1553,8 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
         }
         
         const data = await apiRequest(url);
+        // 票种字典：表格里「赠票票种」下拉与各处显示名都用它
+        window.__invitationTicketTypes = (data.data && data.data.ticket_types) || [];
         const tbody = document.getElementById('invitationsTableBody');
         tbody.innerHTML = '';
 
@@ -1666,6 +1668,9 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                         <span class="status-badge ${getInvitationStatusClass(registrationStatus, isValid)}">${getInvitationStatusText(registrationStatus, isValid)}</span>
                     </td>
                     <td>
+                        ${renderGiftTicketCell(inv)}
+                    </td>
+                    <td>
                         ${renderNeedPayCell(inv)}
                     </td>
                     <td>
@@ -1721,12 +1726,14 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
         const showBulk = !!(currentUser && currentUser.role === 'admin');
         const ap = document.getElementById('invBulkApproveBtn');
         const rj = document.getElementById('invBulkRejectBtn');
+        const gt = document.getElementById('invBulkGiftBtn');
         if (ap) ap.style.display = showBulk ? '' : 'none';
         if (rj) rj.style.display = showBulk ? '' : 'none';
+        if (gt) gt.style.display = showBulk ? '' : 'none';
     } catch (error) {
         console.error('加载邀约列表失败:', error);
         const tbody = document.getElementById('invitationsTableBody');
-        const colspan = (currentUser && currentUser.role === 'admin') ? 10 : 9;   // 含新增的「付款」列
+        const colspan = (currentUser && currentUser.role === 'admin') ? 11 : 10;   // 含「付款」「赠票票种」两列
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 40px; color: #EF4444;">${window.t('admin.loadFailedWith', [error.message || window.t('admin.unknownError')])}<br><button onclick="loadInvitations()" style="margin-top: 10px; padding: 8px 16px; background: #155DFC; color: white; border: none; border-radius: 6px; cursor: pointer;">重试</button></td></tr>`;
     }
 }
@@ -3728,8 +3735,25 @@ async function showInvitationModal() {
     // 加载活动和嘉宾列表
     await loadEventsForSelect();
     await loadGuestsForSelect();
+    await fillTicketTypeSelect('invitationTicketType');
     
     modal.classList.remove('hidden');
+}
+
+/** 填充「赠票票种」下拉：票种字典优先用列表已拉到的，否则单独拉一次 */
+async function fillTicketTypeSelect(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    let list = window.__invitationTicketTypes || [];
+    if (!list.length) {
+        try {
+            const res = await apiRequest('/invitations?page=1&pageSize=1');
+            list = (res && res.data && res.data.ticket_types) || [];
+            window.__invitationTicketTypes = list;
+        } catch (e) { list = []; }
+    }
+    sel.innerHTML = '<option value="0">不指定（按所选票种照价收费）</option>' +
+        list.map(t => `<option value="${t.id}">${t.name}${Number(t.price) > 0 ? ' ¥' + Math.round(Number(t.price)) : ''}</option>`).join('');
 }
 
 function closeInvitationModal() {
@@ -3751,6 +3775,7 @@ async function showBatchInvitationModal() {
     // 加载活动和嘉宾列表
     await loadEventsForSelect('batchInvitationEventId');
     await loadGuestsForBatchSelect();
+    await fillTicketTypeSelect('batchInvitationTicketType');
 
     // 初始化BD筛选下拉
     populateBatchBdFilterOptions();
@@ -3937,13 +3962,16 @@ async function handleInvitationSubmit(e) {
     
     const formData = new FormData(e.target);
     const needPaySel = document.getElementById('invitationNeedPay');
+    const ttSel = document.getElementById('invitationTicketType');
     const data = {
         event_id: parseInt(formData.get('event_id')),
         guest_id: parseInt(formData.get('guest_id')),
         source_bd: formData.get('source_bd') || null,
         created_by: currentUser?.username || 'admin',
-        // 新建邀约默认「免票」（邀约嘉宾不掏钱）；管理员可选需付款
-        need_pay: needPaySel ? (parseInt(needPaySel.value, 10) === 1 ? 1 : 0) : 0
+        // 赠票票种：指定了 → 该嘉宾选这张票免费；未指定（0）→ 按所选票种照价收费
+        ticket_type_id: ttSel ? (parseInt(ttSel.value, 10) || 0) : 0,
+        // 默认照价收费（1）；管理员可选「免票」（need_pay=0，无门槛全免）
+        need_pay: needPaySel ? (parseInt(needPaySel.value, 10) === 0 ? 0 : 1) : 1
     };
     
     try {
@@ -3986,12 +4014,14 @@ async function handleBatchInvitationSubmit(e) {
     }
     
     const batchNeedPaySel = document.getElementById('batchInvitationNeedPay');
+    const batchTtSel = document.getElementById('batchInvitationTicketType');
     const data = {
         event_id: eventId,
         guest_ids: guestIds,
         source_bd: sourceBd,
         created_by: currentUser?.username || 'admin',
-        need_pay: batchNeedPaySel ? (parseInt(batchNeedPaySel.value, 10) === 1 ? 1 : 0) : 0
+        ticket_type_id: batchTtSel ? (parseInt(batchTtSel.value, 10) || 0) : 0,
+        need_pay: batchNeedPaySel ? (parseInt(batchNeedPaySel.value, 10) === 0 ? 0 : 1) : 1
     };
     
     try {
@@ -4846,6 +4876,85 @@ async function markInvitationRegistered(id) {
 }
 
 // 邀约「是否需要付款」单元格（管理员可直接切换）
+/* 赠票票种单元格：管理员可直接下拉改「给这个人哪张票」（选它免费，选别的照价） */
+function renderGiftTicketCell(inv) {
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    const cur = Number(inv.ticket_type_id) || 0;
+    const list = (window.__invitationTicketTypes || []);
+    if (!isAdmin) {
+        const hit = list.find(t => Number(t.id) === cur);
+        return hit
+            ? `<span class="status-badge" style="background:#EFF6FF;color:#1E40AF;">${hit.name}</span>`
+            : '<span style="color:#9CA3AF;">未指定（照价）</span>';
+    }
+    const opts = ['<option value="0">未指定（照价收费）</option>'].concat(
+        list.map(t => `<option value="${t.id}"${Number(t.id) === cur ? ' selected' : ''}>${t.name}${Number(t.price) > 0 ? ' ¥' + Math.round(Number(t.price)) : ''}</option>`)
+    ).join('');
+    return `<select class="filter-select" style="padding:4px 6px;font-size:12px;max-width:170px;"
+        onchange="setInvitationTicketType(${inv.id}, this.value)"
+        title="指定这个人获赠哪张票：选它免费，选别的照价收费">${opts}</select>`;
+}
+
+// 管理员给单个邀约指定赠票票种
+async function setInvitationTicketType(id, value) {
+    const ttId = Number(value) || 0;
+    try {
+        const res = await apiRequest(`/invitations/${id}/ticket-type`, {
+            method: 'PUT',
+            body: JSON.stringify({ ticket_type_id: ttId })
+        });
+        if (window.toast) toast(res.message || '已更新'); else alert(res.message || '已更新');
+        loadInvitations();
+    } catch (error) {
+        alert('设置失败：' + (error.message || ''));
+        loadInvitations();
+    }
+}
+
+// 批量设置赠票票种（勾选的邀约）
+async function bulkSetInvitationTicketType() {
+    const ids = Array.from(selectedInvitationIds || []);
+    if (!ids.length) { alert('请先勾选要设置的邀约'); return; }
+    const list = (window.__invitationTicketTypes || []);
+    const opts = ['<option value="0">未指定（照价收费）</option>'].concat(
+        list.map(t => `<option value="${t.id}">${t.name}${Number(t.price) > 0 ? ' ¥' + Math.round(Number(t.price)) : ''}</option>`)
+    ).join('');
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div style="margin-bottom:8px;">给选中的 <b>${ids.length}</b> 位嘉宾指定赠票票种：<br>
+        <span style="color:#6B7280;font-size:12px;">指定后，这些人报名时选这张票即免费，选别的票照价付费。</span></div>
+        <select id="bulkGiftTicketSel" style="padding:8px 12px;border:1px solid #D1D5DB;border-radius:6px;min-width:240px;">${opts}</select>`;
+    // 用 confirm 太丑，这里直接借用 prompt 之外的轻量弹层
+    const modal = document.getElementById('invGiftModal');
+    if (modal) {
+        const body = document.getElementById('invGiftModalBody');
+        const btn = document.getElementById('invGiftModalOk');
+        if (body) { body.innerHTML = ''; body.appendChild(wrap); }
+        if (btn) btn.onclick = async function () {
+            const sel = document.getElementById('bulkGiftTicketSel');
+            modal.classList.add('hidden');
+            await doBulkSetTicketType(ids, Number(sel && sel.value) || 0);
+        };
+        modal.classList.remove('hidden');
+        return;
+    }
+    const raw = prompt('输入赠票票种 ID（0 = 不指定，照价收费）：\n' + list.map(t => `${t.id} = ${t.name}`).join('\n'), '0');
+    if (raw === null) return;
+    await doBulkSetTicketType(ids, Number(raw) || 0);
+}
+
+async function doBulkSetTicketType(ids, ttId) {
+    try {
+        const res = await apiRequest('/invitations/batch-ticket-type', {
+            method: 'POST',
+            body: JSON.stringify({ ids, ticket_type_id: ttId })
+        });
+        alert(res.message || '已更新');
+        loadInvitations();
+    } catch (error) {
+        alert('批量设置失败：' + (error.message || ''));
+    }
+}
+
 function renderNeedPayCell(inv) {
     const needPay = Number(inv.need_pay) !== 0;
     const isAdmin = currentUser && currentUser.role === 'admin';

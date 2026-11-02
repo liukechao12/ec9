@@ -545,6 +545,7 @@
                     <div class="header-actions">
                         <button id="invBulkApproveBtn" class="btn btn-primary btn-sm" onclick="bulkAuditSelected('approve')" style="margin-right: 8px; display: none;">批量通过</button>
                         <button id="invBulkRejectBtn" class="btn btn-outline btn-sm" onclick="bulkAuditSelected('reject')" style="margin-right: 8px; display: none;">批量驳回</button>
+                        <button id="invBulkGiftBtn" class="btn btn-outline btn-sm" onclick="bulkSetInvitationTicketType()" style="margin-right: 8px; display: none;">设置赠票票种</button>
                         <div class="dropdown-wrapper">
                             <select class="dropdown-select">
                                 <option>全部状态</option>
@@ -614,6 +615,7 @@
                                 <th>BD联系人</th>
                                 <th>发送时间</th>
                                 <th>状态</th>
+                                <th>赠票票种</th>
                                 <th>付款</th>
                                 <th>操作</th>
                             </tr>
@@ -1828,13 +1830,22 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>是否需要付款</label>
-                        <select id="invitationNeedPay" name="need_pay">
-                            <option value="0" selected>免票（默认）</option>
-                            <option value="1">需付款</option>
+                        <label>赠票票种（给这个人哪张票）</label>
+                        <select id="invitationTicketType" name="ticket_type_id">
+                            <option value="0" selected>不指定（按所选票种照价收费）</option>
                         </select>
                         <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
-                            邀约嘉宾默认免票：报名即成功、直接出票，不产生订单。特殊情形可选「需付款」，该嘉宾报名成功后要去付款购票。管理员审批时仍可修改。
+                            指定后：该嘉宾报名时<b>选这张票即免费</b>（应付 ¥0，直接出票），选别的票照价付费。不指定则按他选的票种照价收费。
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>是否需要付款</label>
+                        <select id="invitationNeedPay" name="need_pay">
+                            <option value="1" selected>需付款（默认）</option>
+                            <option value="0">免票（无门槛全免）</option>
+                        </select>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            默认照价收费；要给这个人送票请用上面的「赠票票种」。选「免票」表示无论选哪张票都不收钱。管理员审批时仍可修改。
                         </div>
                     </div>
                 </div>
@@ -2126,13 +2137,22 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>是否需要付款</label>
-                        <select id="batchInvitationNeedPay" name="need_pay">
-                            <option value="0" selected>免票（默认）</option>
-                            <option value="1">需付款</option>
+                        <label>赠票票种（给这批人哪张票）</label>
+                        <select id="batchInvitationTicketType" name="ticket_type_id">
+                            <option value="0" selected>不指定（按所选票种照价收费）</option>
                         </select>
                         <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
-                            批量创建默认「免票」；可在列表中逐条改成需付款
+                            指定后：这批嘉宾报名时<b>选这张票即免费</b>，选别的票照价付费。
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>是否需要付款</label>
+                        <select id="batchInvitationNeedPay" name="need_pay">
+                            <option value="1" selected>需付款（默认）</option>
+                            <option value="0">免票（无门槛全免）</option>
+                        </select>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            默认照价收费；可在列表中逐条改成免票或指定赠票票种
                         </div>
                     </div>
                 </div>
@@ -2141,6 +2161,21 @@
                     <button type="submit" class="btn btn-primary">批量创建</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 批量设置赠票票种 -->
+    <div id="invGiftModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2>设置赠票票种</h2>
+                <button class="modal-close" onclick="document.getElementById('invGiftModal').classList.add('hidden')">×</button>
+            </div>
+            <div class="modal-body" id="invGiftModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('invGiftModal').classList.add('hidden')">取消</button>
+                <button type="button" class="btn btn-primary" id="invGiftModalOk">确定</button>
+            </div>
         </div>
     </div>
 

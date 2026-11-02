@@ -16,6 +16,11 @@ const Invitation = sequelize.define('Invitation', {
   // 语义：票种本身 ¥0（学生票/免费票）永远是免票；此处只决定「票种有价时这个人是否还要掏钱」。
   // 管理员在审批（批准/手动报名成功）时可改成 0，改后该邀约人报名即出票、不产生订单。
   need_pay: { type: DataTypes.TINYINT, defaultValue: 1, comment: '1 需付款 0 免票（管理员审批时可改）' },
+  // 赠票票种：管理员在邀约管理里指定「给这个人哪张票」。
+  //   · 有值 → 该人报名时选这张票即免费（¥0），选别的票照价付费
+  //   · NULL → 未指定，按所选票种实际收费
+  // 与 need_pay 的区别：need_pay=0 是「这个人无门槛全免」；ticket_type_id 是「指定这张票免费」。
+  ticket_type_id: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null, comment: '赠票票种 id：选此票免费，NULL=未指定' },
   is_valid: { type: DataTypes.TINYINT, defaultValue: 1 },
   // 批次号：一次添加多人 / 一次提交多人 = 同一批，可整批审核
   //   · 后台批量创建 → B + 时间戳 + 随机串

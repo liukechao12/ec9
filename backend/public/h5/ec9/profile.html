@@ -150,8 +150,14 @@
 
   /* 邀约名单：命中的人 = 免票 + 免审核 + 提交即报名成功；没命中的 = 需审核后购票付款。
      这里只是给用户的即时反馈，后端提交时会按同样口径再判一次。 */
-  var invitedSet = {}, needPaySet = {};
-  function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
+  var invitedSet = {}, needPaySet = {}, giftSet = {}, giftNameSet = {};
+  // 免费口径（同后端）：有赠票 → 选那张票免费；管理员特批免票 → 全免
+  function isFreeOf(m) {
+    if (!m) return false;
+    if (Number(m.gift_ticket_id) > 0) return true;      // 会默认帮他选中赠票
+    return !!(m.is_invited && m.need_pay !== true);
+  }
+  function giftNameOf(m) { return (m && m.gift_ticket_name) || ""; }
 
   function checkInvited() {
     var phones = members.map(function (x) { return x.phone; }).filter(function (p) { return /^1[3-9]\d{9}$/.test(p); });
@@ -159,10 +165,14 @@
     E.Api.checkInvited(phones, Number(eventId)).then(function (d) {
       invitedSet = (d && d.invited) || {};
       needPaySet = (d && d.need_pay) || {};
+      giftSet = (d && d.ticket_type) || {};          // 邀约管理给这个人指定的赠票票种 id
+      giftNameSet = (d && d.ticket_name) || {};
       members.forEach(function (m) {
         m.is_invited = !!invitedSet[m.phone];
-        // 邀约名单内默认免票；管理员特批 need_pay=1 的才要掏钱
+        // 邀约名单内：指定了赠票 → 选它免费；没指定 → 照所选票种付费
         m.need_pay = m.is_invited ? (needPaySet[m.phone] !== false) : true;
+        m.gift_ticket_id = Number(giftSet[m.phone]) || 0;
+        m.gift_ticket_name = giftNameSet[m.phone] || "";
       });
       renderInvitedTips();
     }).catch(function () { /* 查询失败不阻塞填写，后端提交时会再判一次 */ });
@@ -182,7 +192,11 @@
         tag.className = "mc-tag mc-tag-result";
         head.appendChild(tag);
       }
-      if (isFreeOf(m)) {
+      if (Number(m.gift_ticket_id) > 0) {
+        // 邀约管理给他指定了票：选那张免费，选别的照价
+        if (tip) { tip.textContent = E.t("gift_ticket_tip").replace("{ticket}", giftNameOf(m)); tip.classList.remove("hidden"); }
+        if (tag) tag.textContent = E.t("gift_tag");
+      } else if (isFreeOf(m)) {
         if (tip) { tip.textContent = E.t("invited_tip"); tip.classList.remove("hidden"); }
         if (tag) tag.textContent = E.t("invited_tag");
       } else if (m.is_invited) {

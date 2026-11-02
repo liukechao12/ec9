@@ -224,10 +224,31 @@ async function findInvited(phones, eventId) {
     if (phone) map.set(phone, {
       invitation_id: inv.id,
       source_bd: inv.source_bd || '',
-      need_pay: needPayOf(inv)      // 邀约默认免票；管理员显式改成需付款的才付费
+      need_pay: needPayOf(inv),      // 邀约默认免票；管理员显式改成需付款的才付费
+      ticket_type_id: Number(inv.ticket_type_id) || 0   // 赠票票种：选它免费（0=未指定）
     });
   }
   return map;
+}
+
+/**
+ * 免费口径（2026-11-02 修订，昊哥拍板）：
+ *   ① 票种本身 ¥0（学生票/免费票）                 → 免费
+ *   ② 邀约管理给这个人指定了票种，且他选的就是那张 → 免费
+ *   ③ 管理员特批 need_pay=0                        → 免费（无门槛全免，与票种无关）
+ *   其余（不在名单 / 名单内但没指定票 / 指定票但选了别的票）→ 照票面价付费。
+ *
+ * @param {object} inv      邀约命中信息 {need_pay:boolean, ticket_type_id:number}
+ * @param {number} selId    这个人选的票种 id
+ * @param {number} price    票面价
+ * @returns {boolean}
+ */
+function isFreeFor(inv, selId, price) {
+  if (!(Number(price) > 0)) return true;                       // ① ¥0 票种
+  if (!inv) return false;
+  if (Number(inv.ticket_type_id) > 0 && Number(selId) === Number(inv.ticket_type_id)) return true;  // ② 赠票
+  if (inv.need_pay === false || Number(inv.need_pay) === 0) return true;                            // ③ 特批免票
+  return false;
 }
 
 /**
@@ -258,7 +279,11 @@ async function findInvitedByGuestIds(guestIds, eventId) {
     !(inv.extra_fields && inv.extra_fields.auto_created) || Number(inv.registration_status) === 2);
   for (const inv of genuine) {
     if (!map.has(inv.guest_id)) {
-      map.set(inv.guest_id, { invitation_id: inv.id, need_pay: needPayOf(inv) });
+      map.set(inv.guest_id, {
+        invitation_id: inv.id,
+        need_pay: needPayOf(inv),
+        ticket_type_id: Number(inv.ticket_type_id) || 0
+      });
     }
   }
   return map;
@@ -285,12 +310,13 @@ async function standardTicketId() {
 /**
  * 纯估价（无副作用）：H5 提交前实时显示
  *
- * 免费口径（2026-10-23 二次修订，按昊哥最新流程）：
- *   ① 票种本身 ¥0（学生票 / 免费票）  → 永远免票
- *   ② 在邀约名单内                    → 免票（默认），并直接报名成功、免审核
- *      —— 仅当管理员在邀约管理里把该邀约显式改成 need_pay=1 时才照价付费
- *   ③ 不在邀约名单                    → 照票种价付费 + 走后台整单审核
- * 即：免不免票看「在不在邀约名单」，管理员可逐条特批（need_pay=1）。
+ * 免费口径（2026-11-02 三次修订，昊哥拍板）：
+ *   ① 票种本身 ¥0（学生票 / 免费票）                  → 永远免票
+ *   ② 邀约管理给这个人指定了票种，且他选的就是那张     → 免票（赠票）
+ *   ③ 管理员在邀约管理里特批 need_pay=0               → 免票（无门槛，与票种无关）
+ *   ④ 其余（不在名单 / 名单内没指定票 / 指定票但选了别的）→ 照票种价付费
+ * 即：免不免票看「邀约有没有给他指定票 + 他是不是选了那张票」，
+ *     不再「名单内一律免票」；需要某人无门槛免票就用 need_pay=0 特批。
  * @param {Array<{ticket_type_id:number, phone?:string, guest_id?:number, is_invited?:boolean, need_pay?:boolean}>} members
  */
 async function quoteGroup(eventId, members) {
@@ -309,17 +335,17 @@ async function quoteGroup(eventId, members) {
     // 命中邀约（手机号 / guest_id / 调用方显式传入，三种口径任一）
     const byPhone = m.phone ? invited.get(String(m.phone)) : null;
     const byGuest = m.guest_id ? invitedByGuest.get(Number(m.guest_id)) : null;
-    const isInvited = !!m.is_invited || !!byPhone || !!byGuest;
-    // 需付款优先级：调用方显式 need_pay > 邀约记录 > 「命中邀约即免票」
-    let needPay = true;
-    if (typeof m.need_pay === 'boolean') needPay = m.need_pay;
-    else if (m.need_pay != null) needPay = Number(m.need_pay) !== 0;
-    else if (byPhone) needPay = !!byPhone.need_pay;
-    else if (byGuest) needPay = !!byGuest.need_pay;
-    else if (isInvited) needPay = false;   // 在邀约名单内 → 免票
+    const inv = byPhone || byGuest || null;
+    const isInvited = !!m.is_invited || !!inv;
 
     const price = Number(tt.price) || 0;
-    const isFree = !needPay || price === 0;   // 免票标记 OR ¥0 票种
+    // 免费口径：调用方显式 need_pay 优先（后台审批时的人工裁定），
+    // 否则走邀约口径 —— ¥0 票种 / 选了邀约指定的赠票 / 管理员特批免票
+    let isFree;
+    if (typeof m.need_pay === 'boolean') isFree = !m.need_pay;
+    else if (m.need_pay != null) isFree = Number(m.need_pay) === 0;
+    else isFree = isFreeFor(inv, Number(m.ticket_type_id), price);
+    if (price === 0) isFree = true;
     const payable = isFree ? 0 : price;
     items.push({
       ticket_type_id: tt.id, ticket_name: tt.name,
@@ -394,19 +420,25 @@ async function createGroup({ buyerPhone, eventId, members }) {
   });
   const enabledIds = enabledSessions.map(s => Number(s.id));
 
-  // 邀约名单 + 标准票：邀约嘉宾一律「标准票」（免票），不跟随购票人给同行人选的票种
+  // 邀约名单：命中即「免审核」，但票种按本人所选 —— 不再一律强制标准票。
+  // 赠票口径（2026-11-02）：邀约管理里给这个人指定了票种 → 他选那张免费；选别的照价付费。
   const invitedMap = await findInvited(members.map(m => String(m.phone)), eventId);
   const stdTicketId = await standardTicketId();
+  // 票面价：用于「是否选到赠票」的免费判定
+  const ticketRows = await TicketType.findAll();
+  const priceMap = new Map(ticketRows.map(t => [Number(t.id), Number(t.price) || 0]));
   const norm = members.map(m => {
     const invited = invitedMap.has(String(m.phone));
     const pick = pickSessions(m);
+    const selId = Number(m.ticket_type_id) || 0;
     return {
       ...m,
       is_invited: invited,
       // 全选 → 展开成所有启用场次；否则用所选列表（已去重）
       session_pick: pick.all ? enabledIds.slice() : pick.ids,
       session_all: pick.all ? 1 : 0,
-      ticket_type_id: (invited && stdTicketId) ? stdTicketId : (Number(m.ticket_type_id) || 0)
+      // 本人没选票种的老客户端（邀约人原本被强制标准票）→ 回退标准票，行为不变
+      ticket_type_id: selId || (invited && stdTicketId ? stdTicketId : 0)
     };
   });
 
@@ -487,9 +519,11 @@ async function createGroup({ buyerPhone, eventId, members }) {
     }
 
     const isInvited = invitedMap.has(phone);
-    const invNeedPay = isInvited ? !!invitedMap.get(phone).need_pay : true;   // 邀约默认免票
-    // 邀约嘉宾 → 标准票；其余沿用购票人选的票种
-    const effTicketId = isInvited && stdTicketId ? stdTicketId : (Number(m.ticket_type_id) || 0);
+    const inv = isInvited ? invitedMap.get(phone) : null;
+    // 票种按本人所选（老客户端没传时 norm 里已回退标准票）
+    const effTicketId = Number(m.ticket_type_id) || (isInvited && stdTicketId ? stdTicketId : 0);
+    // 免费判定：¥0 票种 / 选了邀约管理给这个人指定的赠票 / 管理员特批免票
+    const invNeedPay = !isFreeFor(inv, effTicketId, priceMap.get(effTicketId) || 0);
     // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
     const invId = await syncInvitationOnRegister({
       eventId, guestId: guest.id, isInvited, groupNo,
@@ -519,6 +553,10 @@ async function createGroup({ buyerPhone, eventId, members }) {
         is_invited: isInvited,
         audit_exempt: isInvited,
         need_pay: invNeedPay,
+        // 邀约管理给这个人指定的赠票票种（选它免费）；未指定为 null
+        invited_ticket_id: (inv && Number(inv.ticket_type_id) > 0) ? Number(inv.ticket_type_id) : null,
+        // 本次是否正好选到了赠票（免费出票的直接证据，便于对账）
+        used_invited_ticket: !!(inv && Number(inv.ticket_type_id) > 0 && Number(inv.ticket_type_id) === effTicketId),
         // 学生票学籍核验结论（enrolled / not_enrolled / unknown / error）
         ...(svMap.has(phone) ? {
           student_verify: svMap.get(phone).status,

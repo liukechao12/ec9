@@ -183,8 +183,11 @@
     list.innerHTML = members.map(function (m, i) {
       var nm = String(m.name || "").trim() || String(m.phone || "");
       var btns = tickets.map(function (tk) {
+        // 这个人被赠的票：按钮上直接标「免费」，一眼看出选它不用花钱
+        var gift = Number(m.gift_ticket_id) > 0 && Number(m.gift_ticket_id) === Number(tk.id);
         return '<span class="tk-a-btn' + (perTicket[i] === tk.id ? " on" : "") +
-          '" data-i="' + i + '" data-tid="' + tk.id + '">' + E.esc(tk.name) + '</span>';
+          '" data-i="' + i + '" data-tid="' + tk.id + '">' + E.esc(tk.name) +
+          (gift ? '<span class="tk-a-free">' + E.esc(E.t("gift_tag")) + '</span>' : '') + '</span>';
       }).join("");
       // 学生票：多出身份证号输入（用于学籍在线核验，只做资格判断，不做他用）
       var isStu = isStudentTicket(perTicket[i]);
@@ -195,8 +198,12 @@
             '<div class="tk-a-tip">' + E.esc(E.t("student_idcard_tip")) + '</div>' +
           '</div>'
         : '';
+      var tkNow = ticketById(perTicket[i] || selectedId);
+      var tagNow = (Number(m.gift_ticket_id) > 0 && Number(m.gift_ticket_id) === Number(tkNow && tkNow.id))
+        ? E.t("gift_tag")                                   // 正好选到赠票
+        : (isFreeFor(m, tkNow) ? E.t("invited_std_tag") : "");   // ¥0 票种 / 特批免票
       return '<div class="tk-a-row">' +
-        '<div class="tk-a-name">' + E.esc(nm) + (isFreeOf(m) ? '<span class="tk-a-free">' + E.esc(E.t("invited_std_tag")) + '</span>' : '') + '</div>' +
+        '<div class="tk-a-name">' + E.esc(nm) + (tagNow ? '<span class="tk-a-free">' + E.esc(tagNow) + '</span>' : '') + '</div>' +
         '<div class="tk-a-btns">' + btns + '</div>' +
         idBox +
       '</div>';
@@ -256,7 +263,20 @@
   /* ---------- 费用（口径同后端：邀约免票/¥0票种不计入付费票；折扣只认标准票） ----------
      只有标准票计入张数门槛，也只有标准票打折；尊享票等非标准票一律原价。
      总价 = 标准票金额×折扣 + 其它票种原价。档位在后台「折扣规则」配置，不写死在前端。 */
-  function isFreeOf(m) { return !!(m && m.is_invited && m.need_pay !== true); }
+  /* 免费判定（口径同后端 groupOrderService.isFreeFor）：
+     ① 票种本身 ¥0（学生票/免费票）              → 免费
+     ② 邀约管理给这个人指定了票种，且他选的就是那张 → 免费（赠票）
+     ③ 管理员特批 need_pay=0                     → 免费 */
+  function isFreeFor(m, tk) {
+    if (!tk) return false;
+    if (!(Number(tk.price) > 0)) return true;
+    if (!m) return false;
+    if (Number(m.gift_ticket_id) > 0 && Number(m.gift_ticket_id) === Number(tk.id)) return true;
+    if (m.need_pay === false || Number(m.need_pay) === 0) return true;
+    return false;
+  }
+  // 兼容老调用点（不看票种时的粗判：有赠票或特邀免票）
+  function isFreeOf(m) { return !!(m && (Number(m.gift_ticket_id) > 0 || (m.is_invited && m.need_pay !== true))); }
   // 判定以票种属性 is_standard 为准（后台可勾），名称匹配只在属性缺失的老数据上兜底
   var STD_RE = /标准|標準|standard/i;
   function isStd(t) {
@@ -299,7 +319,7 @@
       var tk = ticketById(perTicket[i] || selectedId);
       if (!tk) return;
       var unit = Number(tk.price) || 0;
-      if (isFreeOf(m) || unit === 0) return;
+      if (isFreeFor(m, tk)) return;
       buyN++; raw += unit;
       if (isStd(tk)) { stdN++; stdAmt += unit; } else { otherAmt += unit; }
       var row = null;
@@ -338,10 +358,13 @@
     var freeNames = [], buyNames = [];
     members.forEach(function (m, i) {
       var tk = ticketById(perTicket[i] || selectedId);
-      var unit = tk ? (Number(tk.price) || 0) : 0;
       var nm = String(m.name || "").trim() || String(m.phone || "");
-      if (!tk || unit === 0 || isFreeOf(m)) freeNames.push(nm + (isFreeOf(m) ? E.t("invited_std_tag") : ""));
-      else buyNames.push(nm);
+      if (!tk || isFreeFor(m, tk)) {
+        // 标签区分原因：选到赠票标「赠票·免费」，¥0 票种/admin 特批免票标原「邀约·标准票」
+        var tag = (Number(m.gift_ticket_id) > 0 && Number(m.gift_ticket_id) === Number(tk && tk.id))
+          ? E.t("gift_tag") : (isFreeOf(m) ? E.t("invited_std_tag") : "");
+        freeNames.push(nm + tag);
+      } else buyNames.push(nm);
     });
     if (freeNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("free_ticket_count").replace("{n}", freeNames.length)) + '：' + E.esc(freeNames.join("、")) + '</div>';
     if (buyNames.length) html += '<div style="margin-top:4px">' + E.esc(E.t("paid_ticket_count").replace("{n}", buyNames.length)) + '：' + E.esc(buyNames.join("、")) + '</div>';
@@ -370,6 +393,13 @@
     renderCards(); renderCols();
     var def = tickets.filter(function (t) { return Number(t.price) > 0; })[0] || tickets[0];
     select(def.id);
+    // 被赠票的人默认帮他选中那张赠票（选它免费）；没赠票的人维持默认票种
+    members.forEach(function (m, i) {
+      if (Number(m.gift_ticket_id) > 0 && ticketById(m.gift_ticket_id)) {
+        perTicket[i] = Number(m.gift_ticket_id);
+      }
+    });
+    renderAssign(); renderFee();
     E.applyLang();
   }).catch(function (e) { E.errPill(e.message || E.t("err_ticket_load")); });
 

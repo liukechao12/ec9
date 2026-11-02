@@ -1439,9 +1439,10 @@ router.get('/export', authenticate, operationLog('registrations', '导出报名�
 
 /**
  * POST /api/registrations/check-invited
- * 填资料时逐人预判结果：在邀约名单内 → 免票、免审核、直接报名成功（票种固定标准票）；
- * 不在名单 → 需审核 + 购票付款。
- * 返回 invited{phone:bool}、need_pay{phone:bool}、standard_ticket_id
+ * 填资料时逐人预判结果：
+ *   邀约管理给这个人指定了票种 → 他选那张票就免费（赠票），选别的照价付；
+ *   名单内但没指定票 / 不在名单 → 照所选票种付费（名单内免审核，不在名单需审核）。
+ * 返回 invited{phone:bool}、need_pay{phone:bool}、ticket_type{phone:id|0}、ticket_name{phone:string}、standard_ticket_id
  * 需要 x-verify-token，防匿名枚举；单次最多 10 个（与单次代报上限一致）
  */
 router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
@@ -1452,17 +1453,28 @@ router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
     }
     if (phones.length > 10) return res.status(400).json({ code: 400, message: '单次最多查询 10 个手机号' });
     const map = await groupOrderService.findInvited(phones.map(String), Number(event_id) || 1);
-    const invited = {}, needPay = {};
+    const invited = {}, needPay = {}, ticketType = {}, ticketName = {};
+    // 赠票票种名：H5 要显示「已为您预留 XX 票（免费）」
+    const ttIds = [...new Set([...map.values()].map(v => Number(v.ticket_type_id)).filter(Boolean))];
+    let ttMap = new Map();
+    if (ttIds.length) {
+      const rows = await require('../models').TicketType.findAll({ where: { id: { [require('sequelize').Op.in]: ttIds } } });
+      ttMap = new Map(rows.map(t => [Number(t.id), String(t.name || '')]));
+    }
     for (const p of phones) {
       const hit = map.get(String(p));
       invited[String(p)] = !!hit;
-      // 名单内：默认免票（管理员可特批改成需付款）；不在名单：需付款（且要审批）
-      needPay[String(p)] = hit ? !!hit.need_pay : true;
+      // 名单内：指定了赠票 → 选那张才免（这里先按「会选赠票」报免票，实际以提交时为准）；
+      //        没指定 → 照价付费。不在名单：需付款（且要审批）
+      const giftId = hit ? Number(hit.ticket_type_id) || 0 : 0;
+      needPay[String(p)] = hit ? (!giftId && !!hit.need_pay) : true;
+      ticketType[String(p)] = giftId;
+      ticketName[String(p)] = giftId ? (ttMap.get(giftId) || '') : '';
     }
     const stdId = await groupOrderService.standardTicketId();
     res.json({
       code: 0, message: 'ok',
-      data: { invited, need_pay: needPay, standard_ticket_id: stdId || 0 }
+      data: { invited, need_pay: needPay, ticket_type: ticketType, ticket_name: ticketName, standard_ticket_id: stdId || 0 }
     });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });

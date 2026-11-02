@@ -16,6 +16,16 @@ function generateInviteCode() {
 }
 
 /**
+ * 归一化「赠票票种」入参：合法的在售票种 id 原样返回；0 / 空 / 非法 → null（未指定，照价收费）
+ */
+async function resolveTicketTypeId(v) {
+  const id = Number(v);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const tt = await TicketType.findByPk(id);
+  return tt ? id : null;
+}
+
+/**
  * 审批通过 / 标记报名成功 → 同步报名记录状态
  * 订单服务要求 registrations.status === 'approved' 才允许建单，
  * 否则 H5 支付链路会卡在「报名状态不可创建订单：submitted」。
@@ -264,7 +274,12 @@ router.get('/', authenticate, operationLog('invitations', '获取邀约列表'),
         total: count,
         page: parseInt(page),
         pageSize: parseInt(pageSize),
-        stats: stats
+        stats: stats,
+        // 票种字典：后台表格要把 ticket_type_id 显示成票种名，下拉也要用它
+        ticket_types: await TicketType.findAll({
+          attributes: ['id', 'name', 'price', 'on_shelf', 'is_student'],
+          order: [['sort', 'ASC'], ['id', 'ASC']]
+        })
       }
     });
   } catch (error) {
@@ -364,6 +379,82 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
       message: '操作失败',
       error: error.message
     });
+  }
+});
+
+/**
+ * PUT /api/invitations/:id/ticket-type   管理员给这个人指定「赠票票种」
+ * body: { ticket_type_id: number|0 }   传 0/null = 清空（未指定 → 选什么票都照价收费）
+ * 语义：该邀约人报名时，选这张票即免费；选别的票照价付费。
+ * 已报名且已建单的会同步重算订单。
+ */
+router.put('/:id/ticket-type', authenticate, operationLog('invitations', '设置邀约赠票票种'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可以设置' });
+    }
+    const raw = req.body ? req.body.ticket_type_id : undefined;
+    const ttId = await resolveTicketTypeId(raw);
+    if (raw !== undefined && raw !== null && Number(raw) > 0 && ttId === null) {
+      return res.status(400).json({ code: 400, message: '票种不存在' });
+    }
+    const invitation = await Invitation.findByPk(req.params.id);
+    if (!invitation) return res.status(404).json({ code: 404, message: '邀约不存在' });
+
+    await invitation.update({ ticket_type_id: ttId });
+    const ttName = ttId ? ((await TicketType.findByPk(ttId)) || {}).name : '';
+    console.log(`[邀约] #${invitation.id} 赠票票种 → ${ttId || '未指定'}${ttName ? '(' + ttName + ')' : ''}，操作人 ${req.user.username}`);
+
+    // 已报名的邀约：立刻按新口径重算订单（免费则直接出票，付费则建/改待支付单）
+    let orderInfo = null;
+    if (Number(invitation.registration_status) === 2) {
+      try {
+        const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
+        for (const reg of regs) {
+          const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+          if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+          if (r && !r.ok && !r.skipped) console.warn('[改赠票] 同步订单失败：', r.error);
+        }
+      } catch (e) {
+        console.error('[改赠票] 同步订单异常（不阻塞）：', e.message);
+      }
+    }
+
+    await invitation.reload();
+    res.json({
+      code: 200,
+      message: ttId ? `已指定赠票：${ttName || ('#' + ttId)}` : '已清空赠票票种（照价收费）',
+      data: invitation,
+      order: orderInfo
+    });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '操作失败', error: error.message });
+  }
+});
+
+/**
+ * POST /api/invitations/batch-ticket-type   批量设置赠票票种
+ * body: { ids: number[], ticket_type_id: number|0 }
+ */
+router.post('/batch-ticket-type', authenticate, operationLog('invitations', '批量设置邀约赠票票种'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可以设置' });
+    }
+    const { ids, ticket_type_id } = req.body || {};
+    const raw = ticket_type_id;
+    const ttId = await resolveTicketTypeId(raw);
+    if (raw !== undefined && raw !== null && Number(raw) > 0 && ttId === null) {
+      return res.status(400).json({ code: 400, message: '票种不存在' });
+    }
+    const list = Array.isArray(ids) ? ids.map(Number).filter(n => Number.isInteger(n) && n > 0) : [];
+    if (!list.length) return res.status(400).json({ code: 400, message: '请先勾选邀约' });
+
+    const [n] = await Invitation.update({ ticket_type_id: ttId }, { where: { id: { [Op.in]: list } } });
+    console.log(`[邀约] 批量设置赠票票种 ${ttId || '未指定'} → ${n} 条，操作人 ${req.user.username}`);
+    res.json({ code: 200, message: `已更新 ${n} 条邀约的赠票票种`, data: { updated: n, ticket_type_id: ttId } });
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '操作失败', error: error.message });
   }
 });
 
@@ -485,6 +576,10 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
       order: [['created_at', 'DESC']]
     });
 
+    // 票种字典：把赠票票种 id 翻译成票种名
+    const ttRows = await TicketType.findAll({ attributes: ['id', 'name'] });
+    const ttName = new Map(ttRows.map(t => [Number(t.id), String(t.name || '')]));
+
     // 构造导出数据
     const data = invitations.map(inv => {
       let phone = '';
@@ -514,6 +609,7 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
         活动地点: inv.event?.location || '',
         报名状态: statusTextMap[inv.registration_status] || inv.registration_status || '',
         是否需付款: Number(inv.need_pay) === 0 ? '免票' : '需付款',
+        赠票票种: (Number(inv.ticket_type_id) > 0 ? (ttName.get(Number(inv.ticket_type_id)) || ('#' + inv.ticket_type_id)) : ''),
         邀约码: inv.invite_code || '',
         住宿分配: accommodation,
         座位分配: seats,
@@ -950,16 +1046,18 @@ router.get('/code/:code', async (req, res) => {
 // 创建邀请（需要认证）
 router.post('/', authenticate, operationLog('invitations', '创建邀约'), async (req, res) => {
   try {
-    let { event_id, guest_id, source_bd, created_by, need_pay } = req.body;
-    
+    let { event_id, guest_id, source_bd, created_by, need_pay, ticket_type_id } = req.body;
+
     // BD用户创建邀约时，自动设置source_bd为自己
     if (req.user.role === 'bd') {
       source_bd = req.user.username;
     }
 
-    // 是否需要付款：2026-10-23 口径 —— 邀约嘉宾一律免票，新建邀约默认「免票(0)」；
-    // 管理员仍可显式改成「需付款(1)」（特殊情形：邀约嘉宾也要买票）
-    const needPay = (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1 : 0;
+    // 是否需要付款（2026-11-02 新口径）：默认「需付款(1)」—— 只有「邀约管理里指定了赠票票种」
+    // 或管理员显式选「免票」才不花钱。老口径是「邀约一律免票」，已废弃。
+    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
+    // 赠票票种：选它免费；传 0/null/非法 → 未指定（照价收费）
+    const giftTicketId = await resolveTicketTypeId(ticket_type_id);
     
     // 检查该嘉宾在该活动是否已有邀约记录（无论状态，只要is_valid=1）
     const existingInvitation = await Invitation.findOne({
@@ -1015,6 +1113,7 @@ router.post('/', authenticate, operationLog('invitations', '创建邀约'), asyn
       invite_url,
       created_by,
       need_pay: needPay,
+      ticket_type_id: giftTicketId,   // 赠票票种：该人报名时选这张票免费（null=未指定，照价收费）
       registration_status: 0,  // 待回复（后台创建的都是待回复）
       is_valid: 1
     });
@@ -1047,15 +1146,16 @@ router.post('/', authenticate, operationLog('invitations', '创建邀约'), asyn
 // 批量创建邀请（需要认证）
 router.post('/batch', authenticate, operationLog('invitations', '批量创建邀约'), async (req, res) => {
   try {
-    let { event_id, guest_ids, source_bd, created_by, need_pay } = req.body;
+    let { event_id, guest_ids, source_bd, created_by, need_pay, ticket_type_id } = req.body;
     
     // BD用户批量创建邀约时，自动设置source_bd为自己
     if (req.user.role === 'bd') {
       source_bd = req.user.username;
     }
 
-    // 批量创建同样默认「免票」（邀约嘉宾不掏钱），管理员可后续逐条改成需付款
-    const needPay = (need_pay === 1 || need_pay === '1' || need_pay === true) ? 1 : 0;
+    // 与单条创建同口径（2026-11-02）：默认需付款，指定赠票票种后那个人选它才免费
+    const needPay = (need_pay === 0 || need_pay === '0' || need_pay === false) ? 0 : 1;
+    const giftTicketId = await resolveTicketTypeId(ticket_type_id);
 
     // 一次添加多人 = 同一批：整批可在「批次」视图里一起审核
     const batchNo = 'B' + Date.now() + crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -1121,6 +1221,7 @@ router.post('/batch', authenticate, operationLog('invitations', '批量创建邀
         invite_url,
         created_by,
         need_pay: needPay,
+        ticket_type_id: giftTicketId,   // 整批统一赠票票种（未指定则照价收费）
         batch_no: batchNo,
         registration_status: 0,
         is_valid: 1

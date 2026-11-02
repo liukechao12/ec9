@@ -219,18 +219,24 @@ async function renderDocx(filePath) {
         // padding-left 递进体现层级（1.8em -> 2.8em -> 4.0em）。
         let pStyle;
         let numStyle;
+        // ⚠️ 编号 span 必须显式 text-indent:0 —— 它会继承 <p> 的负 text-indent
+        // （悬挂缩进用的），继承后又把编号文字往左推一次，正好推出卡片左边界
+        // 被 .agree-card{overflow:hidden} 裁掉，表现就是「段落标号全没了」。
         if (level === 0) {
             pStyle = 'margin:20px 0 10px;font-size:15px;line-height:1.7;' +
                      'padding-left:1.8em;text-indent:-1.8em;';
-            numStyle = 'display:inline-block;min-width:1.8em;font-weight:600;color:#1D2129;white-space:nowrap;';
+            numStyle = 'display:inline-block;min-width:1.8em;font-weight:600;color:#1D2129;' +
+                       'white-space:nowrap;text-indent:0;';
         } else if (level === 1) {
             pStyle = 'margin:0 0 9px;line-height:1.9;text-align:justify;' +
                      'padding-left:2.8em;text-indent:-2.8em;';
-            numStyle = 'display:inline-block;min-width:2.8em;color:#1D2129;white-space:nowrap;';
+            numStyle = 'display:inline-block;min-width:2.8em;color:#1D2129;' +
+                       'white-space:nowrap;text-indent:0;';
         } else if (level >= 2) {
             pStyle = 'margin:0 0 9px;line-height:1.9;text-align:justify;' +
                      'padding-left:4.0em;text-indent:-4.0em;';
-            numStyle = 'display:inline-block;min-width:4.0em;color:#1D2129;white-space:nowrap;';
+            numStyle = 'display:inline-block;min-width:4.0em;color:#1D2129;' +
+                       'white-space:nowrap;text-indent:0;';
         } else {
             pStyle = 'margin:0 0 11px;line-height:1.9;text-align:justify;';
             numStyle = '';

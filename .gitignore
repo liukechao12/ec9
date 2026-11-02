@@ -11,3 +11,6 @@ node_modules/
 *.log
 .DS_Store
 .workbuddy/
+
+# ===== BD 账号导出表（含初始口令，禁止入库）=====
+EC9_BD账号_*.xlsx

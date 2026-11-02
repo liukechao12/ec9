@@ -238,14 +238,21 @@ function openSessionModal(id) {
     document.getElementById('sessionForm').reset();
     document.getElementById('sessionModalTitle').textContent = id ? '编辑场次' : '新增场次';
 
+    // 编辑态标记必须在这里落：handleSessionSubmit 靠它决定 PUT 还是 POST。
+    // 漏设会导致「编辑保存」变成新建一条（历史上踩过）。
     if (!id) {
+        delete modal.dataset.editId;
+        delete modal.dataset.eventId;
         document.getElementById('sessionStatus').value = '1';
         return;
     }
+    modal.dataset.editId = id;
     // 详情异步取，避免列表里字段不全
     apiRequest('/sessions/' + id).then((res) => {
         if (res.code !== 0) return;
         const s = res.data.session || res.data;
+        // 表单里没有会议选择器，编辑时靠这个把原 event_id 带回去，别串到别的会议
+        if (s.event_id) modal.dataset.eventId = s.event_id;
         document.getElementById('sessionName').value = s.name || '';
         document.getElementById('sessionStartTime').value = ec9ToLocalInput(s.start_time);
         document.getElementById('sessionEndTime').value = ec9ToLocalInput(s.end_time);
@@ -264,7 +271,11 @@ function openSessionModal(id) {
 
 function closeSessionModal() {
     const m = document.getElementById('sessionModal');
-    if (m) m.classList.add('hidden');
+    if (!m) return;
+    m.classList.add('hidden');
+    // 关窗清态：避免下次「新增」时残留上次的编辑态又变 PUT
+    delete m.dataset.editId;
+    delete m.dataset.eventId;
 }
 
 async function handleSessionSubmit(e) {

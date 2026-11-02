@@ -132,7 +132,7 @@ html[lang="en"] .brand { background-image: url(../img/signup_bg_en.png?v=3x20261
   height: 815px;
   margin: 0 auto;
   overflow: hidden;
-  background: url(../img/home_bg.png) no-repeat center top;
+  background: url(../img/home_bg.png?v=home20261102) no-repeat center top;
   background-size: 375px 815px;
 }
 .home-stage .home-hero,

@@ -285,6 +285,11 @@ function normalize(outer, inner) {
 
   // 外层非成功：余额不足 / 参数错 / 无权限 等，一律按 error（不是「不是学生」）
   if (code !== null && code !== undefined && String(code) !== '0' && String(code) !== '200') {
+    // 1000 = 查询为空（学籍库里查不到这个人）：不是接口故障，按「无法判断」转人工，
+    // 且复用 7 天而不是 10 分钟 —— 查不到的人短期内再查还是查不到，别反复烧钱
+    if (String(code) === '1000') {
+      return { status: VERIFY_STATUS.UNKNOWN, apiCode: '1000', message: String(msg || '查询为空'), tx };
+    }
     return { status: VERIFY_STATUS.ERROR, apiCode: String(code), message: String(msg), tx };
   }
 

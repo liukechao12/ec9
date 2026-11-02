@@ -6368,12 +6368,12 @@ async function loadRegAudit() {
     const keyword = document.getElementById('regAuditKeyword').value.trim();
     const body = document.getElementById('regAuditBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="10">加载中…</td></tr>';
+    body.innerHTML = '<tr><td colspan="11">加载中…</td></tr>';
     try {
         const res = await apiRequest(`/registrations/group-list?status=${encodeURIComponent(status)}&keyword=${encodeURIComponent(keyword)}`);
         regAuditCache = (res.data && res.data.list) || [];
         if (!regAuditCache.length) {
-            body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999">暂无数据</td></tr>';
+            body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999">暂无数据</td></tr>';
             return;
         }
         const stMap = { submitted: '<span style="color:#E8A33D">待审核</span>', approved: '<span style="color:#3056D4">待支付</span>', paid: '<span style="color:#00B42A">已支付</span>', rejected: '<span style="color:#E34D59">已驳回</span>' };
@@ -6386,6 +6386,17 @@ async function loadRegAudit() {
             // 多人一起审核：只有「全部通过」和「全部驳回」两种结果；满3张9折、满5张8折
             const disc = (g.paid_count >= 5) ? '满5张8折' : (g.paid_count >= 3 ? '满3张9折' : '');
             const cntTip = disc ? `<br><span style="font-size:11px;color:#C2404F">${disc}</span>` : '';
+            // 学生票学籍报告：有学生票才显示，标出待复核 / 不符合数量，点开可做人工复核
+            const rs = g.reports || [];
+            const okN = rs.filter(r => r.status === 'approved').length;
+            const pendN = rs.filter(r => r.status === 'pending').length;
+            const badN = rs.filter(r => r.status === 'rejected').length;
+            const reportCell = g.has_student
+                ? `<button class="btn btn-sm ${(pendN || badN) ? 'btn-outline' : 'btn-primary'}" onclick="openStudentReports('${g.group_no}')">学籍报告 ${okN}/${rs.length}</button>`
+                    + (pendN ? `<br><span style="font-size:11px;color:#E8A33D">待复核 ${pendN}</span>` : '')
+                    + (badN ? `<br><span style="font-size:11px;color:#E34D59">不符合 ${badN}</span>` : '')
+                    + (rs.length === 0 ? '<br><span style="font-size:11px;color:#E34D59">缺报告</span>' : '')
+                : '-';
             return `<tr data-gi="${i}">
                 <td><input type="checkbox" class="reg-audit-ck" data-gno="${g.group_no}" ${canAudit ? '' : 'disabled'}></td>
                 <td style="font-family:monospace;font-size:12px">${g.group_no}</td>
@@ -6395,6 +6406,7 @@ async function loadRegAudit() {
                 <td>${forums}</td>
                 <td>${g.members.length}<br><span style="font-size:11px;color:#6B7280">邀约 ${g.invited_count || 0} · 需付款 ${g.paid_count || 0}</span>${cntTip}</td>
                 <td>${stMap[g.status] || g.status}${g.members.some(m => m.reject_reason) ? '<br><span style="font-size:11px;color:#E34D59">' + (g.members.find(m => m.reject_reason) || {}).reject_reason + '</span>' : ''}</td>
+                <td>${reportCell}</td>
                 <td style="font-size:12px">${g.submitted_at ? new Date(g.submitted_at).toLocaleString() : '-'}</td>
                 <td>${canAudit ? `<button class="btn btn-primary btn-sm" onclick="regAuditOne('${g.group_no}','approve')">通过</button>
                     <button class="btn btn-outline btn-sm" onclick="regAuditOne('${g.group_no}','reject')">驳回</button>` : '-'}</td>
@@ -6406,7 +6418,7 @@ async function loadRegAudit() {
             document.querySelectorAll('#regAuditBody .reg-audit-ck:not(:disabled)').forEach(c => c.checked = ckAll.checked);
         };
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="10" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="11" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
     }
 }
 
@@ -6420,7 +6432,8 @@ async function regAuditOne(groupNo, action) {
         const n = g ? g.members.length : 0;
         const p = g ? (g.paid_count || 0) : 0;
         const disc = p >= 5 ? '（满5张8折）' : (p >= 3 ? '（满3张9折）' : '');
-        if (!confirm(`确认通过 ${groupNo} 整单（${n} 人，需付款 ${p} 人${disc}）？\n通过 = 全部通过；通过后建单锁库存，并向购票人发送付款链接短信。`)) return;
+        const srTip = (g && g.has_student) ? '\n⚠️ 含学生票：须先在「学籍报告」里把报告全部标记「符合」，否则会被拦截。' : '';
+        if (!confirm(`确认通过 ${groupNo} 整单（${n} 人，需付款 ${p} 人${disc}）？${srTip}\n通过 = 全部通过；通过后建单锁库存，并向购票人发送付款链接短信。`)) return;
     }
     try {
         const res = await apiRequest(`/registrations/group/${groupNo}/audit`, {
@@ -6457,6 +6470,143 @@ async function regAuditBulk(action) {
     }
     alert(`批量${action === 'approve' ? '通过' : '驳回'}完成：成功 ${ok}/${gnos.length}` + (failMsgs.length ? '\n失败：\n' + failMsgs.join('\n') : ''));
     loadRegAudit();
+}
+
+/* ==================== 学生票《教育部学籍在线验证报告》人工复核 ====================
+   报告文件不对外静态暴露，这里带 admin token 取 blob 再预览/下载。
+   管理员按报告里的「在线验证码」去学信网核对，标记「符合 / 不符合」；
+   全部「符合」后，整单才能通过审核（后端 groupOrderService.auditGroup 硬卡）。 */
+let srObjectUrls = [];
+const srFileNames = {};
+
+function srEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function srStatusTag(s) {
+    if (s === 'approved') return '<span style="color:#00B42A;font-size:12px;font-weight:600">✓ 符合</span>';
+    if (s === 'rejected') return '<span style="color:#E34D59;font-size:12px;font-weight:600">✗ 不符合</span>';
+    return '<span style="color:#E8A33D;font-size:12px;font-weight:600">待复核</span>';
+}
+
+async function openStudentReports(groupNo) {
+    const g = regAuditCache.find(x => x.group_no === groupNo);
+    if (!g) { alert('找不到该报名单，请刷新后重试'); return; }
+    const box = document.getElementById('srModalBody');
+    document.getElementById('srModalTitle').textContent = `学生票学籍报告复核 · ${groupNo}`;
+    document.getElementById('studentReportModal').classList.remove('hidden');
+    box.innerHTML = '加载中…';
+    try {
+        const res = await apiRequest(`/student-reports?group_no=${encodeURIComponent(groupNo)}`);
+        const list = (res.data && res.data.list) || [];
+        if (!list.length) {
+            box.innerHTML = '<div style="padding:20px;color:#999">该单暂无学籍报告（可能学生还没上传）</div>';
+            return;
+        }
+        box.innerHTML = list.map(r => {
+            srFileNames[r.id] = r.file_name || 'report';
+            return `<div style="border:1px solid #E5E6EB;border-radius:8px;padding:14px;margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div style="font-weight:600;">${srEsc(r.name || '—')}
+                        <span style="font-weight:400;color:#6B7280;font-size:12px">${srEsc(r.phone_masked || '')}</span></div>
+                    <div>${srStatusTag(r.status)}</div>
+                </div>
+                <div style="font-size:12px;color:#6B7280;margin:6px 0 10px;">
+                    文件：${srEsc(r.file_name || '—')} · ${Math.round((r.file_size || 0) / 1024)}KB
+                    ${r.reviewed_at ? ` · 复核人 ${srEsc(r.reviewed_by || '')} ${new Date(r.reviewed_at).toLocaleString()}` : ''}
+                </div>
+                <div id="srPreview_${r.id}" style="background:#F7F8FA;border-radius:6px;min-height:180px;max-height:420px;overflow:auto;text-align:center;padding:8px;">
+                    <span style="color:#999;font-size:12px">正在加载预览…</span>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+                    <label style="font-size:12px;">在线验证码（选填）
+                        <input type="text" id="srCode_${r.id}" value="${srEsc(r.verify_code || '')}"
+                               placeholder="按报告填写，便于复查" style="width:200px;"></label>
+                    <label style="font-size:12px;">复核备注（选填）
+                        <input type="text" id="srNote_${r.id}" value="${srEsc(r.review_note || '')}"
+                               placeholder="不符合原因等" style="width:220px;"></label>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-sm" onclick="reviewStudentReport(${r.id},'approve','${groupNo}')">✓ 符合</button>
+                    <button class="btn btn-outline btn-sm" onclick="reviewStudentReport(${r.id},'reject','${groupNo}')">✗ 不符合</button>
+                    <button class="btn btn-outline btn-sm" onclick="downloadStudentReport(${r.id})">下载原文件</button>
+                </div>
+            </div>`;
+        }).join('');
+        list.forEach(loadSrPreview);
+    } catch (e) {
+        box.innerHTML = `<div style="color:#E34D59">加载失败：${srEsc(e.message)}</div>`;
+    }
+}
+
+async function loadSrPreview(r) {
+    const box = document.getElementById('srPreview_' + r.id);
+    if (!box) return;
+    try {
+        const resp = await fetch(`${API_BASE}/student-reports/${r.id}/file`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        srObjectUrls.push(url);
+        if ((r.mime || '').indexOf('image/') === 0) {
+            box.innerHTML = `<img src="${url}" style="max-width:100%;border-radius:4px;">`;
+        } else {
+            box.innerHTML = `<iframe src="${url}" style="width:100%;height:400px;border:0;"></iframe>`;
+        }
+    } catch (e) {
+        box.innerHTML = `<span style="color:#E34D59;font-size:12px">预览失败：${srEsc(e.message)}，可点「下载原文件」查看</span>`;
+    }
+}
+
+async function downloadStudentReport(id) {
+    try {
+        const resp = await fetch(`${API_BASE}/student-reports/${id}/file`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = srFileNames[id] || 'report';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 30000);
+    } catch (e) {
+        alert('下载失败：' + e.message);
+    }
+}
+
+async function reviewStudentReport(id, action, groupNo) {
+    if (action === 'reject' && !confirm('确认标记为「不符合」？该单将无法审核通过，需重新处理。')) return;
+    const codeEl = document.getElementById('srCode_' + id);
+    const noteEl = document.getElementById('srNote_' + id);
+    try {
+        const res = await apiRequest(`/student-reports/${id}/review`, {
+            method: 'POST',
+            body: JSON.stringify({
+                action,
+                verify_code: codeEl ? codeEl.value.trim() : '',
+                review_note: noteEl ? noteEl.value.trim() : ''
+            })
+        });
+        if (res.code !== 0 && res.code !== 200) throw new Error(res.message || '复核失败');
+        alert(res.message || '已保存');
+        await openStudentReports(groupNo);
+        loadRegAudit();
+    } catch (e) {
+        alert('操作失败：' + e.message);
+    }
+}
+
+function closeStudentReportModal() {
+    document.getElementById('studentReportModal').classList.add('hidden');
+    srObjectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} });
+    srObjectUrls = [];
 }
 
 /**

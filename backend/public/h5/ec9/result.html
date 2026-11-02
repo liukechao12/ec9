@@ -86,8 +86,11 @@
     var anyRejected = regs.some(function (r) { return r.status === "rejected"; });
     var allPaid = regs.length && regs.every(function (r) { return r.status === "paid"; });
     var anyApproved = regs.some(function (r) { return r.status === "approved"; });
-    // 「报名成功」= 不用掏钱的人（邀约免票 / ¥0 票种 / 订单已支付）：提交即成功，不用等审核
-    var autoApproved = regs.length && regs.every(function (r) { return r.is_invited || !r.need_pay; })
+    // 「报名成功」= 不用掏钱的人（邀约免票 / ¥0 票种 / 订单已支付）且确实已出票。
+    // ⚠️ 学生票 0 元单现在必须等人工复核，status 仍是 submitted，不能再按「免费即成功」误判。
+    var autoApproved = regs.length
+      && regs.every(function (r) { return r.status === 'approved' || r.status === 'paid'; })
+      && regs.every(function (r) { return r.is_invited || !r.need_pay; })
       && (!order || Number(order.final_amount) === 0 || order.status === 'paid');
 
     var html = '<div class="group-tip ' + (allPaid ? 'ok' : (anyRejected ? 'warn' : 'info')) + '" style="margin-top:14px">';
@@ -99,7 +102,13 @@
       if (rj) html += '<br>' + E.esc(rj.reject_reason);
       html += '<br>' + E.t("group_rejected_resub");
     } else if (anyApproved && order && order.status === 'pending_payment') html += E.t("group_approved_tip");
-    else html += E.t("group_submitted_tip");
+    else {
+      html += E.t("group_submitted_tip");
+      // 学生票：报告由主办方按在线验证码人工复核，明确告诉用户为什么还在等
+      if (regs.some(function (r) { return r.is_student && r.status === 'submitted'; })) {
+        html += '<br><span style="font-size:12px">' + E.esc(E.t("student_review_wait")) + '</span>';
+      }
+    }
     html += '</div>';
 
     // 全员名单（购票数量与填报人数对得上：免票 F + 购票 M = N）

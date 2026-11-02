@@ -177,9 +177,9 @@
   /* ---------- 按人分配票种 ---------- */
   function renderAssign() {
     var box = document.getElementById("tkAssign");
-    // 原本只有「票种 ≥2」才显示分配区；但只要有人选了学生票就必须显示（要填身份证号）
-    var needIdCard = members.some(function (m, i) { return isStudentTicket(perTicket[i] || selectedId); });
-    if (!members.length || (tickets.length < 2 && !needIdCard)) { box.classList.add("hidden"); return; }
+    // 原本只有「票种 ≥2」才显示分配区；但只要有人选了学生票就必须显示（要上传学籍报告）
+    var needReport = members.some(function (m, i) { return isStudentTicket(perTicket[i] || selectedId); });
+    if (!members.length || (tickets.length < 2 && !needReport)) { box.classList.add("hidden"); return; }
     box.classList.remove("hidden");
     var list = document.getElementById("tkAssignList");
     list.innerHTML = members.map(function (m, i) {
@@ -191,13 +191,19 @@
           '" data-i="' + i + '" data-tid="' + tk.id + '">' + E.esc(tk.name) +
           (gift ? '<span class="tk-a-free">' + E.esc(E.t("gift_tag")) + '</span>' : '') + '</span>';
       }).join("");
-      // 学生票：多出身份证号输入（用于学籍在线核验，只做资格判断，不做他用）
+      // 学生票：多出《教育部学籍在线验证报告》上传（报名时必传，主办方按在线验证码人工复核）
       var isStu = isStudentTicket(perTicket[i]);
-      var idBox = isStu
-        ? '<div class="tk-a-idcard">' +
-            '<input class="input tk-idcard" data-i="' + i + '" maxlength="18" autocomplete="off" ' +
-              'placeholder="' + E.esc(E.t("student_idcard_ph")) + '" value="' + E.esc(m.id_card || "") + '">' +
-            '<div class="tk-a-tip">' + E.esc(E.t("student_idcard_tip")) + '</div>' +
+      var rf = m.reportFile;
+      var reportBox = isStu
+        ? '<div class="tk-a-report">' +
+            '<label class="tk-report-pick" data-i="' + i + '">' +
+              '<input type="file" class="tk-report-input" data-i="' + i + '" ' +
+                'accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">' +
+              '<span class="tk-report-btn">' + E.esc(E.t("student_report_btn")) + '</span>' +
+            '</label>' +
+            (rf ? '<div class="tk-report-file">✓ ' + E.esc(E.t("student_report_chosen")) + '：' + E.esc(rf.name) + '</div>' : '') +
+            '<div class="tk-a-tip">' + E.esc(E.t("student_report_tip")) + '</div>' +
+            '<div class="tk-a-tip tk-report-how">' + E.esc(E.t("student_report_how")) + '</div>' +
           '</div>'
         : '';
       var tkNow = ticketById(perTicket[i] || selectedId);
@@ -207,7 +213,7 @@
       return '<div class="tk-a-row">' +
         '<div class="tk-a-name">' + E.esc(nm) + (tagNow ? '<span class="tk-a-free">' + E.esc(tagNow) + '</span>' : '') + '</div>' +
         '<div class="tk-a-btns">' + btns + '</div>' +
-        idBox +
+        reportBox +
       '</div>';
     }).join("");
     Array.prototype.forEach.call(list.querySelectorAll(".tk-a-btn"), function (el) {
@@ -216,10 +222,14 @@
         renderAssign(); renderFee();
       });
     });
-    Array.prototype.forEach.call(list.querySelectorAll(".tk-idcard"), function (el) {
-      el.addEventListener("input", function () {
+    Array.prototype.forEach.call(list.querySelectorAll(".tk-report-input"), function (el) {
+      el.addEventListener("change", function () {
         var i = Number(el.getAttribute("data-i"));
-        members[i].id_card = String(el.value || "").trim().toUpperCase();
+        var f = el.files && el.files[0];
+        if (!f) return;
+        // File 只存在内存里的 members 上，不写 localStorage（无法序列化）
+        members[i].reportFile = f;
+        renderAssign();   // 重绘显示已选文件名
       });
     });
   }
@@ -234,10 +244,10 @@
     return /学生|學生|student/i.test(String(tk.name || ""));
   }
 
-  /** 校验没过时把页面滚到那一位的身份证输入框，别让用户自己找 */
+  /** 校验没过时把页面滚到那一位的报告上传控件，别让用户自己找 */
   function btnScrollToId(i) {
-    var el = document.querySelector('.tk-idcard[data-i="' + i + '"]');
-    if (el) { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} el.focus(); }
+    var el = document.querySelector('.tk-report-pick[data-i="' + i + '"]');
+    if (el) { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
   }
 
   function select(id) {
@@ -411,38 +421,52 @@
     if (!members.length) { E.errPill(E.t("err_required")); E.go("profile.html", { event_id: eventId }); return; }
     if (!selectedId || members.some(function (m, i) { return !perTicket[i]; })) { E.toast(E.t("ticket_title")); return; }
     if (!agreed) { E.toast(E.t("agree_required_tip")); return; }
-    // 学生票：提交前先在本地拦一道，别让用户白等一趟接口
+    // 学生票：提交前先在本地拦一道（报告必传 / 格式 / 大小），别让用户白等一趟接口
     for (var k = 0; k < members.length; k++) {
       if (!isStudentTicket(perTicket[k] || selectedId)) continue;
-      var idc = String(members[k].id_card || "").trim();
-      if (!idc) { E.toast(E.t("err_student_idcard_required")); btnScrollToId(k); return; }
-      if (!/^\d{17}[\dXx]$/.test(idc)) { E.toast(E.t("err_student_idcard_format")); btnScrollToId(k); return; }
+      var rf = members[k].reportFile;
+      if (!rf) { E.toast(E.t("err_student_report_required")); btnScrollToId(k); return; }
+      var ext = String(rf.name || "").toLowerCase().split(".").pop();
+      if (!/^(pdf|jpg|jpeg|png)$/.test(ext)) { E.toast(E.t("err_student_report_type")); btnScrollToId(k); return; }
+      if (rf.size > 10 * 1024 * 1024) { E.toast(E.t("err_student_report_size")); btnScrollToId(k); return; }
     }
     var btn = this; btn.disabled = true;
-    E.Api.submitGroup({
-      event_id: Number(eventId),
-      buyer_phone: E.S.phone,
-      members: members.map(function (m, i) {
-        var o = {
-          name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
-          company: String(m.company || "").trim(), position: String(m.position || "").trim(),
-          inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
-          // 论坛是**多选**：session_ids 是所选全部；session_all=1 表示全选
-          session_ids: (Array.isArray(m.session_ids) && m.session_ids.length)
-            ? m.session_ids.map(Number).filter(function (x) { return x > 0; })
-            : (Number(m.session_id) > 0 ? [Number(m.session_id)] : []),
-          session_all: m.session_all ? 1 : 0,
-          // session_id 只剩兼容回退（写所选第一个），后端以 session_ids + session_all 为准
-          session_id: (function () {
-            var ids = (Array.isArray(m.session_ids) && m.session_ids.length) ? m.session_ids : [];
-            return Number(ids[0] || m.session_id) || 0;
-          })(),
-          ticket_type_id: Number(perTicket[i] || selectedId)
-        };
-        if (isStudentTicket(o.ticket_type_id)) o.id_card = String(m.id_card || "").trim().toUpperCase();
-        return o;
-      })
-    }).then(function (d) {
+    var payloadMembers = members.map(function (m, i) {
+      return {
+        name: String(m.name || "").trim(), phone: m.phone, is_invited: !!m.is_invited,
+        company: String(m.company || "").trim(), position: String(m.position || "").trim(),
+        inviter: String(m.inviter || "").trim(), focus: String(m.focus || "").trim(),
+        // 论坛是**多选**：session_ids 是所选全部；session_all=1 表示全选
+        session_ids: (Array.isArray(m.session_ids) && m.session_ids.length)
+          ? m.session_ids.map(Number).filter(function (x) { return x > 0; })
+          : (Number(m.session_id) > 0 ? [Number(m.session_id)] : []),
+        session_all: m.session_all ? 1 : 0,
+        // session_id 只剩兼容回退（写所选第一个），后端以 session_ids + session_all 为准
+        session_id: (function () {
+          var ids = (Array.isArray(m.session_ids) && m.session_ids.length) ? m.session_ids : [];
+          return Number(ids[0] || m.session_id) || 0;
+        })(),
+        ticket_type_id: Number(perTicket[i] || selectedId)
+      };
+    });
+    // 有学生票 → multipart 带报告文件；没有学生票 → 保持原来的 JSON 提交（老流程零改动）
+    var hasStu = payloadMembers.some(function (o) { return isStudentTicket(o.ticket_type_id); });
+    var body;
+    if (hasStu) {
+      var fd = new FormData();
+      fd.append("event_id", String(Number(eventId)));
+      fd.append("buyer_phone", E.S.phone);
+      fd.append("members", JSON.stringify(payloadMembers));
+      members.forEach(function (m, i) {
+        if (isStudentTicket(payloadMembers[i].ticket_type_id) && m.reportFile) {
+          fd.append("report_" + i, m.reportFile, m.reportFile.name);
+        }
+      });
+      body = fd;
+    } else {
+      body = { event_id: Number(eventId), buyer_phone: E.S.phone, members: payloadMembers };
+    }
+    E.Api.submitGroup(body).then(function (d) {
       E.S.patch({ group_no: d.group_no, quote: d.quote, draft_members: null });
       E.go("result.html", { event_id: eventId, group_no: d.group_no, status: "pending" });
     }).catch(function (e) {

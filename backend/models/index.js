@@ -26,6 +26,7 @@ const PaymentConfig = require('./PaymentConfig');
 const DiscountRule = require('./DiscountRule');
 const StudentVerifyConfig = require('./StudentVerifyConfig');
 const { StudentVerification, VERIFY_STATUS } = require('./StudentVerification');
+const { StudentReport, REPORT_STATUS } = require('./StudentReport');
 const { RegistrationSession } = require('./RegistrationSession');
 
 // 关联定义（放在最后，避免循环依赖）
@@ -51,6 +52,7 @@ module.exports = {
   OperationLog, LegalDoc, PaymentConfig,
   DiscountRule,
   StudentVerifyConfig, StudentVerification, VERIFY_STATUS,
+  StudentReport, REPORT_STATUS,
   RegistrationSession,
 
   // ==================== EC8 兼容别名 ====================

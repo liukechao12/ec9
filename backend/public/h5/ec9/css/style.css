@@ -770,15 +770,27 @@ html[lang="en"] .tk-col-h { font-size: 12px; }
 html[lang="en"] .tk-a-row { flex-direction: column; align-items: stretch; gap: 6px; }
 html[lang="en"] .tk-a-name { max-width: none; }
 html[lang="en"] .tk-a-btns { justify-content: flex-start; }
-/* 学生票：选中后多出身份证号输入（学籍核验用），整行独占一行避免和票种按钮挤在一起 */
-.tk-a-idcard { flex-basis: 100%; margin-top: 6px; }
-.tk-a-idcard .tk-idcard {
-  width: 100%; font-size: 12px; letter-spacing: 0.5px;
-  text-transform: uppercase;
+/* 学生票：选中后多出《教育部学籍在线验证报告》上传，整行独占一行避免和票种按钮挤在一起 */
+.tk-a-report { flex-basis: 100%; margin-top: 8px; }
+.tk-report-pick { display: inline-block; position: relative; cursor: pointer; }
+/* input 不能用 display:none（微信 WebView 里 label 点不触发），用 1px 透明保留可点击性 */
+.tk-report-input {
+  position: absolute; left: 0; top: 0; width: 1px; height: 1px;
+  opacity: 0; overflow: hidden;
 }
-.tk-a-idcard .tk-a-tip {
+.tk-report-btn {
+  display: inline-block; padding: 7px 12px; border-radius: 6px;
+  border: 1px dashed #3056D4; background: #F5F8FF; color: #3056D4;
+  font-size: 11px; font-weight: 600; line-height: 1.4;
+}
+.tk-report-file {
+  margin-top: 5px; font-size: 11px; color: #00B42A; line-height: 1.5;
+  word-break: break-all;
+}
+.tk-a-report .tk-a-tip {
   font-size: 10px; color: #86909C; margin-top: 4px; line-height: 1.5;
 }
+.tk-a-report .tk-report-how { color: #4E5969; }
 .tk-fee-total { font-weight: 700; margin-top: 2px; }
 .tk-bar { width: 20px; flex: none; }
 .tk-bar.g1 { background: #83B931; }

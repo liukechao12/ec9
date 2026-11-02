@@ -172,8 +172,8 @@
                     </svg>
                     <span>订单管理</span>
                 </a>
-                <!-- 审核已统一收敛到「邀约管理 → 按批次审核 / 勾选批量」；接口保留，去掉 display:none 即可恢复 -->
-                <a href="#" class="nav-item" data-page="reg-audit" style="display: none;">
+                <!-- 整单报名审核 + 学生票学籍报告人工复核（2026-11-02 起启用） -->
+                <a href="#" class="nav-item" data-page="reg-audit">
                     <svg class="nav-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path d="M10 2.5L16.67 5.83V10C16.67 14.17 13.83 16.79 10 17.5C6.17 16.79 3.33 14.17 3.33 10V5.83L10 2.5Z" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"/>
                         <path d="M7.08 10L9.17 12.08L13.33 7.92" stroke="currentColor" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1128,7 +1128,7 @@
                         <thead>
                             <tr>
                                 <th><input type="checkbox" id="regAuditCkAll"></th>
-                                <th>组号</th><th>填报人</th><th>购票人手机</th><th>票种</th><th>论坛</th><th>人数</th><th>状态</th><th>提交时间</th><th>操作</th>
+                                <th>组号</th><th>填报人</th><th>购票人手机</th><th>票种</th><th>论坛</th><th>人数</th><th>状态</th><th>学籍报告</th><th>提交时间</th><th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="regAuditBody"></tbody>
@@ -1454,6 +1454,26 @@
 
     <!-- 模态框容器 -->
     <div id="modalContainer"></div>
+
+    <!-- 学生票《教育部学籍在线验证报告》人工复核（2026-11-02 新增） -->
+    <div id="studentReportModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 960px;">
+            <div class="modal-header">
+                <h2 id="srModalTitle">学生票学籍报告复核</h2>
+                <button class="modal-close" onclick="closeStudentReportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="background:#FFF7E8;border:1px solid #FFD591;color:#874D00;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;line-height:1.7;">
+                    请打开报告，按报告中的<b>在线验证码</b>到学信网核验，并核对姓名 / 院校 / 学籍状态。
+                    全部标记「符合」后，本单才能审核通过。验证码与备注为选填，仅用于留痕复查。
+                </div>
+                <div id="srModalBody">加载中…</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeStudentReportModal()">关闭</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 场次模态框（EC9 新增） -->
     <div id="sessionModal" class="modal hidden">

@@ -17,6 +17,8 @@
  */
 const { Op } = require('sequelize');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { Registration, REG_STATUS } = require('../models/Registration');
 const { Order, ORDER_STATUS } = require('../models/Order');
 const Guest = require('../models/Guest');
@@ -24,8 +26,8 @@ const TicketType = require('../models/TicketType');
 const Event = require('../models/Event');
 const CheckinCode = require('../models/CheckinCode');
 const Invitation = require('../models/Invitation');
-const { StudentVerification, RegistrationSession, Session } = require('../models');
-const { encryptPhone, hmacPhone, decryptPhone } = require('../utils/phoneCrypto');
+const { StudentReport, REPORT_STATUS, RegistrationSession, Session } = require('../models');
+const { encryptPhone, hmacPhone, decryptPhone, maskPhone } = require('../utils/phoneCrypto');
 const { validateSelection } = require('./ticketBinding');
 const { sendBusinessSms } = require('./verificationSmsService');
 const { SmsService } = require('./SmsService');
@@ -39,6 +41,25 @@ const config = require('../config');
  * 只有属性缺失（老数据 / 没走 Model 的裸对象）时才退回按名称猜，避免历史数据突然不打折。
  * 票种名遗留下来的正则仅用于兜底，新增/改名票种请到后台勾「是否标准票」，不要再依赖名字。
  */
+// ---------- 学生票学籍报告文件 ----------
+// 报告含姓名/身份证号/院校，存私有目录，只能经 /api/student-reports/:id/file 鉴权读取。
+const REPORT_DIR = path.resolve(__dirname, '../private/student_reports');
+function saveReportFile(f) {
+  fs.mkdirSync(REPORT_DIR, { recursive: true });
+  const m = String(f.originalname || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = m && ['pdf', 'jpg', 'jpeg', 'png'].includes(m[1]) ? m[1] : 'pdf';
+  const fname = crypto.randomBytes(16).toString('hex') + '.' + ext;
+  fs.writeFileSync(path.join(REPORT_DIR, fname), f.buffer);
+  return 'private/student_reports/' + fname;
+}
+/** 只允许 PDF / JPG / PNG（微信里选文件偶尔没有 mime，用扩展名兜底） */
+function isAllowedReport(f) {
+  const mime = String(f.mimetype || '').toLowerCase();
+  if (['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(mime)) return true;
+  const m = String(f.originalname || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return !!(m && ['pdf', 'jpg', 'jpeg', 'png'].includes(m[1]));
+}
+
 const STD_NAME_RE = /标准|標準|standard/i;
 function isStandardType(t) {
   if (!t) return false;
@@ -397,7 +418,7 @@ function pickSessions(m) {
   return { all, ids: Array.from(new Set(ids)) };
 }
 
-async function createGroup({ buyerPhone, eventId, members }) {
+async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
   if (!Array.isArray(members) || members.length < 1) return { ok: false, error: '至少填报一位报名人' };
   if (members.length > 10) return { ok: false, error: '单次最多代报 10 人' };
 
@@ -461,40 +482,33 @@ async function createGroup({ buyerPhone, eventId, members }) {
   const now = new Date();
   const created = [];
 
-  // ===== 学生票学籍核验（天远 API）=====
-  // 省钱口径：同一人（姓名+身份证）的核验结果入库复用 N 天，命中就不调接口。
-  // 通道未启用或未配凭证 → 整段跳过，维持原来的「现场核验学生证」，绝不阻断报名。
-  const studentVerify = require('./studentVerifyService');
-  const svCfg = await studentVerify.loadConfig();
-  const svReady = await studentVerify.isReady();
-  const svMap = new Map();          // phone → 核验结论
-  if (svReady) {
-    for (const m of norm) {
-      const ttId = Number(m.ticket_type_id) || 0;
-      const tt = ttId ? await TicketType.findByPk(ttId) : null;
-      if (!tt || Number(tt.is_student) !== 1) continue;   // 非学生票不核验
-
-      const idCard = String(m.id_card || '').trim();
-      if (!idCard) {
-        return { ok: false, error: `${m.name}：学生票需填写身份证号以完成学籍核验` };
-      }
-      const r = await studentVerify.verify({ name: m.name, idCard, eventId, groupNo });
-      svMap.set(String(m.phone), r);
-
-      // 明确不在籍 → 不允许买学生票（默认）
-      if (r.status === 'not_enrolled' && svCfg.on_not_enrolled === 'reject') {
-        return { ok: false, error: `${m.name}：学籍核验未通过，学生票仅限在读学生购买` };
-      }
-      // 接口异常/无法判断 ≠ 不是学生：默认转人工，只有显式配 reject 才拒绝
-      if ((r.status === 'unknown' || r.status === 'error') && r.code !== 'not_configured') {
-        if (svCfg.on_unknown === 'reject') {
-          return { ok: false, error: `${m.name}：学籍状态暂时无法核验，请稍后重试或联系主办方` };
-        }
-      }
+  // ===== 学生票：《教育部学籍在线验证报告》上传 + 人工复核（2026-11-02 起）=====
+  // 所有学籍核验 API 均不可用（天远 1001 / 聚美智数不可用），改为报名时上传报告，
+  // 管理员按报告里的「在线验证码」去学信网人工复核，标记「符合」后整单才能通过。
+  // ⚠️ 含学生票的整单一律留在「待审核」，绝不自动确认出票——否则人工复核来不及。
+  const studentTicketIds = new Set(
+    ticketRows.filter(t => Number(t.is_student) === 1).map(t => Number(t.id))
+  );
+  const filesByIndex = new Map((reportFiles || []).map(f => [Number(f.index), f]));
+  for (let i = 0; i < norm.length; i++) {
+    const m = norm[i];
+    if (!studentTicketIds.has(Number(m.ticket_type_id))) continue;
+    const f = filesByIndex.get(i);
+    if (!f || !f.buffer || !f.buffer.length) {
+      return { ok: false, error: `${m.name}：学生票需上传《教育部学籍在线验证报告》` };
+    }
+    if (!isAllowedReport(f)) {
+      return { ok: false, error: `${m.name}：学籍报告仅支持 PDF / JPG / PNG 格式` };
+    }
+    if (Number(f.size) > 10 * 1024 * 1024) {
+      return { ok: false, error: `${m.name}：学籍报告文件不能超过 10MB` };
     }
   }
+  const hasStudent = norm.some(m => studentTicketIds.has(Number(m.ticket_type_id)));
+  const forceAudit = hasStudent;   // 含学生票 → 整单进待审核，等人工复核
 
-  for (const m of norm) {
+  for (let mi = 0; mi < norm.length; mi++) {
+    const m = norm[mi];
     const phone = String(m.phone);
     const ph = hmacPhone(phone);
     let guest = await Guest.findOne({ where: { phone_hmac: ph } });
@@ -541,29 +555,22 @@ async function createGroup({ buyerPhone, eventId, members }) {
       guest_id: guest.id,
       invitation_id: invId || (isInvited ? invitedMap.get(phone).invitation_id : null),
       group_no: groupNo,
-      status: isInvited ? REG_STATUS.APPROVED : REG_STATUS.SUBMITTED,
+      status: (isInvited && !forceAudit) ? REG_STATUS.APPROVED : REG_STATUS.SUBMITTED,
       focus: clip(m.focus, 200),
       source_bd: clip(m.inviter, 100),
       submitted_at: now,
       registration_time: now,
-      audited_at: isInvited ? now : null,
+      audited_at: (isInvited && !forceAudit) ? now : null,
       extra_fields: {
         submitter_phone: buyerPhone,
         is_buyer: phone === String(buyerPhone),
         is_invited: isInvited,
-        audit_exempt: isInvited,
+        audit_exempt: isInvited && !forceAudit,
         need_pay: invNeedPay,
         // 邀约管理给这个人指定的赠票票种（选它免费）；未指定为 null
         invited_ticket_id: (inv && Number(inv.ticket_type_id) > 0) ? Number(inv.ticket_type_id) : null,
         // 本次是否正好选到了赠票（免费出票的直接证据，便于对账）
-        used_invited_ticket: !!(inv && Number(inv.ticket_type_id) > 0 && Number(inv.ticket_type_id) === effTicketId),
-        // 学生票学籍核验结论（enrolled / not_enrolled / unknown / error）
-        ...(svMap.has(phone) ? {
-          student_verify: svMap.get(phone).status,
-          student_verify_id: svMap.get(phone).verificationId || null,
-          student_verify_msg: svMap.get(phone).message || '',
-          student_verify_cached: !!svMap.get(phone).fromCache
-        } : {})
+        used_invited_ticket: !!(inv && Number(inv.ticket_type_id) > 0 && Number(inv.ticket_type_id) === effTicketId)
       }
     });
 
@@ -579,15 +586,31 @@ async function createGroup({ buyerPhone, eventId, members }) {
       } catch (e) { /* 忽略：口径以 session_all / 后台补选为准 */ }
     }
 
-    // 核验流水回填报名信息（便于按报名/订单追溯，身份证只在流水里加密存一份）
-    const sv = svMap.get(phone);
-    if (sv && sv.verificationId) {
+    // 学生票：报名落库成功后才把报告写盘并建记录（避免校验失败留下孤儿文件）。
+    // 报告默认 pending，等管理员按报告中的在线验证码人工复核；未标「符合」整单不给通过。
+    const rf = filesByIndex.get(mi);
+    if (rf && studentTicketIds.has(Number(effTicketId))) {
       try {
-        await StudentVerification.update(
-          { registration_id: reg.id, guest_id: guest.id, group_no: groupNo },
-          { where: { id: sv.verificationId } }
-        );
-      } catch (e) { /* 回填失败不影响报名 */ }
+        const relPath = saveReportFile(rf);
+        const sr = await StudentReport.create({
+          registration_id: reg.id,
+          group_no: groupNo,
+          guest_id: guest.id,
+          event_id: eventId,
+          name: clip(m.name, 100),
+          phone_masked: maskPhone(phone),
+          file_path: relPath,
+          file_name: clip(String(rf.originalname || 'report'), 255),
+          mime: String(rf.mimetype || '') || (relPath.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+          file_size: Number(rf.size) || 0,
+          status: REPORT_STATUS.PENDING
+        });
+        const ef = reg.extra_fields || {};
+        ef.student_report_id = sr.id;
+        await reg.update({ extra_fields: ef });
+      } catch (e) {
+        return { ok: false, error: `${m.name}：学籍报告保存失败，请重新上传后重试（${e.message}）` };
+      }
     }
 
     created.push({
@@ -611,7 +634,8 @@ async function createGroup({ buyerPhone, eventId, members }) {
   if (!finalQuote.ok) return finalQuote;
 
   // 整单无付费票（全员免票邀约 / 全员免费票）→ 自动确认：免审核、免支付，直接出票
-  if (Number(finalQuote.final_amount) === 0) {
+  // ⚠️ 含学生票例外：必须等人工复核报告「符合」，绝不能提交即出票
+  if (Number(finalQuote.final_amount) === 0 && !forceAudit) {
     const auto = await autoConfirmFreeGroup({ groupNo, eventId, quote: finalQuote, buyerPhone });
     return {
       ok: true, group_no: groupNo, quote: finalQuote, registrations: created,
@@ -621,7 +645,7 @@ async function createGroup({ buyerPhone, eventId, members }) {
 
   // 全员在邀约名单内（不需要审批）但有人要付款 → 报名已成功，直接建待支付单，进入付款
   const needAudit = created.filter(c => !c.is_invited);
-  if (!needAudit.length) {
+  if (!needAudit.length && !forceAudit) {
     const ord = await createGroupOrder({ groupNo, eventId, quote: finalQuote, buyerPhone });
     if (!ord.ok) return ord;
     // 全员在邀约名单内 → 提交即通过，订单已建，通知每位成员「审核通过请付款」（失败不阻塞）
@@ -741,6 +765,30 @@ async function auditGroup({ groupNo, action, reason, operator }) {
     };
   }
   if (action !== 'approve') return { ok: false, error: 'action 必须是 approve/reject' };
+
+  // ===== 学生票硬卡：报告必须全部人工复核「符合」才允许整单通过 =====
+  // 报告在 /api/student-reports/:id/review 里按「在线验证码」人工核对后标记。
+  // 没复核 / 标记不符合 → 一律拦下，避免没核就白出 ¥0 学生票。
+  const studentRegs = regs.filter(r => Number(r.ticketType && r.ticketType.is_student) === 1);
+  if (studentRegs.length) {
+    const reports = await StudentReport.findAll({
+      where: { registration_id: { [Op.in]: studentRegs.map(r => r.id) } },
+      order: [['id', 'DESC']]
+    });
+    const approvedIds = new Set(
+      reports.filter(x => x.status === REPORT_STATUS.APPROVED).map(x => Number(x.registration_id))
+    );
+    const missing = studentRegs.filter(r => !approvedIds.has(r.id));
+    if (missing.length) {
+      const rejected = reports.find(x => x.status === REPORT_STATUS.REJECTED);
+      return {
+        ok: false,
+        error: rejected
+          ? `有 ${missing.length} 位学生票报名人的学籍报告复核未「符合」（其中「${rejected.name}」已标记不符合），请核实后再处理`
+          : `本单有 ${missing.length} 位学生票报名人的《教育部学籍在线验证报告》尚未人工复核「符合」，请先在「报名审核」页复核后再通过`
+      };
+    }
+  }
 
   // approve：需审成员 approved（邀约成员早已 approved）→ 建单锁库存
   for (const r of needAudit) {

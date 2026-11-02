@@ -149,6 +149,7 @@ app.use('/api/statistics', require('./routes/statistics'));
 app.use('/api/sms', require('./routes/sms'));
 app.use('/api/sms-config', require('./routes/sms-config'));
 app.use('/api/student-verify', require('./routes/student-verify'));
+app.use('/api/student-reports', require('./routes/student-reports'));
 app.use('/api/operation-logs', require('./routes/operation-logs'));
 app.use('/api/legal', require('./routes/legal'));
 

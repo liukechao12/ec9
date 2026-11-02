@@ -12,6 +12,25 @@ const { validateSelection, pickLang, toSid } = require('../services/ticketBindin
 const { calcDiscount, fetchDiscountRules } = require('../services/discountRules');
 const { isStandardType } = require('../services/groupOrderService');
 
+// 学生票《教育部学籍在线验证报告》随报名一起 multipart 上传。
+// 用内存存储：文件只有在报名真正落库成功后才由 service 写盘，避免校验失败留下孤儿文件。
+const multer = require('multer');
+const reportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 }
+});
+function uploadReports(req, res, next) {
+  reportUpload.any()(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? '学籍报告文件不能超过 10MB'
+        : '文件上传失败：' + (err.message || '未知错误');
+      return res.status(400).json({ code: 400, message: msg });
+    }
+    next();
+  });
+}
+
 /**
  * 从请求里取「门票 + 场次」并按规则 A 校验。
  *
@@ -1057,12 +1076,25 @@ const groupOrderService = require('../services/groupOrderService');
 /**
  * POST /api/registrations/submit-group
  * 多人代报提交（购票人手机验证后，一次填报多人，可混票种）
- * body: { event_id, members: [{ name, phone, company, position, inviter, focus, session_id, ticket_type_id }] }
+ *
+ * 两种 Content-Type 都支持（老客户端 JSON 不能选学生票，会自动被拦）：
+ *   application/json         body: { event_id, buyer_phone, members: [...] }
+ *   multipart/form-data      body: 同上但 members 是 JSON 字符串，
+ *                            文件字段 report_<成员下标>（选学生票必传，PDF/JPG/PNG ≤10MB）
  * header: x-verify-token（购票人凭证）
  */
-router.post('/submit-group', requireVerifiedReusable, async (req, res) => {
+router.post('/submit-group', uploadReports, requireVerifiedReusable, async (req, res) => {
   try {
-    const { event_id, members, buyer_phone } = req.body;
+    const isMulti = !!req.is('multipart/form-data');
+    let event_id, members, buyer_phone;
+    if (isMulti) {
+      const b = req.body || {};
+      event_id = b.event_id;
+      buyer_phone = b.buyer_phone;
+      try { members = JSON.parse(b.members || '[]'); } catch (e) { members = []; }
+    } else {
+      ({ event_id, members, buyer_phone } = req.body || {});
+    }
     if (!event_id) return res.status(400).json({ code: 400, message: '活动ID不能为空' });
     // 购票人手机号必须与验证凭证一致（防冒名）
     if (!buyer_phone || !/^1[3-9]\d{9}$/.test(String(buyer_phone))) {
@@ -1073,8 +1105,19 @@ router.post('/submit-group', requireVerifiedReusable, async (req, res) => {
       return res.status(401).json({ code: 401, message: '购票人手机号与验证凭证不一致' });
     }
 
+    // 报告文件按成员下标归位；忽略其它字段名的文件
+    const reportFiles = (req.files || [])
+      .filter(f => /^report_\d+$/.test(f.fieldname))
+      .map(f => ({
+        index: Number(f.fieldname.slice(7)),
+        originalname: f.originalname || 'report',
+        mimetype: f.mimetype || '',
+        size: f.size,
+        buffer: f.buffer
+      }));
+
     const result = await groupOrderService.createGroup({
-      buyerPhone: String(buyer_phone), eventId: Number(event_id), members
+      buyerPhone: String(buyer_phone), eventId: Number(event_id), members, reportFiles
     });
     if (!result.ok) return res.status(400).json({ code: 400, message: result.error });
     res.json({
@@ -1262,6 +1305,8 @@ router.get('/group-list', authenticate, async (req, res) => {
         })(),
         ticket_name: r.ticketType ? r.ticketType.name : '',
         price: r.ticketType ? Number(r.ticketType.price) : 0,
+        is_student: r.ticketType ? Number(r.ticketType.is_student) === 1 : false,
+        student_report_id: (r.extra_fields && r.extra_fields.student_report_id) || null,
         session_all: Number(r.session_all) === 1 ? 1 : 0,
         session_ids: r.__sessionIds || [],
         session_name: sessionLabelOf(r, sMap),
@@ -1274,6 +1319,24 @@ router.get('/group-list', authenticate, async (req, res) => {
     }
     let list = Array.from(groups.values());
 
+    // 学生票学籍报告：一次批量取全挂到整单上，避免列表 N+1 把 PG 打爆。
+    // 私有文件路径不外泄，后台预览走 /api/student-reports/:id/file 鉴权接口。
+    const groupNos = Array.from(groups.keys());
+    const { StudentReport } = require('../models');
+    const reports = groupNos.length ? await StudentReport.findAll({
+      where: { group_no: { [Op.in]: groupNos } },
+      order: [['id', 'DESC']],
+      limit: 5000
+    }) : [];
+    const reportsByGroup = new Map();
+    for (const r of reports) {
+      const k = r.group_no || '';
+      if (!reportsByGroup.has(k)) reportsByGroup.set(k, []);
+      const p = r.get ? r.get({ plain: true }) : r;
+      delete p.file_path;
+      reportsByGroup.get(k).push(p);
+    }
+
     // 折扣档位按活动缓存（后台可配 ec9_discount_rules）：整单列表可能跨多个活动，每种只查一次库
     const ruleCache = new Map();
     const rulesOf = async (eid) => {
@@ -1285,6 +1348,8 @@ router.get('/group-list', authenticate, async (req, res) => {
     // 整单状态聚合：多人一次提交 = 一起审核，只有「全部通过」和「全部驳回」两种结果
     // 口径：有 submitted → 待审核；全 rejected → 已驳回；全 paid → 已支付；其余 → 待支付
     for (const g of list) {
+      g.reports = reportsByGroup.get(g.group_no) || [];
+      g.has_student = g.members.some(m => m.is_student);
       const sts = g.members.map(m => m.status);
       g.status = sts.includes('submitted') ? 'submitted'
         : (sts.every(s => s === 'rejected') ? 'rejected'

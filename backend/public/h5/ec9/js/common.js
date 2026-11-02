@@ -276,13 +276,16 @@
   /* ---------- 请求 ---------- */
   function request(path, opts) {
     opts = opts || {};
-    var headers = { "Content-Type": "application/json" };
+    // 传 FormData 时不能设 Content-Type（浏览器要自动生成 multipart boundary），
+    // 也不能 JSON.stringify —— 学生票的《教育部学籍在线验证报告》走这条通道。
+    var isForm = (typeof FormData !== "undefined") && opts.body instanceof FormData;
+    var headers = isForm ? {} : { "Content-Type": "application/json" };
     // 后端中间件读的是小写 x-verify-token（见 middleware/requireVerified.js）
     if (S.token) headers["x-verify-token"] = S.token;
     return fetch(API + path, {
       method: opts.method || "GET",
       headers: headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined
+      body: isForm ? opts.body : (opts.body ? JSON.stringify(opts.body) : undefined)
     }).then(function (r) {
       return r.json().catch(function () { return { code: r.status, message: "响应解析失败" }; });
     }).then(function (j) {

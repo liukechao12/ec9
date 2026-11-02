@@ -294,13 +294,24 @@ function normalize(outer, inner) {
     return undefined;
   };
 
-  const st = pick(inner, ['status', 'Status']);
+  // 天远多数产品把业务字段包在 result 里：{"result":{"status":1}}
+  // 逐个往下剥，直到找到含 status / resultCode 的那一层
+  const layers = [];
+  let cur = inner;
+  for (let d = 0; d < 4 && cur && typeof cur === 'object'; d++) {
+    layers.push(cur);
+    cur = cur.result !== undefined && cur.result !== null && typeof cur.result === 'object'
+      ? cur.result
+      : (cur.data !== undefined && cur.data !== null && typeof cur.data === 'object' ? cur.data : null);
+  }
+
+  const st = layers.map(o => pick(o, ['status', 'Status'])).find(v => v !== undefined);
   if (st !== undefined) {
     if (String(st) === '1') return { status: VERIFY_STATUS.ENROLLED, apiCode: 'status=1', message: '在籍', tx };
     if (String(st) === '0') return { status: VERIFY_STATUS.NOT_ENROLLED, apiCode: 'status=0', message: '不在籍', tx };
   }
 
-  const rc = pick(inner, ['resultCode', 'result_code', 'resultcode']);
+  const rc = layers.map(o => pick(o, ['resultCode', 'result_code', 'resultcode'])).find(v => v !== undefined);
   if (rc !== undefined) {
     if (String(rc) === '2') return { status: VERIFY_STATUS.ENROLLED, apiCode: 'resultCode=2', message: '在籍', tx };
     if (String(rc) === '1') return { status: VERIFY_STATUS.NOT_ENROLLED, apiCode: 'resultCode=1', message: '不在籍', tx };
@@ -422,36 +433,47 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
   }
 
   // ---- ④ 真调 API ----
+  // 天远错误码 1001 = 接口异常（官方建议重试），这里最多 3 次尝试（首调 + 2 次重试）；
+  // 失败请求不计费，重试不会多花钱。其余错误码（1003 参数错 / 1007 余额不足等）不重试。
   let normalized;
   let rawText = '';
-  try {
-    const res = await postTianyuan({
-      endpoint: cfg.endpoint,
-      productCode: cfg.product_code,
-      accessId: cfg.access_id,
-      accessKey: cfg.access_key,
-      payload: { name: String(name || '').trim(), id_card: idVal },
-      timeoutMs: Number(cfg.timeout_ms) || 8000
-    });
-    rawText = res.body;
-    let outer = {};
-    try { outer = JSON.parse(res.body || '{}'); } catch (e) { outer = {}; }
-    let inner = null;
-    if (outer && outer.data) {
-      try { inner = JSON.parse(decryptPayload(outer.data, cfg.access_key)); } catch (e) {
-        try { inner = JSON.parse(Buffer.from(outer.data, 'base64').toString('utf8')); } catch (e2) { inner = null; }
+  const MAX_TRY = 3;
+  for (let attempt = 1; attempt <= MAX_TRY; attempt++) {
+    try {
+      const res = await postTianyuan({
+        endpoint: cfg.endpoint,
+        productCode: cfg.product_code,
+        accessId: cfg.access_id,
+        accessKey: cfg.access_key,
+        payload: { name: String(name || '').trim(), id_card: idVal },
+        timeoutMs: Number(cfg.timeout_ms) || 8000
+      });
+      rawText = res.body;
+      let outer = {};
+      try { outer = JSON.parse(res.body || '{}'); } catch (e) { outer = {}; }
+      let inner = null;
+      if (outer && outer.data) {
+        try { inner = JSON.parse(decryptPayload(outer.data, cfg.access_key)); } catch (e) {
+          try { inner = JSON.parse(Buffer.from(outer.data, 'base64').toString('utf8')); } catch (e2) { inner = null; }
+        }
       }
+      if (res.statusCode >= 400) {
+        normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'http_' + res.statusCode, message: '接口返回 HTTP ' + res.statusCode, tx: '' };
+      } else {
+        normalized = normalize(outer, inner);
+      }
+      if (!inner && !outer.code && !res.body) {
+        normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'empty_response', message: '接口返回为空', tx: '' };
+      }
+      normalized.attempts = attempt;
+      // 只有 1001（接口异常）值得重试；其它结论（含成功 / 1000 查询为空）直接用
+      if (normalized.apiCode !== '1001') break;
+      if (attempt < MAX_TRY) await new Promise(r => setTimeout(r, 600 * attempt));
+    } catch (e) {
+      normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'exception', message: String(e.message || e), tx: '', attempts: attempt };
+      if (attempt < MAX_TRY) await new Promise(r => setTimeout(r, 600 * attempt));
+      else break;
     }
-    if (res.statusCode >= 400) {
-      normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'http_' + res.statusCode, message: '接口返回 HTTP ' + res.statusCode, tx: '' };
-    } else {
-      normalized = normalize(outer, inner);
-    }
-    if (!inner && !outer.code && !res.body) {
-      normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'empty_response', message: '接口返回为空', tx: '' };
-    }
-  } catch (e) {
-    normalized = { status: VERIFY_STATUS.ERROR, apiCode: 'exception', message: String(e.message || e), tx: '' };
   }
 
   // ---- ⑤ 落库：任何结论都写一行（在籍/不在籍/无法判断/异常），TTL 按结论长短不同 ----
@@ -478,6 +500,7 @@ async function verify({ name, idCard, guestId = null, eventId = null, registrati
     status: normalized.status, fromCache: false, message: normalized.message || '',
     transactionId: normalized.tx || '', apiCode: normalized.apiCode || '',
     verificationId: saved.row ? saved.row.id : null, verifiedAt: now, expiresAt: expires,
+    attempts: normalized.attempts || 1,
     saveError: saved.saveError || undefined
   };
 }

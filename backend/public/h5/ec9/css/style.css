@@ -67,13 +67,13 @@ html, body {
 /* 设计稿量测：蓝块 y0-183（白卡顶 y164 + 顶部圆角 20，圆角内透出蓝色） */
 .brand {
   height: 185px;
-  background: url(../img/signup_bg.png) top center / 375px 185px no-repeat;
+  background: url(../img/signup_bg.png?v=3x20261102) top center / 375px 185px no-repeat;
   position: relative;
   overflow: hidden;
 }
 /* 2026-11-02 新稿：共用蓝带分中/英两版。applyLang 会把 <html lang> 写成
    en / zh-CN / zh-Hant，English 换英文版切图，繁體沿用中文版。 */
-html[lang="en"] .brand { background-image: url(../img/signup_bg_en.png); }
+html[lang="en"] .brand { background-image: url(../img/signup_bg_en.png?v=3x20261102); }
 /* ---------- 语言切换（产品功能入口，设计稿未画；坐标贴设计稿风格） ---------- */
 /* 位置贴页面右上角：状态栏删除后整条上移，右侧留 12px（首页另有设计稿坐标，见下方 #app.home 覆盖） */
 .lang-switch {

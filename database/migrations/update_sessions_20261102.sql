@@ -55,6 +55,19 @@ WHERE NOT EXISTS (
   SELECT 1 FROM ec9_sessions s WHERE s.event_id = v.event_id AND s.name = v.name
 );
 
+-- 3) 已报名对齐：旧「上午主论坛」(id=1) → 新「上午 · 主题演讲」
+--    上午只有主题演讲一场，映射唯一，无需问本人。
+--    「全部论坛」(session_all=1) 不受影响；选旧「下午分论坛」的 1 人
+--    因下午已拆成 3 个并行论坛，映射不唯一，保持原值待线下确认。
+UPDATE ec9_registrations r
+   SET session_id = (SELECT s.id FROM ec9_sessions s
+                      WHERE s.event_id = 1 AND s.name = '上午 · 主题演讲' AND s.status = 1
+                      ORDER BY s.id LIMIT 1),
+       updated_at = NOW()
+ WHERE r.event_id = 1
+   AND r.session_id = 1
+   AND COALESCE(r.session_all, 0) = 0;
+
 COMMIT;
 
 -- 校验：

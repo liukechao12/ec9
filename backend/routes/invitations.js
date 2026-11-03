@@ -406,15 +406,14 @@ router.put('/:id/ticket-type', authenticate, operationLog('invitations', '设置
     console.log(`[邀约] #${invitation.id} 赠票票种 → ${ttId || '未指定'}${ttName ? '(' + ttName + ')' : ''}，操作人 ${req.user.username}`);
 
     // 已报名的邀约：立刻按新口径重算订单（免费则直接出票，付费则建/改待支付单）
+    // 团单与单人记录都要重算 —— 以前单人（无 group_no）会被跳过，
+    // 表现就是「后台设了赠票，前台还停在待付款页」。
     let orderInfo = null;
     if (Number(invitation.registration_status) === 2) {
       try {
-        const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
-        for (const reg of regs) {
-          const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
-          if (r && r.ok && !r.skipped) { orderInfo = r; break; }
-          if (r && !r.ok && !r.skipped) console.warn('[改赠票] 同步订单失败：', r.error);
-        }
+        const recalced = await groupOrderService.recalcOrdersForInvitation(invitation);
+        orderInfo = recalced.find(x => x && x.ok) || null;
+        recalced.filter(x => x && !x.ok).forEach(x => console.warn('[改赠票] 同步订单失败：', x.error));
       } catch (e) {
         console.error('[改赠票] 同步订单异常（不阻塞）：', e.message);
       }
@@ -476,16 +475,13 @@ router.put('/:id/need-pay', authenticate, operationLog('invitations', '修改邀
     await invitation.update({ need_pay: needPay });
     console.log(`[邀约] #${invitation.id} need_pay → ${needPay}（${needPay ? '需付款' : '免票'}），操作人 ${req.user.username}`);
 
-    // 已报名（registration_status=2）的邀约：立即把新口径落到订单上
+    // 已报名（registration_status=2）的邀约：立即把新口径落到订单上（团单 + 单人）
     let orderInfo = null;
     if (Number(invitation.registration_status) === 2) {
       try {
-        const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
-        for (const reg of regs) {
-          const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
-          if (r && r.ok && !r.skipped) { orderInfo = r; break; }
-          if (r && !r.ok && !r.skipped) console.warn('[改付款口径] 同步订单失败：', r.error);
-        }
+        const recalced = await groupOrderService.recalcOrdersForInvitation(invitation);
+        orderInfo = recalced.find(x => x && x.ok) || null;
+        recalced.filter(x => x && !x.ok).forEach(x => console.warn('[改付款口径] 同步订单失败：', x.error));
       } catch (e) {
         console.error('[改付款口径] 同步订单异常（不阻塞）：', e.message);
       }

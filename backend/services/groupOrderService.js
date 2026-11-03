@@ -1014,6 +1014,60 @@ async function ensureGroupOrderAfterApprove(reg) {
 }
 
 /**
+ * 后台在邀约管理里改了「赠票票种」或「是否需付款」之后，把这个人的订单重算一遍。
+ *
+ * 以前只处理团单（ensureGroupOrderAfterApprove 遇到没有 group_no 的单人记录直接跳过），
+ * 于是「单人报名的老记录」会出现：后台已经设了免票，H5 还是停在待付款页。
+ * 现在团单 / 单人两条路都走：
+ *   免票  → 关掉原来的收费待支付单，建 0 元单直接出票
+ *   收费  → 按新口径建（或沿用）待支付单
+ *
+ * @param {object} invitation  ec9_invitations 记录（已更新过）
+ * @returns {Promise<Array>}   每条报名一条结果，失败项带 error，不抛异常给调用方
+ */
+async function recalcOrdersForInvitation(invitation) {
+  const out = [];
+  if (!invitation || !invitation.id) return out;
+  const regs = await Registration.findAll({
+    where: {
+      [Op.or]: [
+        { invitation_id: invitation.id },
+        { guest_id: invitation.guest_id, event_id: invitation.event_id }
+      ]
+    },
+    order: [['id', 'DESC']]
+  });
+  const seen = new Set();
+  for (const reg of regs) {
+    if (seen.has(reg.id)) continue;
+    seen.add(reg.id);
+    try {
+      if (reg.group_no) {
+        const r = await ensureGroupOrderAfterApprove(reg);
+        if (r && !r.skipped) out.push(Object.assign({ registration_id: reg.id, group_no: reg.group_no }, r));
+        continue;
+      }
+      // 单人记录：只有「已审核通过」才谈得上订单；已出票的不用动
+      if (reg.status !== REG_STATUS.APPROVED) continue;
+      const free = await isFreeRegistration(reg);
+      const dup = await Order.findOne({
+        where: { registration_id: reg.id, status: ORDER_STATUS.PENDING_PAYMENT },
+        order: [['id', 'DESC']]
+      });
+      // 免票但还挂着收费单 → 必须重建（createOrder 会关旧单并 0 元出票）；
+      // 没有单则补一张（免票 → 0 元出票，收费 → 待支付单）
+      if (free || !dup) {
+        const r = await require('./orderService').createOrder(reg.id, {});
+        out.push(Object.assign({ registration_id: reg.id, single: true }, r));
+      }
+    } catch (e) {
+      out.push({ registration_id: reg.id, ok: false, error: e.message });
+    }
+  }
+  return out;
+}
+
+/**
  * group 订单支付成功：全员 paid + 每人入场码 + 全员短信
  * （由 orderService.markPaid 在 group 单时调用）
  */
@@ -1133,6 +1187,6 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 module.exports = {
   calcDiscount, applyDiscount, isStandardType, isFreeRegistration, isFreeFor, needPayOf,
   pickTier, rateToZhe, fetchDiscountRules, DEFAULT_TIERS, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
-  createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
+  createGroupOrder, ensureGroupOrderAfterApprove, recalcOrdersForInvitation, payUrlOf,
   markGroupPaid, sendGroupPaidSms, sendGroupApprovedSms, releaseGroupStock, sellGroupStock, genCheckinCode
 };

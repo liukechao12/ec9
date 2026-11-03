@@ -65,6 +65,17 @@ async function createOrder(registrationId, opts = {}) {
       return { ok: false, error: `报名状态不可创建订单：${reg.status}` };
     }
 
+    // 免票兜底（2026-11-03）：单人链路以前完全不读邀约，导致「邀约管理里设了免票 /
+    // 指定了赠票票种，H5 单人去预定还是按票面价建单收费」。口径与团单 quoteGroup 一致。
+    // 后台审核时人工指定价（opts.unitPrice）优先级最高，不受免票覆盖。
+    // ⚠️ 必须算在「复用旧待支付单」之前：下面要靠它判断旧单是不是已经不该收钱了。
+    let isFree = false;
+    if (!(opts.unitPrice !== undefined && opts.unitPrice !== null && opts.unitPrice !== '')) {
+      try {
+        isFree = await require('./groupOrderService').isFreeRegistration(reg);
+      } catch (e) { /* 判定失败不阻塞建单，按原价走 */ }
+    }
+
     // 幂等：同一报名已有「待付款」订单 → 复用，不重复锁库存
     // H5 重复进支付页 / 刷新 / 断网重试都会再打一次建单接口，
     // 不复用会锁双倍库存并产生孤儿订单（支付完另一单仍是待付款）。
@@ -97,16 +108,6 @@ async function createOrder(registrationId, opts = {}) {
 
     const tt = reg.ticketType;
     if (!tt || !Number(tt.on_shelf)) { await t.rollback(); return { ok: false, error: '票种不存在或已下架' }; }
-
-    // 免票兜底（2026-11-03）：单人链路以前完全不读邀约，导致「邀约管理里设了免票 /
-    // 指定了赠票票种，H5 单人去预定还是按票面价建单收费」。口径与团单 quoteGroup 一致。
-    // 后台审核时人工指定价（opts.unitPrice）优先级最高，不受免票覆盖。
-    let isFree = false;
-    if (!(opts.unitPrice !== undefined && opts.unitPrice !== null && opts.unitPrice !== '')) {
-      try {
-        isFree = await require('./groupOrderService').isFreeRegistration(reg);
-      } catch (e) { /* 判定失败不阻塞建单，按原价走 */ }
-    }
 
     // 规则 A：报名的场次必须与票种适用场次一致（场次票必须选对应场次）
     const bind = await resolveSessionForRegistration(reg);

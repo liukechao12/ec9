@@ -281,9 +281,12 @@
      ③ 管理员特批 need_pay=0                     → 免费 */
   function isFreeFor(m, tk) {
     if (!tk) return false;
-    if (!(Number(tk.price) > 0)) return true;
+    if (!(Number(tk.price) > 0)) return true;          // ① ¥0 票种
     if (!m) return false;
-    if (Number(m.gift_ticket_id) > 0 && Number(m.gift_ticket_id) === Number(tk.id)) return true;
+    var gift = Number(m.gift_ticket_id) || 0;
+    // ② 指定了赠票：只有选到那张才免，选别的照价付（与后端 isFreeFor 同口径）
+    if (gift > 0) return gift === Number(tk.id);
+    // ③ 没指定赠票时，管理员特批免票（need_pay=0）才免
     if (m.need_pay === false || Number(m.need_pay) === 0) return true;
     return false;
   }

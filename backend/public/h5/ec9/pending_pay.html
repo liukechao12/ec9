@@ -107,7 +107,17 @@
         E.go("result.html", { event_id: eventId, status: "rejected", reg_id: m.registration_id });
         return;
       }
-      var price = Number(m.price != null ? m.price : ((m.ticket && m.ticket.price) || 0));
+      // 应付金额优先取后端算好的 payable_price（邀约免票 / 赠票 / ¥0 票种 = 0），
+      // 老接口没这个字段时再退回票面价
+      var price = Number(m.payable_price != null ? m.payable_price
+        : (m.price != null ? m.price : ((m.ticket && m.ticket.price) || 0)));
+      // 免票：建单即自动出票，别把人挡在「继续支付」后面
+      if (price === 0) {
+        E.Api.createOrder(Number(m.registration_id), 1).then(function () {
+          E.go("eticket.html", { event_id: eventId, reg_id: m.registration_id });
+        }).catch(onFail);
+        return;
+      }
       var html = '<div class="fee-title">' + E.t("fee_summary") + '</div>';
       if (m.order_no) html += row(E.t("pending_pay_order"), E.esc(m.order_no));
       html += row(E.esc(m.ticket_name || (m.ticket && m.ticket.name) || "—") + " × 1", "¥" + price.toFixed(2));

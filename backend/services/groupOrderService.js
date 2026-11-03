@@ -311,6 +311,43 @@ async function findInvitedByGuestIds(guestIds, eventId) {
 }
 
 /**
+ * 单人（非团单）报名是否免票 —— 与 quoteGroup / createGroup 完全同一口径：
+ *   ① 票种本身 ¥0（学生票 / 免费票）        → 免
+ *   ② 邀约管理给这个人指定了赠票票种，且他选的就是那张 → 免
+ *   ③ 管理员在邀约管理里特批 need_pay=0      → 免（无门槛，与票种无关）
+ *
+ * 历史坑（2026-11-03）：这条口径原本只写在团单链路里，单人链路（POST /api/orders
+ * → orderService.createOrder）压根没读邀约，导致「邀约管理设了免票、H5 单人去预定
+ * 仍然按票面价建单收费」。现在两边共用这一个函数，改口径只改一处。
+ *
+ * @param {object} reg  报名记录（需带 ticket_type_id / event_id / guest_id，可含 ticketType 关联）
+ * @returns {Promise<boolean>}
+ */
+async function isFreeRegistration(reg) {
+  if (!reg) return false;
+  const tt = reg.ticketType || (Number(reg.ticket_type_id) > 0
+    ? await TicketType.findByPk(Number(reg.ticket_type_id)) : null);
+  const price = Number(tt && tt.price) || 0;
+  if (!(price > 0)) return true;                                   // ①
+
+  let inv = null;
+  if (Number(reg.invitation_id) > 0) inv = await Invitation.findByPk(Number(reg.invitation_id));
+  if (!inv || Number(inv.is_valid) !== 1) {
+    const list = await Invitation.findAll({
+      where: { event_id: reg.event_id, guest_id: reg.guest_id, is_valid: 1 },
+      order: [['id', 'DESC']]
+    });
+    // 与 findInvitedByGuestIds 同口径：报名时自动生成的「待审批」邀约，
+    // 只有被管理员批准（registration_status=2）后才算真邀约、参与免票判定
+    inv = list.find(i => !(i.extra_fields && i.extra_fields.auto_created)
+      || Number(i.registration_status) === 2) || null;
+  }
+  if (!inv) return false;
+  return isFreeFor({ need_pay: needPayOf(inv), ticket_type_id: Number(inv.ticket_type_id) || 0 },
+    Number(reg.ticket_type_id), price);
+}
+
+/**
  * 标准票票种 id —— 邀约嘉宾一律「标准票」（免票），与购票人选的票种无关
  * 匹配优先级：在售且名称含「标准/Standard」的非学生票 → 首个在售非学生票 → 首个在售票种
  */
@@ -1092,7 +1129,7 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
 }
 
 module.exports = {
-  calcDiscount, applyDiscount, isStandardType,
+  calcDiscount, applyDiscount, isStandardType, isFreeRegistration, isFreeFor, needPayOf,
   pickTier, rateToZhe, fetchDiscountRules, DEFAULT_TIERS, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, payUrlOf,
   markGroupPaid, sendGroupPaidSms, sendGroupApprovedSms, releaseGroupStock, sellGroupStock, genCheckinCode

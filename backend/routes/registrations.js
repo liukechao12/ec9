@@ -242,6 +242,15 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
     await attachSessionPicks([reg]);
     const regSMap = await buildSessionMap([reg]);
 
+    // 应付金额：邀约免票 / 赠票 / ¥0 票种一律 0（与建单口径同一函数，避免页面显示
+    // ¥510、建单却收 ¥0 这种前后不一致）
+    let payablePrice = reg.ticketType ? Number(reg.ticketType.price) : null;
+    let isFreeFlag = false;
+    try {
+      isFreeFlag = await require('../services/groupOrderService').isFreeRegistration(reg);
+      if (isFreeFlag) payablePrice = 0;
+    } catch (e) { /* 判定失败按票面价显示，不阻塞页面 */ }
+
     res.json({
       code: 0,
       message: 'ok',
@@ -253,6 +262,9 @@ router.get('/mine', requireVerifiedReusable, async (req, res) => {
         ticket_type_id: reg.ticket_type_id,
         ticket_name: reg.ticketType ? reg.ticketType.name : null,
         price: reg.ticketType ? Number(reg.ticketType.price) : null,
+        // 实际应付（免票时为 0）：H5 待付款页按这个显示，不要再拿 price 当应付
+        payable_price: payablePrice,
+        is_free: isFreeFlag,
         session_id: reg.session_id,
         // 论坛是多选：session_ids 是所选全部；session_all=1 表示全选
         // （session_id 只剩兼容回退，别拿它当口径）

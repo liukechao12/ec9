@@ -472,11 +472,20 @@ const stamp = Date.now().toString().slice(-6);
         await sequelize.query(
           'DELETE FROM ec9_payments WHERE order_id IN (SELECT id FROM ec9_orders WHERE event_id IN (:ids))',
           { replacements: { ids } });
+        // 子表按 registration_id 关联删（ec9_registration_sessions 没有 event_id 列）
+        await sequelize.query(
+          'DELETE FROM ec9_registration_sessions WHERE registration_id IN (SELECT id FROM ec9_registrations WHERE event_id IN (:ids))',
+          { replacements: { ids } })
+          .catch(e => console.log(`  清理 registration_sessions 跳过: ${e.message.slice(0, 50)}`));
         for (const t of ['ec9_checkin_codes', 'ec9_checkins', 'ec9_orders', 'ec9_registrations',
-          'ec9_invitations', 'ec9_ticket_types', 'ec9_sessions', 'ec9_events']) {
+          'ec9_invitations', 'ec9_ticket_types', 'ec9_sessions']) {
           await sequelize.query(`DELETE FROM ${t} WHERE event_id IN (:ids)`, { replacements: { ids } })
             .catch(e => console.log(`  清理 ${t} 跳过: ${e.message.slice(0, 50)}`));
         }
+        // ⚠️ ec9_events 的主键是 id，不是 event_id —— 写错会静默删不掉，
+        //    演练会议残留后会按 start_time DESC 排到第一个，污染后续所有「取第一个活动」的用例
+        await sequelize.query(`DELETE FROM ec9_events WHERE id IN (:ids)`, { replacements: { ids } })
+          .catch(e => console.log(`  清理 events 跳过: ${e.message.slice(0, 50)}`));
         console.log(`\n[清理] 已删除演练会议 id=${ctx.eventId} 及其关联数据`);
       } catch (e) {
         console.log('[清理] 失败: ' + e.message.slice(0, 80));

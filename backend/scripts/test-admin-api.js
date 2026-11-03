@@ -218,7 +218,9 @@ async function main() {
 
   // 找一个在售票种
   const tts = await req('GET', `/api/ticket-types?event_id=${event.id}&on_shelf=1`, { token: T });
-  const sellable = (tts.json.data.list || []).find(x => x.stock_available >= 2);
+  // ⚠️ 只挑「有价」票种：¥0 票种（学生票 / 免费票 / 邀约免票）建单即自动出票（paid），
+  //    后面的「查单刷新 / 手动关单」两项只在待付款单上有意义，拿 ¥0 单跑必然 400。
+  const sellable = (tts.json.data.list || []).find(x => x.stock_available >= 2 && Number(x.price) > 0);
   check('存在可售票种', !!sellable, '无可售票种');
 
   let orderId = null;

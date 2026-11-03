@@ -75,7 +75,9 @@ async function createOrder(registrationId, opts = {}) {
     });
     if (dup) {
       const stillValid = !dup.expire_at || new Date(dup.expire_at).getTime() > Date.now();
-      if (stillValid && Number(dup.quantity) === quantity) {
+      // 管理员把人改成免票后，旧的收费待支付单不能复用（否则还是收原来的钱）
+      const dupStillCharged = isFree && Number(dup.final_amount) > 0;
+      if (stillValid && Number(dup.quantity) === quantity && !dupStillCharged) {
         await t.commit();
         return { ok: true, order: dup, reused: true };
       }
@@ -96,6 +98,16 @@ async function createOrder(registrationId, opts = {}) {
     const tt = reg.ticketType;
     if (!tt || !Number(tt.on_shelf)) { await t.rollback(); return { ok: false, error: '票种不存在或已下架' }; }
 
+    // 免票兜底（2026-11-03）：单人链路以前完全不读邀约，导致「邀约管理里设了免票 /
+    // 指定了赠票票种，H5 单人去预定还是按票面价建单收费」。口径与团单 quoteGroup 一致。
+    // 后台审核时人工指定价（opts.unitPrice）优先级最高，不受免票覆盖。
+    let isFree = false;
+    if (!(opts.unitPrice !== undefined && opts.unitPrice !== null && opts.unitPrice !== '')) {
+      try {
+        isFree = await require('./groupOrderService').isFreeRegistration(reg);
+      } catch (e) { /* 判定失败不阻塞建单，按原价走 */ }
+    }
+
     // 规则 A：报名的场次必须与票种适用场次一致（场次票必须选对应场次）
     const bind = await resolveSessionForRegistration(reg);
     if (!bind.ok) {
@@ -112,6 +124,8 @@ async function createOrder(registrationId, opts = {}) {
     } else {
       unitPrice = Number(tt.original_price || 0);
     }
+
+    if (isFree) unitPrice = 0;
     const totalAmount = unitPrice * quantity;
 
     // 库存校验（行锁防并发超卖）
@@ -159,7 +173,15 @@ async function createOrder(registrationId, opts = {}) {
     if (sessLocked) await sessLocked.increment('stock_locked', { by: quantity, transaction: t });
 
     await t.commit();
-    return { ok: true, order };
+
+    // 免票单：0 元也要走完「出票」流程（库存 locked→sold、报名置 paid、生成签到码、发短信），
+    // 否则 H5 会停在待付款页等一个永远不会发生的支付。
+    if (isFree && Number(order.final_amount) === 0) {
+      const paid = await markPaid(order.id, { paid_at: new Date() });
+      if (paid && paid.ok) return { ok: true, order: paid.order, free: true, checkinCode: paid.checkinCode || null };
+      console.warn('[createOrder] 免票单自动出票失败：' + ((paid && paid.error) || '未知'));
+    }
+    return { ok: true, order, free: false };
   } catch (e) {
     await t.rollback();
     return { ok: false, error: e.message };

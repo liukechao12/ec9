@@ -536,12 +536,20 @@ router.post('/by-phone', async (req, res) => {
 // H5提交报名信息接口（更新嘉宾信息、记录住宿选择、更新报名状态）
 router.post('/submit', async (req, res) => {
   try {
-    const { invite_code, name, company, position, hotel_12_29, hotel_12_30, skip_approval } = req.body;
+    const { invite_code, name, company, position, focus, hotel_12_29, hotel_12_30, skip_approval } = req.body;
     
     if (!invite_code) {
       return res.status(400).json({
         code: 400,
         message: '邀请码不能为空'
+      });
+    }
+
+    // 关注方向必填（2026-11-03），与手机号报名 / 多人代报同一口径
+    if (!String(focus || '').trim()) {
+      return res.status(400).json({
+        code: 400,
+        message: '关注方向不能为空'
       });
     }
     
@@ -790,10 +798,11 @@ router.post('/submit-by-phone', async (req, res) => {
       });
     }
     
-    if (!name || !company || !position) {
+    // 关注方向 2026-11-03 起改为必填（客户要求：报名必须采集关注方向）
+    if (!name || !company || !position || !String(focus || '').trim()) {
       return res.status(400).json({
         code: 400,
-        message: '姓名、公司、职务不能为空'
+        message: '姓名、公司、职务、关注方向不能为空'
       });
     }
 

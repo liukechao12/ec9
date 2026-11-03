@@ -921,6 +921,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const company = document.getElementById('guestCompany').value.trim();
             const position = document.getElementById('guestPosition').value.trim();
             const inviter = document.getElementById('inviter').value.trim();
+            const focus = document.getElementById('guestFocus').value.trim();
             
             // 验证必填字段
             if (!name) {
@@ -948,8 +949,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            if (!inviter) {
-                alert('请输入邀请人');
+            if (!focus) {
+                alert('请输入关注方向');
                 return;
             }
             
@@ -976,6 +977,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     name: name,
                     company: company,
                     position: position,
+                    focus: focus,
                     hotel_12_29: hotel_12_29,
                     hotel_12_30: hotel_12_30
                 } : {
@@ -984,6 +986,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     company: company,
                     position: position,
                     inviter: inviter,
+                    focus: focus,
                     event_id: eventId ? parseInt(eventId) : null,
                     hotel_12_29: hotel_12_29,
                     hotel_12_30: hotel_12_30
@@ -1033,6 +1036,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const company = document.getElementById('guestCompany2').value.trim();
             const position = document.getElementById('guestPosition2').value.trim();
             const inviter = document.getElementById('inviter2').value.trim();
+            const focus = document.getElementById('guestFocus2').value.trim();
             
             // 验证必填字段
             if (!name) {
@@ -1052,6 +1056,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!position) {
                 alert('请输入职务');
+                return;
+            }
+
+            if (!focus) {
+                alert('请输入关注方向');
                 return;
             }
             
@@ -1077,6 +1086,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     name: name,
                     company: company,
                     position: position,
+                    focus: focus,
                     hotel_12_29: hotel_12_29,
                     hotel_12_30: hotel_12_30
                 } : {
@@ -1085,6 +1095,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     company: company,
                     position: position,
                     inviter: inviter,
+                    focus: focus,
                     event_id: eventId ? parseInt(eventId) : null,
                     hotel_12_29: hotel_12_29,
                     hotel_12_30: hotel_12_30

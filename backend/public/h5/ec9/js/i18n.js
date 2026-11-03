@@ -64,6 +64,7 @@ const I18N = {
     forum_2: " 智驾安全与全球准入论坛",
     forum_3: " Physical AI 产业创新与资本赋能论坛",
     err_required: "请填写完整必填信息",
+    err_focus_required: "请填写关注方向（必填）",
     err_submit: "报名失败信息",
     // 门票
     ticket_title: "门票类型",
@@ -284,6 +285,7 @@ const I18N = {
     forum_2: " 智駕安全與全球准入論壇",
     forum_3: " Physical AI 產業創新與資本賦能論壇",
     err_required: "請填寫完整必填信息",
+    err_focus_required: "請填寫關注方向（必填）",
     err_submit: "報名失敗信息",
     ticket_title: "門票類型",
     year: "2026",
@@ -494,6 +496,7 @@ const I18N = {
     forum_2: " Intelligent Driving Safety & Global Access Forum",
     forum_3: " Physical AI: Industrial Innovation & Capital Empowerment Forum",
     err_required: "Please complete all required fields",
+    err_focus_required: "Please fill in your focus area (required)",
     err_submit: "Registration failed",
     ticket_title: "Ticket Types",
     year: "2026",

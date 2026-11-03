@@ -233,7 +233,7 @@ const stamp = Date.now().toString().slice(-6);
       // EC8 沿用：凭邀请码报名
       const body = {
         phone: ctx.phone2, name: '演练报名人', company: '演练科技', position: '经理',
-        event_id: ctx.eventId, lang: 'zh-CN'
+        focus: '具身智能', event_id: ctx.eventId, lang: 'zh-CN'
       };
       if (ctx.inviteCode) body.invite_code = ctx.inviteCode;
       const r = await step('报名', '提交报名（凭邀请码）', 'POST', '/api/registrations/submit', { body, verifyToken: ctx.token });

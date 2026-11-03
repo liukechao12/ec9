@@ -84,7 +84,7 @@
         '<div class="form-field"><input class="input f-position" maxlength="100" data-i18n="job_ph" value="' + E.esc(m.position) + '"></div></div>' +
       '<div class="form-row"><div class="form-label"><span data-i18n="inviter">邀请人：</span></div>' +
         '<div class="form-field"><input class="input f-inviter" maxlength="100" data-i18n="inviter_ph" value="' + E.esc(m.inviter) + '"></div></div>' +
-      '<div class="form-row"><div class="form-label"><span data-i18n="focus">关注方向：</span></div>' +
+      '<div class="form-row"><div class="form-label"><span data-i18n="focus">关注方向：</span><span class="required-star">*</span></div>' +
         '<div class="form-field"><input class="input f-focus" maxlength="200" data-i18n="focus_ph" value="' + E.esc(m.focus) + '"></div></div>' +
       '<div class="form-row form-row-col"><div class="form-label"><span data-i18n="forum">论坛：</span><span class="required-star">*</span></div>' +
         '<div class="form-field">' + sessionPicksHtml(m) + '</div></div>' +
@@ -248,6 +248,8 @@
       if (!String(m.name).trim() || !String(m.company).trim() || !String(m.position).trim()) {
         E.errPill(E.t("err_required")); return;
       }
+      // 关注方向必填（2026-11-03）
+      if (!String(m.focus || "").trim()) { E.errPill(E.t("err_focus_required")); return; }
       // 论坛至少选一个（多选）
       if (!pickedIds(m).length) {
         E.errPill(E.t("err_required")); return;

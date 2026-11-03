@@ -91,7 +91,7 @@ function check(name, cond, extra) {
 
   // 场景1：场次票 + 不传场次 → 应 400
   let r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD',
+    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId, ticket_type_id: ttSid
   } });
   check('场次票 + 不传场次 → 400 SESSION_REQUIRED',
@@ -100,7 +100,7 @@ function check(name, cond, extra) {
 
   // 场景2：场次票 + 错误场次 → 应 400
   r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD',
+    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId, ticket_type_id: ttSid, session_id: sid2
   } });
   check('场次票 + 错误场次 → 400 SESSION_MISMATCH',
@@ -109,7 +109,7 @@ function check(name, cond, extra) {
 
   // 场景3：场次票 + 正确场次 → 应通过
   r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD',
+    phone, name: 'HTTP测试', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId, ticket_type_id: ttSid, session_id: sid1
   } });
   check('场次票 + 正确场次 → 报名成功',
@@ -133,7 +133,7 @@ function check(name, cond, extra) {
   // 场景4：活动票 + 不传场次 → 应通过
   const phone2 = '139' + String(Date.now()).slice(-8);
   r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone: phone2, name: 'HTTP测试2', company: 'T', position: 'P', inviter: 'BD',
+    phone: phone2, name: 'HTTP测试2', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId, ticket_type_id: ttAid
   } });
   check('活动票 + 不传场次 → 报名成功（全场次通用）',
@@ -143,7 +143,7 @@ function check(name, cond, extra) {
   // 场景5：都不传 → 老流程不受影响
   const phone3 = '137' + String(Date.now()).slice(-8);
   r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone: phone3, name: 'HTTP测试3', company: 'T', position: 'P', inviter: 'BD',
+    phone: phone3, name: 'HTTP测试3', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId
   } });
   check('都不传 → 老报名流程不受影响',
@@ -152,7 +152,7 @@ function check(name, cond, extra) {
 
   // 场景6：英文态错误文案
   r = await req('/api/registrations/submit-by-phone', { method: 'POST', body: {
-    phone: '136' + String(Date.now()).slice(-8), name: 'X', company: 'T', position: 'P', inviter: 'BD',
+    phone: '136' + String(Date.now()).slice(-8), name: 'X', company: 'T', position: 'P', inviter: 'BD', focus: '具身智能',
     event_id: eventId, ticket_type_id: ttSid, lang: 'en'
   } });
   check('英文态错误文案返回英文',

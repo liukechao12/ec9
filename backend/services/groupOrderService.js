@@ -469,6 +469,8 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
     if (!m.phone || !/^1[3-9]\d{9}$/.test(String(m.phone))) return { ok: false, error: `手机号格式错误：${m.phone}` };
     if (seen.has(m.phone)) return { ok: false, error: `手机号重复：${m.phone}` };
     seen.add(m.phone);
+    // 关注方向必填（2026-11-03）：与单人报名同一口径
+    if (!String(m.focus || '').trim()) return { ok: false, error: `关注方向不能为空：${m.name}` };
   }
 
   // 论坛多选：全选时后端按该活动启用场次展开，不依赖前端传全

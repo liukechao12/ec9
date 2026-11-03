@@ -1126,10 +1126,50 @@ body {
     color: #BEBEBE;
 }
 
+/* 关注方向（必填）：标签 (x: 19, y: 551, 60x12) */
+#page-register-form .form-label-focus,
+#page-register-form-2 .form-label-focus {
+    position: absolute;
+    top: 551px;
+    left: 19px;
+    width: 60px;
+    height: 12px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1em;
+    color: #5D6762;
+    text-align: left;
+}
+
+/* 关注方向：输入框 (x: 69, y: 538, 286x38) */
+#page-register-form .form-input-focus,
+#page-register-form-2 .form-input-focus {
+    position: absolute;
+    top: 538px;
+    left: 69px;
+    width: 286px;
+    height: 38px;
+    padding: 0 14px;
+    background: #EDEDED;
+    border: none;
+    border-radius: 6.976744174957275px;
+    font-family: 'HONOR Sans CN', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    box-sizing: border-box;
+}
+
+#page-register-form .form-input-focus::placeholder,
+#page-register-form-2 .form-input-focus::placeholder {
+    color: #BEBEBE;
+}
+
 /* 住宿选择标签 - 第一个 (x: 19, y: 538, 137x12) - 仅页面5 */
 #page-register-form .form-hotel-label-1 {
     position: absolute;
-    top: 538px;
+    top: 596px;
     left: 19px;
     width: 137px;
     height: 12px;
@@ -1144,7 +1184,7 @@ body {
 /* 住宿选择标签 - 第二个 (x: 19, y: 570, 137x12) - 仅页面5 */
 #page-register-form .form-hotel-label-2 {
     position: absolute;
-    top: 570px;
+    top: 628px;
     left: 19px;
     width: 137px;
     height: 12px;
@@ -1159,7 +1199,7 @@ body {
 /* 单选按钮选项 - 第一个"是" (x: 243, y: 538, 按钮12x12, 文字在 x: 262) - 仅页面5 */
 #page-register-form .radio-option-yes-1 {
     position: absolute;
-    top: 538px;
+    top: 596px;
     left: 243px;
     display: flex;
     align-items: center;
@@ -1175,7 +1215,7 @@ body {
 /* 单选按钮选项 - 第一个"否" (x: 309, y: 538, 按钮12x12, 文字在 x: 328) - 仅页面5 */
 #page-register-form .radio-option-no-1 {
     position: absolute;
-    top: 538px;
+    top: 596px;
     left: 309px;
     display: flex;
     align-items: center;
@@ -1191,7 +1231,7 @@ body {
 /* 单选按钮选项 - 第二个"是" (x: 243, y: 570, 按钮12x12, 文字在 x: 262) - 仅页面5 */
 #page-register-form .radio-option-yes-2 {
     position: absolute;
-    top: 570px;
+    top: 628px;
     left: 243px;
     display: flex;
     align-items: center;
@@ -1207,7 +1247,7 @@ body {
 /* 单选按钮选项 - 第二个"否" (x: 309, y: 570, 按钮12x12, 文字在 x: 328) - 仅页面5 */
 #page-register-form .radio-option-no-2 {
     position: absolute;
-    top: 570px;
+    top: 628px;
     left: 309px;
     display: flex;
     align-items: center;
@@ -1275,7 +1315,7 @@ body {
 /* 住宿选择标签 - 仅12月30日 (x: 19, y: 551, 137x12) - 仅页面8 */
 #page-register-form-2 .form-hotel-label-2-only {
     position: absolute;
-    top: 551px;
+    top: 599px;
     left: 19px;
     width: 137px;
     height: 12px;
@@ -1290,7 +1330,7 @@ body {
 /* 单选按钮选项 - 仅12月30日"是" (x: 243, y: 551, 按钮12x12, 文字在 x: 262) - 仅页面8 */
 #page-register-form-2 .radio-option-yes-2-only {
     position: absolute;
-    top: 551px;
+    top: 599px;
     left: 243px;
     display: flex;
     align-items: center;
@@ -1306,7 +1346,7 @@ body {
 /* 单选按钮选项 - 仅12月30日"否" (x: 309, y: 551, 按钮12x12, 文字在 x: 328) - 仅页面8 */
 #page-register-form-2 .radio-option-no-2-only {
     position: absolute;
-    top: 551px;
+    top: 599px;
     left: 309px;
     display: flex;
     align-items: center;
@@ -1364,7 +1404,7 @@ body {
 /* 温馨提示 (x: 19, y: 585, 290x13) - 仅页面8 */
 #page-register-form-2 .form-tip-message {
     position: absolute;
-    top: 585px;
+    top: 633px;
     left: 19px;
     width: 290px;
     height: 13px;
@@ -1380,7 +1420,7 @@ body {
 #page-register-form .btn-submit-form,
 #page-register-form-2 .btn-submit-form {
     position: absolute;
-    top: 627px;
+    top: 685px;
     left: 20px;
     width: 335px;
     height: 38px;
@@ -1407,7 +1447,7 @@ body {
 #page-register-form .form-error-message,
 #page-register-form-2 .form-error-message {
     position: absolute;
-    top: 685px;
+    top: 743px;
     left: 68px;
     width: 240px;
     height: 24px;

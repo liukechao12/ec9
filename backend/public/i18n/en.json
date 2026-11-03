@@ -1348,6 +1348,7 @@
     },
     "pages": {
       "inviter": "Invited by: ",
+      "focus": "Focus Area: ",
       "hotel1229": "Need hotel on Dec 29: ",
       "hotel1230": "Need hotel on Dec 30: ",
       "pending": "Under review",

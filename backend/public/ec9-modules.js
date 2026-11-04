@@ -632,9 +632,55 @@ function ec9RenderOrders(list) {
                 <button class="btn btn-sm btn-outline" onclick="openOrderModal(${o.id})">详情</button>
                 ${o.status === 'pending_payment'
                     ? `<button class="btn btn-sm btn-outline" onclick="closeOrder(${o.id})">关闭</button>` : ''}
+                ${ec9IsAdmin() ? `<button class="btn btn-sm btn-outline" style="color:#E34D59;border-color:#F0B4B8;" onclick="ec9DeleteOrder(${o.id})">删除</button>` : ''}
             </td>
         </tr>`;
     }).join('');
+}
+
+/**
+ * 后台删除权限：仅 admin。currentUser 定义在 app.js 顶层（本文件在其后加载）。
+ * 后端同样有 authorize('admin') 兜底，这里只是不把按钮露给 BD。
+ */
+function ec9IsAdmin() {
+    try {
+        return typeof currentUser !== 'undefined' && !!currentUser && currentUser.role === 'admin';
+    } catch (e) { return false; }
+}
+
+/** 订单管理：物理删除订单 + 该订单支付流水（删前后端自动备份） */
+async function ec9DeleteOrder(id) {
+    if (!ec9IsAdmin()) { alert('仅管理员可删除'); return; }
+    const msg = `确认删除订单 #${id}？\n\n`
+        + '将同时删除：该订单的支付流水。\n'
+        + '保留：报名记录、嘉宾档案、邀约、日志。\n\n'
+        + '⚠️ 物理删除不可撤销（系统会在删除前自动备份完整数据，可找运维恢复）。';
+    if (!confirm(msg)) return;
+    try {
+        const res = await apiRequest('/orders/' + id, { method: 'DELETE' });
+        if (res.code !== 0) throw new Error(res.message || '删除失败');
+        alert(res.message || '删除成功');
+        loadOrders(ec9OrderPage, ec9OrderPageSize);
+    } catch (e) {
+        alert('删除失败：' + e.message);
+    }
+}
+
+/** 支付流水：物理删除单条流水 */
+async function ec9DeletePayment(id) {
+    if (!ec9IsAdmin()) { alert('仅管理员可删除'); return; }
+    const msg = `确认删除支付流水 #${id}？\n\n`
+        + '只删这一条流水，订单与报名记录保留。\n\n'
+        + '⚠️ 物理删除不可撤销（系统会在删除前自动备份完整数据，可找运维恢复）。';
+    if (!confirm(msg)) return;
+    try {
+        const res = await apiRequest('/payments/' + id, { method: 'DELETE' });
+        if (res.code !== 0) throw new Error(res.message || '删除失败');
+        alert(res.message || '删除成功');
+        loadPayments(ec9PayPage, ec9PayPageSize);
+    } catch (e) {
+        alert('删除失败：' + e.message);
+    }
 }
 
 function resetOrderFilter() {
@@ -842,7 +888,10 @@ function ec9RenderPayments(list) {
             <td style="font-family:monospace;font-size:12px;">${ec9Esc(p.transaction_id || '-')}</td>
             <td style="font-size:12px;color:#6B7280;">${ec9Esc(formatDateTime(p.paid_at || p.created_at))}</td>
             <td>${recHtml}</td>
-            <td><button class="btn btn-sm btn-outline" onclick="openPaymentModal(${p.id})">详情</button></td>
+            <td>
+                <button class="btn btn-sm btn-outline" onclick="openPaymentModal(${p.id})">详情</button>
+                ${ec9IsAdmin() ? `<button class="btn btn-sm btn-outline" style="color:#E34D59;border-color:#F0B4B8;" onclick="ec9DeletePayment(${p.id})">删除</button>` : ''}
+            </td>
         </tr>`;
     }).join('');
 }

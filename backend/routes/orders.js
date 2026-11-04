@@ -9,6 +9,7 @@
  *   POST   /api/orders/:id/close      手动关单（释放锁定库存）
  *   POST   /api/orders/:id/refresh    向微信查单并同步状态
  *   POST   /api/orders/batch-close    批量关单
+ *   DELETE /api/orders/:id            管理员删除订单（级联该订单支付流水，删前自动备份）
  *
  * 退款不在这里：走 POST /api/payment/refund（要与微信退款 API 强绑定）。
  *
@@ -24,6 +25,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
 const orderService = require('../services/orderService');
 const wechat = require('../services/wechatPayService');
+const adminDelete = require('../services/adminDeleteService');
 const { decryptPhone, maskPhone } = require('../utils/phoneCrypto');
 
 function toNum(v, def) {
@@ -437,6 +439,26 @@ router.post('/:id/refresh', authenticate, async (req, res) => {
       data: { trade_state: result.tradeState, status: order.status }
     });
   } catch (e) {
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+/**
+ * DELETE /api/orders/:id —— 管理员删除订单
+ * 级联删除该订单的支付流水；报名记录、嘉宾、邀约、日志均不动。
+ * 删前整行备份到 /opt/ec9/_bak/deletes/，操作日志留痕。
+ */
+router.delete('/:id(\\d+)', authenticate, authorize('admin'), operationLog('orders', '删除订单'), async (req, res) => {
+  try {
+    const r = await adminDelete.deleteOrderCascade(req.params.id, req.user && req.user.username);
+    if (r.notFound) return res.status(404).json({ code: 404, message: '订单不存在' });
+    res.json({
+      code: 0,
+      message: `订单已删除（含 ${r.deleted.ec9_payments || 0} 条支付流水），删除前已备份`,
+      data: r
+    });
+  } catch (e) {
+    console.error('[orders] 删除订单失败:', e.message);
     res.status(500).json({ code: 500, message: e.message });
   }
 });

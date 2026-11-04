@@ -4,7 +4,8 @@ const { Registration, Invitation, Guest, Event, Ticket, TicketType } = require('
 const { SmsService, MESSAGE_TYPES } = require('../services/SmsService');
 const crypto = require('crypto');
 const { generateTicketQRCode } = require('../utils/qrcode');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+const adminDelete = require('../services/adminDeleteService');
 const { requireVerifiedReusable } = require('../middleware/requireVerified');
 const operationLog = require('../middleware/operationLog');
 const { hashPhone, encryptPhone } = require('../utils/phoneCrypto');
@@ -1563,6 +1564,31 @@ router.post('/check-invited', requireVerifiedReusable, async (req, res) => {
       data: { invited, need_pay: needPay, ticket_type: ticketType, ticket_name: ticketName, standard_ticket_id: stdId || 0 }
     });
   } catch (e) {
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+/**
+ * DELETE /api/registrations/group/:groupNo —— 管理员删除整单报名
+ *
+ * 级联删除（单事务）：该 group_no 下全部成员报名、订单、支付流水、签到码、
+ * 签到记录、论坛场次关联、学籍报告记录及其私有文件。
+ * 嘉宾档案 / 邀约 / 短信日志 / 验证码 / 操作日志一律不动。
+ * 删前整行备份到 /opt/ec9/_bak/deletes/，操作日志留痕。
+ * 仅 admin（BD 后端 403）。
+ */
+router.delete('/group/:groupNo', authenticate, authorize('admin'), operationLog('registrations', '删除整单报名'), async (req, res) => {
+  try {
+    const r = await adminDelete.deleteGroupCascade(req.params.groupNo, req.user && req.user.username);
+    if (r.notFound) return res.status(404).json({ code: 404, message: '该报名单不存在或已被删除' });
+    const n = Object.values(r.deleted).reduce((a, b) => a + (Number(b) || 0), 0);
+    res.json({
+      code: 0,
+      message: `报名单 ${r.group_no} 已删除（${r.member_count} 人，共 ${n} 行关联数据），删除前已备份`,
+      data: r
+    });
+  } catch (e) {
+    console.error('[registrations] 删除整单报名失败:', e.message);
     res.status(500).json({ code: 500, message: e.message });
   }
 });

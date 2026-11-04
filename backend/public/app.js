@@ -6409,7 +6409,8 @@ async function loadRegAudit() {
                 <td>${reportCell}</td>
                 <td style="font-size:12px">${g.submitted_at ? new Date(g.submitted_at).toLocaleString() : '-'}</td>
                 <td>${canAudit ? `<button class="btn btn-primary btn-sm" onclick="regAuditOne('${g.group_no}','approve')">通过</button>
-                    <button class="btn btn-outline btn-sm" onclick="regAuditOne('${g.group_no}','reject')">驳回</button>` : '-'}</td>
+                    <button class="btn btn-outline btn-sm" onclick="regAuditOne('${g.group_no}','reject')">驳回</button>` : '<span style="color:#9CA3AF">-</span>'}
+                    ${(currentUser && currentUser.role === 'admin') ? `<br><button class="btn btn-outline btn-sm" style="color:#E34D59;border-color:#F0B4B8;margin-top:4px;" onclick="deleteRegGroup('${g.group_no}', ${g.members.length})">删除整单</button>` : ''}</td>
             </tr>`;
         }).join('');
         const ckAll = document.getElementById('regAuditCkAll');
@@ -6419,6 +6420,27 @@ async function loadRegAudit() {
         };
     } catch (e) {
         body.innerHTML = `<tr><td colspan="11" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
+    }
+}
+
+/**
+ * 报名审核：管理员物理删除整单（按 group_no 级联全链路）
+ * 后端 DELETE /api/registrations/group/:groupNo 会先备份整行数据再单事务删除。
+ */
+async function deleteRegGroup(groupNo, memberCount) {
+    if (!currentUser || currentUser.role !== 'admin') { alert('仅管理员可删除'); return; }
+    const msg = `确认删除报名单 ${groupNo}（${memberCount} 人）？\n\n`
+        + '将同时删除：全部成员报名、订单、支付流水、签到码、签到记录、论坛场次关联、学籍报告及文件。\n'
+        + '保留：嘉宾档案、邀约、短信日志、验证码、操作日志。\n\n'
+        + '⚠️ 物理删除不可撤销（系统会在删除前自动备份完整数据，可找运维恢复）。';
+    if (!confirm(msg)) return;
+    try {
+        const res = await apiRequest(`/registrations/group/${encodeURIComponent(groupNo)}`, { method: 'DELETE' });
+        if (res.code !== 0) throw new Error(res.message || '删除失败');
+        alert(res.message || '删除成功');
+        loadRegAudit();
+    } catch (e) {
+        alert('删除失败：' + e.message);
     }
 }
 
@@ -6500,18 +6522,32 @@ async function openStudentReports(groupNo) {
     try {
         const res = await apiRequest(`/student-reports?group_no=${encodeURIComponent(groupNo)}`);
         const list = (res.data && res.data.list) || [];
-        if (!list.length) {
-            box.innerHTML = '<div style="padding:20px;color:#999">该单暂无学籍报告（可能学生还没上传）</div>';
+        const byReg = new Map(list.map(r => [Number(r.registration_id), r]));
+        // 本单学生票成员：即使从没上传过报告，也要能定位到人来代传
+        const students = (g.members || []).filter(m => m.is_student);
+        // 兜底：报告里出现、但不在 members 里的老数据也列出来
+        const extra = list.filter(r => !students.some(m => Number(m.registration_id) === Number(r.registration_id)));
+        const cards = [];
+        students.forEach(m => cards.push(renderSrCard(m, byReg.get(Number(m.registration_id)), groupNo)));
+        extra.forEach(r => cards.push(renderSrCard(
+            { registration_id: r.registration_id, name: r.name, phone_masked: r.phone_masked }, r, groupNo)));
+        if (!cards.length) {
+            box.innerHTML = '<div style="padding:20px;color:#999">该单没有学生票成员，无需学籍报告</div>';
             return;
         }
-        box.innerHTML = list.map(r => {
-            srFileNames[r.id] = r.file_name || 'report';
-            return `<div style="border:1px solid #E5E6EB;border-radius:8px;padding:14px;margin-bottom:14px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                    <div style="font-weight:600;">${srEsc(r.name || '—')}
-                        <span style="font-weight:400;color:#6B7280;font-size:12px">${srEsc(r.phone_masked || '')}</span></div>
-                    <div>${srStatusTag(r.status)}</div>
-                </div>
+        box.innerHTML = cards.join('');
+        list.forEach(loadSrPreview);
+    } catch (e) {
+        box.innerHTML = `<div style="color:#E34D59">加载失败：${srEsc(e.message)}</div>`;
+    }
+}
+
+function renderSrCard(m, r, groupNo) {
+    const regId = Number(m.registration_id);
+    if (r) srFileNames[r.id] = r.file_name || 'report';
+    const statusTag = r ? srStatusTag(r.status)
+        : '<span style="color:#E34D59;font-size:12px;font-weight:600">缺报告（可代传）</span>';
+    const detail = r ? `
                 <div style="font-size:12px;color:#6B7280;margin:6px 0 10px;">
                     文件：${srEsc(r.file_name || '—')} · ${Math.round((r.file_size || 0) / 1024)}KB
                     ${r.reviewed_at ? ` · 复核人 ${srEsc(r.reviewed_by || '')} ${new Date(r.reviewed_at).toLocaleString()}` : ''}
@@ -6531,12 +6567,53 @@ async function openStudentReports(groupNo) {
                     <button class="btn btn-primary btn-sm" onclick="reviewStudentReport(${r.id},'approve','${groupNo}')">✓ 符合</button>
                     <button class="btn btn-outline btn-sm" onclick="reviewStudentReport(${r.id},'reject','${groupNo}')">✗ 不符合</button>
                     <button class="btn btn-outline btn-sm" onclick="downloadStudentReport(${r.id})">下载原文件</button>
+                </div>`
+        : '<div style="font-size:12px;color:#6B7280;margin:6px 0 10px;">尚未上传《教育部学籍在线验证报告》，可在下方代传。</div>';
+    return `<div style="border:1px solid #E5E6EB;border-radius:8px;padding:14px;margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div style="font-weight:600;">${srEsc(m.name || '—')}
+                        <span style="font-weight:400;color:#6B7280;font-size:12px">${srEsc(m.phone_masked || (r && r.phone_masked) || '')}</span></div>
+                    <div>${statusTag}</div>
+                </div>
+                ${detail}
+                <div style="margin-top:12px;padding-top:12px;border-top:1px dashed #E5E6EB;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <span style="font-size:12px;color:#6B7280;">${r ? '替换报告' : '代传报告'}（PDF/JPG/PNG ≤10MB）：</span>
+                    <input type="file" id="srFile_${regId}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" style="font-size:12px;max-width:280px;">
+                    <button class="btn btn-outline btn-sm" id="srUploadBtn_${regId}" onclick="uploadStudentReport(${regId},'${groupNo}')">${r ? '替换' : '上传'}报告</button>
                 </div>
             </div>`;
-        }).join('');
-        list.forEach(loadSrPreview);
+}
+
+async function uploadStudentReport(registrationId, groupNo) {
+    const input = document.getElementById('srFile_' + registrationId);
+    if (!input || !input.files || !input.files.length) { alert('请先选择报告文件'); return; }
+    const f = input.files[0];
+    if (f.size > 10 * 1024 * 1024) { alert('文件不能超过 10MB'); return; }
+    const fd = new FormData();
+    fd.append('registration_id', String(registrationId));
+    fd.append('file', f);
+    const btn = document.getElementById('srUploadBtn_' + registrationId);
+    const oldText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '上传中…'; }
+    try {
+        // 不走 apiRequest：FormData 不能设 Content-Type，让浏览器自动带 boundary
+        const resp = await fetch(`${API_BASE}/student-reports/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${currentToken}` },
+            body: fd
+        });
+        let res = {};
+        try { res = await resp.json(); } catch (e) { throw new Error('HTTP ' + resp.status); }
+        if (!resp.ok || (res.code !== 0 && res.code !== 200)) {
+            throw new Error(res.message || ('HTTP ' + resp.status));
+        }
+        alert(res.message || '上传成功');
+        await openStudentReports(groupNo);
+        loadRegAudit();
     } catch (e) {
-        box.innerHTML = `<div style="color:#E34D59">加载失败：${srEsc(e.message)}</div>`;
+        alert('上传失败：' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = oldText || '上传 / 替换报告'; }
     }
 }
 

@@ -5,6 +5,7 @@
  *   GET  /api/payments/summary    对账汇总（收款/退款笔数与金额）
  *   GET  /api/payments/reconcile  逐笔对账：微信侧应有 vs 本地实收，标出差异
  *   GET  /api/payments/:id        单笔详情（含微信原始回调报文）
+ *   DELETE /api/payments/:id      管理员删除单条流水（删前自动备份）
  *
  * 与 /api/payment 的分工：
  *   /api/payment  = H5 侧下单 + 微信回调（交易链路）
@@ -13,7 +14,9 @@
 const express = require('express');
 const router = express.Router();
 const { Op, fn, col, Payment, Order, Guest, Event } = require('../models');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+const operationLog = require('../middleware/operationLog');
+const adminDelete = require('../services/adminDeleteService');
 const { decryptPhone, maskPhone } = require('../utils/phoneCrypto');
 
 function toNum(v, def) {
@@ -261,6 +264,21 @@ router.get('/:id(\\d+)', authenticate, async (req, res) => {
       }
     });
   } catch (e) {
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+/**
+ * DELETE /api/payments/:id —— 管理员删除单条支付流水
+ * 只删本条，订单与报名不动；删前整行备份到 /opt/ec9/_bak/deletes/。
+ */
+router.delete('/:id(\\d+)', authenticate, authorize('admin'), operationLog('payments', '删除支付流水'), async (req, res) => {
+  try {
+    const r = await adminDelete.deletePayment(req.params.id, req.user && req.user.username);
+    if (r.notFound) return res.status(404).json({ code: 404, message: '支付流水不存在' });
+    res.json({ code: 0, message: '支付流水已删除，删除前已备份', data: r });
+  } catch (e) {
+    console.error('[payments] 删除支付流水失败:', e.message);
     res.status(500).json({ code: 500, message: e.message });
   }
 });

@@ -27,6 +27,27 @@ const upload = multer({
   }
 });
 
+/**
+ * 嘉宾导入 BD 工号校验（2026-11-05）
+ * bd_id 存的是 ec9_admins.username（工号），不是姓名。
+ * 导入时必须命中「已启用的 BD 账号」，否则该行拒绝，避免把姓名/旧 bd001 之类脏值写进去。
+ */
+async function loadActiveBdUsernames() {
+  const rows = await Admin.findAll({
+    where: { role: 'bd', status: 1 },
+    attributes: ['username'],
+    raw: true
+  });
+  return new Set(rows.map(r => String(r.username || '').trim()).filter(Boolean));
+}
+
+// 工号形如 EC00001，允许小写录入，统一转大写后再比对
+function normalizeBdId(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  return /^ec\d{5}$/i.test(s) ? s.toUpperCase() : s;
+}
+
 // 获取所有嘉宾（需要认证）
 router.get('/', authenticate, operationLog('guests', '获取嘉宾列表'), async (req, res) => {
   try {
@@ -333,6 +354,12 @@ router.get('/export', authenticate, operationLog('guests', '导出嘉宾Excel'),
     const data = guests.map(g => {
       let phone = '';
       try { phone = g.phone ? (decryptPhone(g.phone) || '') : ''; } catch (e) { phone = ''; }
+      // 与列表口径一致：工号 + 姓名；匹配不到 BD 账号时只留原值
+      const bdCode = String(g.bd_id || '').trim();
+      const bdName = adminMap[bdCode] || '';
+      const bdLabel = bdCode
+        ? (bdName && bdName !== bdCode ? `${bdCode} ${bdName}` : bdCode)
+        : '';
       return {
         嘉宾ID: g.id,
         姓名: g.name || '',
@@ -340,7 +367,7 @@ router.get('/export', authenticate, operationLog('guests', '导出嘉宾Excel'),
         公司: g.company || '',
         职位: g.position || '',
         来源: g.source || '',
-        负责人: adminMap[g.bd_id] || g.bd_id || '',
+        负责人: bdLabel,
         状态: Number(g.status) === 1 ? '正常' : '已删除',
         创建时间: g.created_at ? new Date(g.created_at).toISOString().slice(0, 19).replace('T', ' ') : ''
       };
@@ -358,6 +385,46 @@ router.get('/export', authenticate, operationLog('guests', '导出嘉宾Excel'),
   } catch (error) {
     console.error('导出嘉宾失败:', error);
     res.status(500).json({ code: 500, message: '导出失败', error: error.message });
+  }
+});
+
+/**
+ * GET /api/guests/import-template —— 下载嘉宾导入 Excel 模板
+ * 表头与 utils/excel.js 的 parseExcel 列名一致；BD工号示例取库里真实存在的 BD 账号。
+ * ⚠️ 必须放在 /:id(\d+) 之前注册（虽然 :id 有数字约束，仍按显式路由优先）。
+ */
+router.get('/import-template', authenticate, async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const sample = await Admin.findOne({
+      where: { role: 'bd', status: 1 },
+      attributes: ['username', 'name'],
+      order: [['username', 'ASC']],
+      raw: true
+    });
+    const headers = ['姓名', '公司', '手机号', '职位', 'BD工号', '备注'];
+    const example = {
+      '姓名': '张三',
+      '公司': '示例科技有限公司',
+      '手机号': '13800138000',
+      '职位': '总经理',
+      'BD工号': sample ? sample.username : '',
+      '备注': ''
+    };
+    const ws = XLSX.utils.json_to_sheet([example], { header: headers });
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 24 }, { wch: 16 },
+      { wch: 14 }, { wch: 14 }, { wch: 20 }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '嘉宾导入模板');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="guests_import_template.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return res.send(buffer);
+  } catch (error) {
+    console.error('下载嘉宾导入模板失败:', error);
+    res.status(500).json({ code: 500, message: '模板下载失败', error: error.message });
   }
 });
 
@@ -816,11 +883,23 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
     }
     
     const results = [];
-    
+
+    // 一次性取有效 BD 工号集合，避免逐行查库；读不到就中止，不写入任何数据
+    let activeBdSet;
+    try {
+      activeBdSet = await loadActiveBdUsernames();
+    } catch (e) {
+      return res.status(500).json({
+        code: 500,
+        message: '读取BD账号失败，导入已中止',
+        error: e.message
+      });
+    }
+
     for (const row of excelData) {
       const { name, phone, company, bd_id, remark, row: rowNum } = row;
-      const inviterBdId = bd_id && String(bd_id).trim() ? String(bd_id).trim() : null;
-      
+      const inviterBdId = normalizeBdId(bd_id) || null;
+
       // 验证手机号格式
       if (!validatePhone(phone)) {
         results.push({
@@ -833,7 +912,20 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
         });
         continue;
       }
-      
+
+      // BD 工号必须是系统里已启用的 BD 账号：这一列填工号（如 EC00001），不填姓名
+      if (inviterBdId && !activeBdSet.has(inviterBdId)) {
+        results.push({
+          row: rowNum,
+          name,
+          phone,
+          company,
+          success: false,
+          message: `BD工号「${inviterBdId}」不存在或已停用，请填 BD 账号工号（如 EC00001）`
+        });
+        continue;
+      }
+
       // 检查手机号是否已存在（包括已删除状态的记录）
       const phoneHash = hashPhone(phone);
       const existingAny = await Guest.findOne({ where: { phone_hash: phoneHash } });

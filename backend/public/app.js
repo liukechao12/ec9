@@ -929,7 +929,19 @@ async function loadGuests(page = currentGuestPage, pageSize = currentGuestPageSi
                         </div>
                     </td>
                     <td>
-                        <span style="color: #6B7280; font-size: 14px;">${guest.bd ? (guest.bd.name || guest.bd.username) : (guest.bd_id || '-')}</span>
+                        ${(() => {
+                            // BD 同时显示工号与姓名：姓名为主、工号为辅（灰色小字第二行）
+                            const bd = guest.bd || null;
+                            const code = (bd && bd.username) || guest.bd_id || '';
+                            const nm = (bd && bd.name) || '';
+                            if (!code && !nm) return '<span style="color:#9CA3AF;font-size:14px;">-</span>';
+                            if (!nm) {
+                                return `<div style="font-size:14px;color:#364153;white-space:nowrap;">${srEsc(code)}</div>` +
+                                       `<div style="font-size:12px;color:#E34D59;white-space:nowrap;">未匹配BD账号</div>`;
+                            }
+                            return `<div style="font-size:14px;color:#364153;white-space:nowrap;">${srEsc(nm)}</div>` +
+                                   `<div style="font-size:12px;color:#9CA3AF;white-space:nowrap;">${srEsc(code)}</div>`;
+                        })()}
                     </td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -3458,6 +3470,27 @@ function removeGuestExtraField(fieldId) {
 
 // ==================== 其他模态框（占位） ====================
 
+// 下载嘉宾导入 Excel 模板（表头含「BD工号」列，示例工号取库里真实 BD 账号）
+async function downloadGuestTemplate() {
+    try {
+        const res = await fetch(`${API_BASE}/guests/import-template`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '嘉宾导入模板.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+        alert('模板下载失败：' + e.message);
+    }
+}
+
 // 显示导入模态框
 function showImportModal() {
     // 创建导入模态框HTML
@@ -3473,10 +3506,11 @@ function showImportModal() {
                         <div class="import-tips">
                             <h3>📋 导入说明</h3>
                             <ul>
-                                <li>支持 .xlsx 和 .xls 格式的Excel文件</li>
-                                <li>文件大小不超过 5MB</li>
-                                <li>Excel表格应包含以下列：姓名、公司、手机号、职位（可选）、备注（可选）</li>
-                                <li>手机号必须是11位数字</li>
+                                <li>支持 .xlsx 和 .xls 格式的Excel文件，大小不超过 5MB</li>
+                                <li>列：姓名、公司、手机号、职位、<b>BD工号</b>、备注（姓名和手机号必填，其余可选）</li>
+                                <li><b>BD工号</b>填 BD 账号的工号（如 EC00001），不要填姓名；留空表示不归属 BD</li>
+                                <li>BD工号必须是系统里已启用的 BD 账号，填错该行不会导入并在结果里说明</li>
+                                <li>手机号必须是11位数字；已存在的手机号不会被覆盖</li>
                             </ul>
                         </div>
                         <div class="file-upload-area">
@@ -3484,7 +3518,11 @@ function showImportModal() {
                             <button class="btn btn-primary" onclick="document.getElementById('excelFileInput').click()">
                                 选择Excel文件
                             </button>
+                            <button class="btn btn-outline" onclick="downloadGuestTemplate()" style="margin-left:8px;">
+                                下载Excel模板
+                            </button>
                             <p id="selectedFileName" class="selected-file"></p>
+                            <p style="font-size:12px;color:#6B7280;margin-top:6px;">模板第一行是示例数据，正式导入前请删除该行。</p>
                         </div>
                         <div id="uploadProgress" class="upload-progress" style="display: none;">
                             <div class="progress-bar">

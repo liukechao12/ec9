@@ -1,7 +1,8 @@
 const XLSX = require('xlsx');
 
 /**
- * 解析通用嘉宾导入 Excel（姓名 / 手机 / 公司 / 备注）
+ * 解析通用嘉宾导入 Excel（姓名 / 手机 / 公司 / BD工号 / 备注）
+ * BD 列填的是 BD 账号工号（admins.username，如 EC00001），不是姓名。
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @returns {Array} 解析后的数据数组
  */
@@ -27,9 +28,12 @@ function parseExcel(fileBuffer) {
       const company = row['公司'] || row['company'] || row['Company'] || row['公司名称'] || row['单位'] || '';
       const position =
         row['职位'] || row['职务'] || row['position'] || row['Position'] || row['岗位'] || '';
+      // BD 工号列优先；「邀请人」只作历史兼容兜底（旧表里它可能是姓名，
+      // 不能抢在 BD 列前面，否则同时有两列时会把姓名写进 bd_id）。
       const bdId =
-        row['邀请人'] || row['BDID'] || row['bd_id'] || row['bdId'] ||
-        row['BD账号'] || row['BD'] || row['来源BD'] || row['source_bd'] || '';
+        row['BD工号'] || row['BD'] || row['bd_id'] || row['bdId'] ||
+        row['BD账号'] || row['BDID'] || row['工号'] ||
+        row['来源BD'] || row['source_bd'] || row['邀请人'] || '';
       const remark = row['备注'] || row['remark'] || row['Remark'] || row['说明'] || '';
       
       return {

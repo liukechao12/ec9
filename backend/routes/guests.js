@@ -866,7 +866,8 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
     // 解析Excel
     let excelData;
     try {
-      excelData = parseExcel(uploadedFile.buffer);
+      // 保留缺姓名/手机号的行，避免静默丢弃；它们会在下面被记为失败并出现在失败清单里
+      excelData = parseExcel(uploadedFile.buffer, { keepInvalidRows: true });
     } catch (error) {
       return res.status(400).json({
         code: 400,
@@ -900,6 +901,20 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
       const { name, phone, company, bd_id, remark, row: rowNum } = row;
       const inviterBdId = normalizeBdId(bd_id) || null;
 
+      // 缺姓名/手机号：以前被 parseExcel 静默过滤，现在明确回报行号
+      if (!String(name || '').trim() || !String(phone || '').trim()) {
+        results.push({
+          row: rowNum,
+          name,
+          phone,
+          company,
+          bd_id: inviterBdId || '',
+          success: false,
+          message: !String(name || '').trim() ? '姓名为空' : '手机号为空'
+        });
+        continue;
+      }
+
       // 验证手机号格式
       if (!validatePhone(phone)) {
         results.push({
@@ -907,8 +922,9 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
           name,
           phone,
           company,
+          bd_id: inviterBdId || '',
           success: false,
-          message: '手机号格式不正确'
+          message: `手机号「${phone}」格式不正确（应为 11 位数字、1 开头）`
         });
         continue;
       }
@@ -920,6 +936,7 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
           name,
           phone,
           company,
+          bd_id: inviterBdId || '',
           success: false,
           message: `BD工号「${inviterBdId}」不存在或已停用，请填 BD 账号工号（如 EC00001）`
         });
@@ -938,12 +955,12 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
             name,
             phone,
             company,
-            success: false,
-            message: '手机号已存在'
-          });
-          continue;
-        }
-        // 如果存在已删除状态的记录，恢复并更新它
+          success: false,
+          message: '手机号已存在（系统中已有该嘉宾，未重复导入）'
+        });
+        continue;
+      }
+      // 如果存在已删除状态的记录，恢复并更新它
         try {
           await existingAny.update({
             name,
@@ -1012,8 +1029,11 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
       }
     }
     
-    const report = generateImportReport(results);
-    
+    // 把每行原始 BD 工号补进结果，失败清单导出后可直接按行号改回 Excel 再导
+    const bdByRow = new Map(excelData.map(r => [r.row, r.bd_id || '']));
+    const detailed = results.map(r => ({ ...r, bd_id: r.bd_id || bdByRow.get(r.row) || '' }));
+    const report = generateImportReport(detailed);
+
     res.json({
       code: 200,
       message: '导入完成',

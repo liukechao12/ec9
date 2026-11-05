@@ -4,9 +4,11 @@ const XLSX = require('xlsx');
  * 解析通用嘉宾导入 Excel（姓名 / 手机 / 公司 / BD工号 / 备注）
  * BD 列填的是 BD 账号工号（admins.username，如 EC00001），不是姓名。
  * @param {Buffer} fileBuffer - 文件缓冲区
+ * @param {Object} [options] - { keepInvalidRows: true } 时保留缺姓名/手机号的行，
+ *   交由导入流程记为「失败」并回报行号，而不是静默丢弃（2026-11-05）。
  * @returns {Array} 解析后的数据数组
  */
-function parseExcel(fileBuffer) {
+function parseExcel(fileBuffer, options = {}) {
   try {
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames && workbook.SheetNames[0];
@@ -45,7 +47,9 @@ function parseExcel(fileBuffer) {
         bd_id: String(bdId || '').trim(),
         remark: String(remark || '').trim()
       };
-    }).filter(row => row.name && row.phone); // 过滤空行
+    })
+    // 默认过滤掉姓名/手机号为空的行；keepInvalidRows=true 时保留，让失败清单能报出具体行号
+    .filter(row => options.keepInvalidRows ? true : (row.name && row.phone));
   } catch (error) {
     throw new Error(`解析Excel失败: ${error.message}`);
   }
@@ -70,12 +74,23 @@ function generateImportReport(results) {
   const total = results.length;
   const success = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
-  
+
+  // 失败明细：前端 showImportResult 直接读 errors，字段固定，便于导出后按行号回改 Excel
+  const errors = results.filter(r => !r.success).map(r => ({
+    row: r.row,
+    name: r.name || '',
+    phone: r.phone || '',
+    company: r.company || '',
+    bd_id: r.bd_id || '',
+    error: r.message || r.error || '未知原因'
+  }));
+
   return {
     total,
     success,
     failed,
     successRate: total > 0 ? ((success / total) * 100).toFixed(2) + '%' : '0%',
+    errors,
     details: results
   };
 }

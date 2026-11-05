@@ -3511,6 +3511,7 @@ function showImportModal() {
                                 <li><b>BD工号</b>填 BD 账号的工号（如 EC00001），不要填姓名；留空表示不归属 BD</li>
                                 <li>BD工号必须是系统里已启用的 BD 账号，填错该行不会导入并在结果里说明</li>
                                 <li>手机号必须是11位数字；已存在的手机号不会被覆盖</li>
+                                <li>导入完成后会列出<b>失败行号和原因</b>，可下载失败清单按行号修正后重导</li>
                             </ul>
                         </div>
                         <div class="file-upload-area">
@@ -3656,20 +3657,36 @@ async function uploadExcelFile() {
     }
 }
 
-// 显示导入结果
+// 最近一次导入的失败明细，供「下载失败清单」使用
+let lastImportFailures = [];
+
+// 显示导入结果（2026-11-05：后端返回的是 data.errors / data.details，
+// 原来只读 data.errors 且字段名不匹配，导致失败行一直不显示）
 function showImportResult(data) {
     const importResult = document.getElementById('importResult');
     const resultTitle = document.getElementById('resultTitle');
     const resultContent = document.getElementById('resultContent');
-    
-    const { success, failed, errors } = data;
-    
+
+    const success = Number(data.success || 0);
+    const failed = Number(data.failed || 0);
+    const details = Array.isArray(data.details) ? data.details : [];
+    const rawErrors = Array.isArray(data.errors) && data.errors.length
+        ? data.errors
+        : details.filter(d => !d.success);
+    const failures = rawErrors.map(e => ({
+        row: e.row == null ? '' : e.row,
+        name: e.name || '',
+        phone: e.phone || '',
+        company: e.company || '',
+        bd_id: e.bd_id || '',
+        error: e.error || e.message || '未知原因'
+    }));
+    lastImportFailures = failures;
+
     resultTitle.innerHTML = `
-        <span style="color: ${failed === 0 ? '#10b981' : '#f59e0b'}">
-            导入完成
-        </span>
+        <span style="color: ${failed === 0 ? '#10b981' : '#f59e0b'}">导入完成</span>
     `;
-    
+
     let html = `
         <div class="result-summary">
             <div class="result-item success">
@@ -3682,20 +3699,77 @@ function showImportResult(data) {
             </div>
         </div>
     `;
-    
-    if (errors && errors.length > 0) {
+
+    if (failures.length > 0) {
+        const cell = 'padding:6px 8px;border:1px solid #FECACA;text-align:left;vertical-align:top;';
         html += `
             <div class="error-list">
-                <h4>失败详情:</h4>
-                <ul>
-                    ${errors.map(err => `<li>${window.t('admin.rowError', [err.row, err.error])}</li>`).join('')}
-                </ul>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                    <h4 style="margin:0;">失败详情（${failures.length} 条）</h4>
+                    <button type="button" class="btn btn-outline" onclick="downloadImportFailures()"
+                        style="padding:4px 10px;font-size:12px;background:#fff;color:#991B1B;border-color:#FCA5A5;">
+                        下载失败清单
+                    </button>
+                </div>
+                <div style="max-height:260px;overflow:auto;margin-top:10px;background:#fff;border-radius:4px;">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;color:#364153;">
+                        <thead>
+                            <tr style="background:#FEE2E2;">
+                                <th style="${cell}white-space:nowrap;">Excel行</th>
+                                <th style="${cell}white-space:nowrap;">姓名</th>
+                                <th style="${cell}white-space:nowrap;">手机号</th>
+                                <th style="${cell}">公司</th>
+                                <th style="${cell}white-space:nowrap;">BD工号</th>
+                                <th style="${cell}">失败原因</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${failures.map(e => `
+                                <tr>
+                                    <td style="${cell}">${srEsc(e.row)}</td>
+                                    <td style="${cell}">${srEsc(e.name) || '-'}</td>
+                                    <td style="${cell}white-space:nowrap;">${srEsc(e.phone) || '-'}</td>
+                                    <td style="${cell}">${srEsc(e.company) || '-'}</td>
+                                    <td style="${cell}white-space:nowrap;">${srEsc(e.bd_id) || '-'}</td>
+                                    <td style="${cell}color:#B91C1C;">${srEsc(e.error)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin:10px 0 0;font-size:12px;color:#7F1D1D;line-height:1.6;">
+                    按 Excel 行号修正后重新导入即可；已成功的行会因「手机号已存在」自动跳过，不会重复写入。
+                </p>
             </div>
         `;
+    } else {
+        html += `<div style="font-size:13px;color:#10B981;">全部导入成功，无失败记录。</div>`;
     }
-    
+
     resultContent.innerHTML = html;
     importResult.style.display = 'block';
+}
+
+// 导出失败清单 CSV（带 BOM，Excel 直接打开不乱码）
+function downloadImportFailures() {
+    if (!lastImportFailures.length) {
+        alert('没有失败记录');
+        return;
+    }
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [['Excel行号', '姓名', '手机号', '公司', 'BD工号', '失败原因'].map(q).join(',')];
+    lastImportFailures.forEach(e =>
+        lines.push([e.row, e.name, e.phone, e.company, e.bd_id, e.error].map(q).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    a.href = url;
+    a.download = `嘉宾导入失败清单_${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // ==================== 邀约管理模态框 ====================

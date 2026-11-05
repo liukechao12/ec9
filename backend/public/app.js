@@ -3787,7 +3787,28 @@ let currentInvitationId = null;
 let allEvents = [];
 let allGuests = [];
 let batchInvitationExistingGuestIds = new Set();
+let singleInvitationExistingGuestIds = new Set();
 let batchInvitationSelectedBd = '';
+let invitedIdsLoadFailed = false;
+
+/**
+ * 拉取某活动下「已有有效邀约」的嘉宾ID。
+ * 口径与后端 /invitations/batch 判重一致：is_valid=1 即视为已邀约，
+ * 作废（is_valid=0）的邀约不占用名单，可重新邀约。
+ */
+async function fetchExistingGuestIds(eventId) {
+    invitedIdsLoadFailed = false;
+    if (!eventId) return new Set();
+    try {
+        const resp = await apiRequest(`/invitations/existing-guest-ids?event_id=${eventId}`);
+        const ids = (resp && resp.data && resp.data.guest_ids) || [];
+        return new Set(ids.map(id => parseInt(id, 10)).filter(Number.isFinite));
+    } catch (error) {
+        invitedIdsLoadFailed = true;
+        console.error('获取已邀约嘉宾失败:', error);
+        return new Set();
+    }
+}
 
 function resetBatchInvitationSelection() {
     document.getElementById('selectedGuestCount').textContent = '0';
@@ -3806,19 +3827,45 @@ function getGuestBdDisplay(guest) {
 }
 
 function applyBatchGuestFilters() {
-    let guests = allGuests;
+    const container = document.getElementById('batchGuestList');
+    if (!container) return;
 
-    // 过滤已邀约嘉宾
-    if (batchInvitationExistingGuestIds && batchInvitationExistingGuestIds.size > 0) {
-        guests = guests.filter(g => !batchInvitationExistingGuestIds.has(parseInt(g.id)));
+    const eventId = parseInt(document.getElementById('batchInvitationEventId')?.value || '', 10);
+    const summary = document.getElementById('batchGuestFilterSummary');
+    const showInvited = !!document.getElementById('batchShowInvited')?.checked;
+
+    // 未选活动时不展示任何嘉宾，避免把「全部嘉宾」误当成「未邀约名单」
+    if (!eventId) {
+        container.innerHTML = '<div style="padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px;">请先选择活动，再挑选未邀约的嘉宾</div>';
+        if (summary) summary.textContent = '请先选择活动';
+        updateSelectedGuestCount();
+        return;
     }
 
-    // 按BD筛选
-    if (batchInvitationSelectedBd) {
-        guests = guests.filter(g => getGuestBdUsername(g) === batchInvitationSelectedBd);
+    const guests = allGuests.filter(g => g && g.id != null);
+    const invited = guests.filter(g => batchInvitationExistingGuestIds.has(parseInt(g.id)));
+    const available = guests.filter(g => !batchInvitationExistingGuestIds.has(parseInt(g.id)));
+
+    const byBd = list => batchInvitationSelectedBd
+        ? list.filter(g => getGuestBdUsername(g) === batchInvitationSelectedBd)
+        : list;
+
+    const shown = byBd(available);
+    // 勾选「显示已邀约」时，这些人也列出来（灰色标记、不可勾选），方便核对
+    const shownInvited = showInvited ? byBd(invited) : [];
+
+    if (summary) {
+        const bdTip = batchInvitationSelectedBd ? '（已按BD筛选）' : '';
+        if (invitedIdsLoadFailed) {
+            summary.textContent = '⚠ 已邀约名单加载失败，当前显示的是全部嘉宾，请关闭弹窗重试';
+        } else {
+            summary.textContent = showInvited
+                ? `可邀约 ${shown.length} 位${bdTip} · 另列 ${shownInvited.length} 位已邀约（不可选）`
+                : `可邀约 ${shown.length} 位${bdTip} · 已隐藏 ${invited.length} 位已邀约嘉宾`;
+        }
     }
 
-    renderBatchGuestList(guests);
+    renderBatchGuestList(shown, shownInvited);
 }
 
 function populateBatchBdFilterOptions() {
@@ -3848,17 +3895,37 @@ function populateBatchBdFilterOptions() {
 async function showInvitationModal() {
     const modal = document.getElementById('invitationModal');
     const form = document.getElementById('invitationForm');
-    
+
     // 重置表单
     form.reset();
     document.getElementById('invitationSourceBd').value = '';
-    
-    // 加载活动和嘉宾列表
+    singleInvitationExistingGuestIds = new Set();
+    const showInvitedEl = document.getElementById('singleShowInvited');
+    if (showInvitedEl) showInvitedEl.checked = false;
+
     await loadEventsForSelect();
+    const eventSelect = document.getElementById('invitationEventId');
+    // 打开即选中活动，嘉宾下拉默认只列未邀约的人
+    if (!eventSelect.value && eventSelect.options.length > 1) {
+        eventSelect.value = eventSelect.options[1].value;
+    }
+    eventSelect.onchange = onSingleEventChange;
+    singleInvitationExistingGuestIds = await fetchExistingGuestIds(parseInt(eventSelect.value, 10));
+
     await loadGuestsForSelect();
     await fillTicketTypeSelect('invitationTicketType');
-    
+
     modal.classList.remove('hidden');
+}
+
+async function onSingleEventChange() {
+    const eventId = parseInt(this.value, 10);
+    singleInvitationExistingGuestIds = new Set();
+    document.getElementById('invitationSourceBd').value = '';
+    if (eventId) {
+        singleInvitationExistingGuestIds = await fetchExistingGuestIds(eventId);
+    }
+    renderSingleGuestOptions();
 }
 
 /** 填充「赠票票种」下拉：票种字典优先用列表已拉到的，否则单独拉一次 */
@@ -3885,18 +3952,25 @@ function closeInvitationModal() {
 async function showBatchInvitationModal() {
     const modal = document.getElementById('batchInvitationModal');
     const form = document.getElementById('batchInvitationForm');
-    
+
     // 重置表单
     form.reset();
     document.getElementById('batchGuestList').innerHTML = '';
     resetBatchInvitationSelection();
     batchInvitationExistingGuestIds = new Set();
     batchInvitationSelectedBd = '';
-    
-    // 加载活动和嘉宾列表
+    const showInvitedEl = document.getElementById('batchShowInvited');
+    if (showInvitedEl) showInvitedEl.checked = false;
+
     await loadEventsForSelect('batchInvitationEventId');
-    await loadGuestsForBatchSelect();
     await fillTicketTypeSelect('batchInvitationTicketType');
+
+    const eventSelect = document.getElementById('batchInvitationEventId');
+    // 打开就选中活动并立即过滤，不用手动切一次活动才生效
+    if (!eventSelect.value && eventSelect.options.length > 1) {
+        eventSelect.value = eventSelect.options[1].value;
+    }
+    eventSelect.onchange = onBatchEventChange;
 
     // 初始化BD筛选下拉
     populateBatchBdFilterOptions();
@@ -3909,33 +3983,21 @@ async function showBatchInvitationModal() {
         };
     }
 
-    // 监听活动选择变化，过滤已邀约嘉宾
-    const eventSelect = document.getElementById('batchInvitationEventId');
-    eventSelect.onchange = async function () {
-        const eventId = parseInt(this.value);
+    // 先取「已邀约」名单，再渲染嘉宾列表（顺序不能反）
+    batchInvitationExistingGuestIds = await fetchExistingGuestIds(parseInt(eventSelect.value, 10));
+    await loadGuestsForBatchSelect();
 
-        // 清空选择
-        resetBatchInvitationSelection();
-        batchInvitationExistingGuestIds = new Set();
-
-        if (!eventId) {
-            applyBatchGuestFilters();
-            return;
-        }
-
-        try {
-            const resp = await apiRequest(`/invitations/existing-guest-ids?event_id=${eventId}`);
-            const ids = resp.data?.guest_ids || [];
-            batchInvitationExistingGuestIds = new Set(ids.map(id => parseInt(id)));
-        } catch (error) {
-            console.error('获取已邀约嘉宾失败:', error);
-            batchInvitationExistingGuestIds = new Set();
-        }
-
-        applyBatchGuestFilters();
-    };
-    
     modal.classList.remove('hidden');
+}
+
+async function onBatchEventChange() {
+    const eventId = parseInt(this.value, 10);
+    resetBatchInvitationSelection();
+    batchInvitationExistingGuestIds = new Set();
+    if (eventId) {
+        batchInvitationExistingGuestIds = await fetchExistingGuestIds(eventId);
+    }
+    applyBatchGuestFilters();
 }
 
 function closeBatchInvitationModal() {
@@ -3963,44 +4025,68 @@ async function loadEventsForSelect(selectId = 'invitationEventId') {
     }
 }
 
-// 加载嘉宾列表到下拉框
+// 加载嘉宾列表到下拉框（单个创建邀约）
 async function loadGuestsForSelect() {
     try {
         const data = await apiRequest('/guests?pageSize=1000');
-        const select = document.getElementById('invitationGuestId');
-        select.innerHTML = '<option value="">请选择嘉宾</option>';
-        
         if (data.data?.list) {
             allGuests = data.data.list;
-            data.data.list.forEach(guest => {
-                const option = document.createElement('option');
-                option.value = guest.id;
-                option.textContent = `${guest.name}${guest.company ? ' - ' + guest.company : ''}`;
-                // 存储BD信息到data属性
-                if (guest.bd) {
-                    option.dataset.bdUsername = guest.bd.username || '';
-                    option.dataset.bdName = guest.bd.name || '';
-                } else if (guest.bd_id) {
-                    option.dataset.bdUsername = guest.bd_id;
-                }
-                select.appendChild(option);
-            });
-            
-            // 添加选择变化监听，自动填充BD字段
-            select.addEventListener('change', function() {
-                const selectedOption = this.options[this.selectedIndex];
-                const bdInput = document.getElementById('invitationSourceBd');
-                if (selectedOption && selectedOption.dataset.bdUsername) {
-                    // 优先使用BD的username，如果没有则使用bd_id
-                    bdInput.value = selectedOption.dataset.bdUsername;
-                } else {
-                    bdInput.value = '';
-                }
-            });
+            renderSingleGuestOptions();
         }
     } catch (error) {
         console.error('加载嘉宾列表失败:', error);
     }
+}
+
+function addGuestOption(select, guest, isInvited) {
+    const option = document.createElement('option');
+    option.value = guest.id;
+    option.textContent = `${guest.name}${guest.company ? ' - ' + guest.company : ''}${isInvited ? '（已邀约）' : ''}`;
+    // 存储BD信息到data属性
+    if (guest.bd) {
+        option.dataset.bdUsername = guest.bd.username || '';
+        option.dataset.bdName = guest.bd.name || '';
+    } else if (guest.bd_id) {
+        option.dataset.bdUsername = guest.bd_id;
+    }
+    if (isInvited) option.disabled = true;
+    select.appendChild(option);
+}
+
+function renderSingleGuestOptions() {
+    const select = document.getElementById('invitationGuestId');
+    if (!select) return;
+    const showInvited = !!document.getElementById('singleShowInvited')?.checked;
+    const eventId = parseInt(document.getElementById('invitationEventId')?.value || '', 10);
+    const summary = document.getElementById('singleGuestFilterSummary');
+    select.innerHTML = '<option value="">请选择嘉宾</option>';
+
+    if (!eventId) {
+        if (summary) summary.textContent = '请先选择活动';
+        return;
+    }
+
+    const invited = allGuests.filter(g => singleInvitationExistingGuestIds.has(parseInt(g.id)));
+    const available = allGuests.filter(g => !singleInvitationExistingGuestIds.has(parseInt(g.id)));
+    available.forEach(g => addGuestOption(select, g, false));
+    if (showInvited) invited.forEach(g => addGuestOption(select, g, true));
+
+    if (summary) {
+        if (invitedIdsLoadFailed) {
+            summary.textContent = '⚠ 已邀约名单加载失败，当前显示全部嘉宾，请关闭弹窗重试';
+        } else {
+            summary.textContent = showInvited
+                ? `可邀约 ${available.length} 位 · 另列 ${invited.length} 位已邀约（不可选）`
+                : `可邀约 ${available.length} 位 · 已隐藏 ${invited.length} 位已邀约嘉宾`;
+        }
+    }
+
+    // 用 onchange 而非 addEventListener，避免每次打开弹窗重复叠加监听
+    select.onchange = function () {
+        const selectedOption = this.options[this.selectedIndex];
+        const bdInput = document.getElementById('invitationSourceBd');
+        if (bdInput) bdInput.value = selectedOption?.dataset?.bdUsername || '';
+    };
 }
 
 // 加载嘉宾列表到批量选择
@@ -4018,24 +4104,37 @@ async function loadGuestsForBatchSelect() {
     }
 }
 
-function renderBatchGuestList(guests) {
+function renderBatchGuestList(guests, invitedGuests = []) {
     const container = document.getElementById('batchGuestList');
     container.innerHTML = '';
 
-    guests.forEach(guest => {
+    if (!guests.length && !invitedGuests.length) {
+        container.innerHTML = '<div style="padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px;">该活动下已没有可邀约的嘉宾</div>';
+        updateSelectedGuestCount();
+        return;
+    }
+
+    const makeItem = (guest, isInvited) => {
         const item = document.createElement('div');
-        item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 8px; background: white; border-radius: 6px; border: 1px solid #E5E7EB;';
+        item.style.cssText = `display: flex; align-items: center; gap: 12px; padding: 8px; background: ${isInvited ? '#F3F4F6' : 'white'}; border-radius: 6px; border: 1px solid ${isInvited ? '#E5E7EB' : '#E5E7EB'}; opacity: ${isInvited ? '0.75' : '1'};`;
         const bdUsername = getGuestBdUsername(guest);
         const bdDisplay = getGuestBdDisplay(guest);
+        const checkbox = isInvited
+            ? `<input type="checkbox" disabled id="guest_${guest.id}" value="${guest.id}" style="width: 18px; height: 18px;">`
+            : `<input type="checkbox" id="guest_${guest.id}" value="${guest.id}" data-bd-username="${bdUsername}" onchange="updateSelectedGuestCount(); updateBatchBdField()" style="width: 18px; height: 18px; cursor: pointer;">`;
         item.innerHTML = `
-            <input type="checkbox" id="guest_${guest.id}" value="${guest.id}" data-bd-username="${bdUsername}" onchange="updateSelectedGuestCount(); updateBatchBdField()" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="guest_${guest.id}" style="flex: 1; cursor: pointer; margin: 0;">
-                <div style="font-weight: 500;">${guest.name}</div>
+            ${checkbox}
+            <label for="guest_${guest.id}" style="flex: 1; margin: 0; cursor: ${isInvited ? 'default' : 'pointer'};">
+                <div style="font-weight: 500; color: ${isInvited ? '#9CA3AF' : '#111827'};">${guest.name}${isInvited ? ' <span style="font-size: 11px; font-weight: 400; color: #9CA3AF; border: 1px solid #D1D5DB; border-radius: 4px; padding: 1px 4px;">已邀约</span>' : ''}</div>
                 <div style="font-size: 12px; color: #6B7280;">${guest.company || '未填写公司'}${bdDisplay ? ` · BD：${bdDisplay}` : ''}</div>
             </label>
         `;
         container.appendChild(item);
-    });
+    };
+
+    guests.forEach(g => makeItem(g, false));
+    invitedGuests.forEach(g => makeItem(g, true));
+    updateSelectedGuestCount();
 }
 
 // 更新已选择嘉宾数量

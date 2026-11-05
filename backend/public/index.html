@@ -1842,6 +1842,15 @@
                         <select id="invitationGuestId" name="guest_id" required>
                             <option value="">请选择嘉宾</option>
                         </select>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; color: #6B7280;">
+                            <span id="singleGuestFilterSummary">请先选择活动</span>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; color: #374151;">
+                                <input type="checkbox" id="singleShowInvited" onchange="renderSingleGuestOptions()"> 显示已邀约
+                            </label>
+                        </div>
+                        <div style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+                            默认只列出本活动下还没邀约过的嘉宾；作废原邀约后可重新邀约
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>来源BD</label>
@@ -2143,11 +2152,17 @@
                     </div>
                     <div class="form-group">
                         <label>选择嘉宾 <span class="required">*</span></label>
+                        <div id="batchGuestFilterBar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; color: #6B7280;">
+                            <span id="batchGuestFilterSummary">正在加载未邀约嘉宾…</span>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; color: #374151;">
+                                <input type="checkbox" id="batchShowInvited" onchange="applyBatchGuestFilters()"> 显示已邀约
+                            </label>
+                        </div>
                         <div style="border: 1px solid #D1D5DB; border-radius: 8px; padding: 12px; max-height: 300px; overflow-y: auto; background: #F9FAFB;">
                             <div id="batchGuestList" style="display: flex; flex-direction: column; gap: 8px;"></div>
                         </div>
                         <div style="margin-top: 8px; font-size: 12px; color: #6B7280;">
-                            已选择 <span id="selectedGuestCount">0</span> 位嘉宾
+                            已选择 <span id="selectedGuestCount">0</span> 位嘉宾 · 默认只列出本活动下还没邀约过的嘉宾
                         </div>
                     </div>
                     <div class="form-group">
@@ -2649,7 +2664,7 @@
         .i18n-lang-block textarea:focus { outline: none; border-color: #155DFC; }
     </style>
     <script src="/i18n.js?v=20261014.3"></script>
-    <script src="app.js?v=20261105phone"></script>
+    <script src="app.js?v=20261105inv"></script>
     <!-- EC9 新增模块（场次/票种/订单/支付流水）：必须排在 app.js 之后，依赖其 apiRequest/formatDateTime -->
     <script src="ec9-modules.js?v=20261104del"></script>
 </body>

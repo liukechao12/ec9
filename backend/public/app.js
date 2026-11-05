@@ -2522,8 +2522,17 @@ function formatDateTime(dateString) {
 }
 
 function maskPhone(phone) {
-    if (!phone || phone.length < 11) return phone;
-    return phone.substring(0, 3) + '****' + phone.substring(7);
+    // 2026-11-05：兼容国际号，短号也要掩码，不能明文整段返回
+    var v = String(phone == null ? '' : phone).trim();
+    if (!v) return '';
+    if (/^1[3-9]\d{9}$/.test(v)) return v.substring(0, 3) + '****' + v.substring(7);
+    var known = ['+852', '+853', '+886', '+65', '+81', '+82', '+44', '+86', '+1'];
+    for (var i = 0; i < known.length; i++) {
+        if (v.indexOf(known[i]) === 0) return known[i] + '****' + v.slice(-4);
+    }
+    var m = v.match(/^\+(\d{1,3})(\d+)$/);
+    if (m) return '+' + m[1] + '****' + m[2].slice(-4);
+    return v.slice(0, 2) + '****' + v.slice(-4);
 }
 
 function isThisWeek(dateString) {

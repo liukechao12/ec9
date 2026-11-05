@@ -348,7 +348,8 @@ class SmsService {
     // 尝试从加密字段中还原明文手机号
     try {
       const phone = decryptPhone(guest.phone);
-      if (phone && phone.length >= 11) {
+      // 2026-11-05：香港 8 位 / 国际 E.164 也算有效（decryptPhone 已放宽）
+      if (phone) {
         return phone;
       }
       console.warn('解密后的手机号格式不正确:', phone);

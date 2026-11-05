@@ -202,7 +202,7 @@ router.post('/by-phone', async (req, res) => {
     // ⚠️ EC9 的 phone_hmac 是 HMAC-SHA256（带 PHONE_HMAC_KEY），
     //    不是 EC8 的无盐 sha256，用错会永远查不到人。
     const { hmacPhone } = require('../utils/phoneCrypto');
-    const phoneHash = hmacPhone(phone);
+    const phoneHash = hmacPhone(require('../utils/phoneUtil').normalizePhone(phone) || String(phone));
 
     const guest = await Guest.findOne({
       where: { phone_hash: phoneHash, status: 1 }
@@ -307,7 +307,7 @@ router.post('/event-checkin', async (req, res) => {
     // ⚠️ EC9 的 phone_hmac 是 HMAC-SHA256（带 PHONE_HMAC_KEY），
     //    不是 EC8 的无盐 sha256，用错会永远查不到人。
     const { hmacPhone } = require('../utils/phoneCrypto');
-    const phoneHmac = hmacPhone(phone);
+    const phoneHmac = hmacPhone(require('../utils/phoneUtil').normalizePhone(phone) || String(phone));
     const guest = await Guest.findOne({ where: { phone_hmac: phoneHmac, status: 1 } });
     if (!guest) {
       return res.status(404).json({ code: 404, message: '未报名或手机号错误' });

@@ -16,6 +16,7 @@ const config = require('../config');
 const smsConfig = require('./smsConfigService');
 const { VerificationCode, VerificationToken } = require('../models');
 const { hmacPhone, hashCode } = require('../utils/phoneCrypto');
+const { normalizePhone } = require('../utils/phoneUtil');
 const sms = require('./verificationSmsService');
 
 if (config.sms.fixedCode) {
@@ -23,7 +24,8 @@ if (config.sms.fixedCode) {
     '，不发送真实短信。上线前必须移除 SMS_FIXED_CODE');
 }
 
-const PHONE_RE = /^1[3-9]\d{9}$/;
+// 2026-11-05：校验统一走 phoneUtil.normalizePhone；PHONE_RE 仅为兼容旧导出保留
+const PHONE_RE = /^(?:1[3-9]\d{9}|\+[1-9]\d{6,14}|[2-9]\d{7}|[2-9]\d{9}|852[2-9]\d{7}|861[3-9]\d{9})$/;
 
 function genCode() {
   return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
@@ -38,7 +40,8 @@ function genToken() {
  * @returns {Promise<{ok:boolean, error?:string, retryAfter?:number}>}
  */
 async function sendCode(phone, purpose = 'register', ip = '') {
-  if (!PHONE_RE.test(String(phone || ''))) {
+  phone = normalizePhone(phone);
+  if (!phone) {
     return { ok: false, error: '手机号格式不正确' };
   }
   const phoneHmac = hmacPhone(phone);
@@ -102,7 +105,8 @@ async function sendCode(phone, purpose = 'register', ip = '') {
  * @returns {Promise<{ok:boolean, token?:string, error?:string}>}
  */
 async function verifyCode(phone, code, purpose = 'register') {
-  if (!PHONE_RE.test(String(phone || ''))) {
+  phone = normalizePhone(phone);
+  if (!phone) {
     return { ok: false, error: '手机号格式不正确' };
   }
   if (!code || !/^\d{6}$/.test(String(code))) {
@@ -157,7 +161,7 @@ async function consumeToken(token, purpose = 'register', phone = null) {
     return { ok: false, error: '验证凭证已过期，请重新验证' };
   }
   if (record.purpose !== purpose) return { ok: false, error: '验证凭证用途不符' };
-  if (phone && record.phone_hmac !== hmacPhone(phone)) {
+  if (phone && record.phone_hmac !== hmacPhone(normalizePhone(phone) || String(phone))) {
     return { ok: false, error: '验证凭证与手机号不匹配' };
   }
   await record.update({ used: 1 });
@@ -181,7 +185,7 @@ async function peekToken(token, purpose = 'register', phone = null) {
     return { ok: false, error: '验证凭证已过期，请重新验证' };
   }
   if (record.purpose !== purpose) return { ok: false, error: '验证凭证用途不符' };
-  if (phone && record.phone_hmac !== hmacPhone(phone)) {
+  if (phone && record.phone_hmac !== hmacPhone(normalizePhone(phone) || String(phone))) {
     return { ok: false, error: '验证凭证与手机号不匹配' };
   }
   return { ok: true, phoneHmac: record.phone_hmac };

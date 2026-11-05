@@ -455,8 +455,27 @@
     var timer = setInterval(tick, 1000);
   }
 
+  /* 手机号规范化：与后端 utils/phoneUtil.js 同规则（2026-11-05） */
+  function normPhone(raw) {
+    var v = String(raw == null ? "" : raw).trim().replace(/[\s\-().（）·]/g, "");
+    if (/^00[1-9]\d{6,14}$/.test(v)) v = "+" + v.slice(2);
+    if (/^\+[1-9]\d{6,14}$/.test(v)) {
+      if (/^\+861[3-9]\d{9}$/.test(v)) return v.slice(3);
+      return v;
+    }
+    if (!/^\d+$/.test(v)) return "";
+    if (/^1[3-9]\d{9}$/.test(v)) return v;
+    if (/^861[3-9]\d{9}$/.test(v)) return v.slice(2);
+    if (/^[2-9]\d{7}$/.test(v)) return "+852" + v;
+    if (/^852[2-9]\d{7}$/.test(v)) return "+852" + v.slice(3);
+    if (/^[2-9]\d{9}$/.test(v)) return "+1" + v;
+    return "";
+  }
+  function validPhone(raw) { return normPhone(raw) !== ""; }
+
   w.EC9 = {
     S: S, t: t, esc: esc, applyLang: applyLang, Api: Api, agendaHtml: agendaHtml,
+    validPhone: validPhone, normPhone: normPhone,
     toast: toast, errPill: errPill, header: header, mountHeader: mountHeader,
     param: param, go: go, codeCountdown: codeCountdown,
     fmtDate: fmtDate, discountText: discountText, localizeMsg: localizeMsg,

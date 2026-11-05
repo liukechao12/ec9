@@ -2236,7 +2236,7 @@
                     </div>
                     <div class="form-group">
                         <label>手机号 <span class="required" id="phoneRequired">*</span></label>
-                        <input type="tel" id="guestPhone" name="phone" placeholder="请输入11位手机号" maxlength="11" pattern="[0-9]{11}">
+                        <input type="tel" id="guestPhone" name="phone" placeholder="请输入手机号（大陆/香港/美国）" maxlength="24">
                     </div>
                     <div class="form-group">
                         <label>公司/单位</label>
@@ -2649,7 +2649,7 @@
         .i18n-lang-block textarea:focus { outline: none; border-color: #155DFC; }
     </style>
     <script src="/i18n.js?v=20261014.3"></script>
-    <script src="app.js?v=20261105fail"></script>
+    <script src="app.js?v=20261105phone"></script>
     <!-- EC9 新增模块（场次/票种/订单/支付流水）：必须排在 app.js 之后，依赖其 apiRequest/formatDateTime -->
     <script src="ec9-modules.js?v=20261104del"></script>
 </body>

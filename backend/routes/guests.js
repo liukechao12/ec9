@@ -5,6 +5,7 @@ const { Guest, Invitation, Event, Admin, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { encryptPhone, hashPhone, decryptPhone } = require('../utils/phoneCrypto');
 const { parseExcel, validatePhone, generateImportReport } = require('../utils/excel');
+const { normalizePhone, isValidPhone } = require('../utils/phoneUtil');
 const { authenticate } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
 
@@ -533,18 +534,23 @@ router.get('/:id(\\d+)', authenticate, operationLog('guests', '获取嘉宾详�
 // 创建嘉宾（支持单个和批量，需要认证）
 router.post('/', authenticate, operationLog('guests', '创建嘉宾'), async (req, res) => {
   try {
-    const { name, phone, company, bd_id, remark, guests } = req.body;
+    let { name, phone, company, bd_id, remark, guests } = req.body;
     
     // 批量导入
     if (guests && Array.isArray(guests)) {
       const results = [];
       for (const guestData of guests) {
-        const { name, phone, company, bd_id, remark } = guestData;
+        let { name, phone, company, bd_id, remark } = guestData;
         
         if (!name || !phone) {
           results.push({ name, phone, success: false, message: '姓名和手机号不能为空' });
           continue;
         }
+        if (!isValidPhone(phone)) {
+          results.push({ name, phone, success: false, message: '手机号格式不正确' });
+          continue;
+        }
+        phone = normalizePhone(phone);
         
         const phoneHash = hashPhone(phone);
         // 先检查是否存在任何状态的记录（包括已删除的）
@@ -610,6 +616,10 @@ router.post('/', authenticate, operationLog('guests', '创建嘉宾'), async (re
         message: '姓名和手机号不能为空'
       });
     }
+    if (!guests && !isValidPhone(phone)) {
+      return res.status(400).json({ code: 400, message: '手机号格式不正确' });
+    }
+    phone = normalizePhone(phone) || phone;
     
     const phoneHash = hashPhone(phone);
     // 先检查是否存在任何状态的记录（包括已删除的）
@@ -743,8 +753,10 @@ router.put('/:id', authenticate, operationLog('guests', '更新嘉宾'), async (
     
     // 如果更新手机号，需要重新加密
     if (req.body.phone) {
-      updateData.phone = encryptPhone(req.body.phone);
-      updateData.phone_hash = hashPhone(req.body.phone);
+      const np = normalizePhone(req.body.phone);
+      if (!np) return res.status(400).json({ code: 400, message: '手机号格式不正确' });
+      updateData.phone = encryptPhone(np);
+      updateData.phone_hash = hashPhone(np);
     }
     
     // 调试日志：记录要更新的数据
@@ -898,7 +910,7 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
     }
 
     for (const row of excelData) {
-      const { name, phone, company, bd_id, remark, row: rowNum } = row;
+      let { name, phone, company, bd_id, remark, row: rowNum } = row;
       const inviterBdId = normalizeBdId(bd_id) || null;
 
       // 缺姓名/手机号：以前被 parseExcel 静默过滤，现在明确回报行号
@@ -915,8 +927,8 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
         continue;
       }
 
-      // 验证手机号格式
-      if (!validatePhone(phone)) {
+      // 验证并规范化手机号（2026-11-05：大陆 / 中国香港 / 美国 / 通用 E.164）
+      if (!isValidPhone(phone)) {
         results.push({
           row: rowNum,
           name,
@@ -924,10 +936,11 @@ router.post('/import', authenticate, upload.fields([{ name: 'file', maxCount: 1 
           company,
           bd_id: inviterBdId || '',
           success: false,
-          message: `手机号「${phone}」格式不正确（应为 11 位数字、1 开头）`
+          message: `手机号「${phone}」格式不正确（支持大陆11位、香港8位/+852、美国10位/+1）`
         });
         continue;
       }
+      phone = normalizePhone(phone);
 
       // BD 工号必须是系统里已启用的 BD 账号：这一列填工号（如 EC00001），不填姓名
       if (inviterBdId && !activeBdSet.has(inviterBdId)) {

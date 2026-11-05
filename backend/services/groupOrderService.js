@@ -28,6 +28,7 @@ const CheckinCode = require('../models/CheckinCode');
 const Invitation = require('../models/Invitation');
 const { StudentReport, REPORT_STATUS, RegistrationSession, Session } = require('../models');
 const { encryptPhone, hmacPhone, decryptPhone, maskPhone } = require('../utils/phoneCrypto');
+const { normalizePhone } = require('../utils/phoneUtil');
 const { validateSelection } = require('./ticketBinding');
 const { sendBusinessSms } = require('./verificationSmsService');
 const { SmsService } = require('./SmsService');
@@ -223,7 +224,8 @@ async function syncInvitationOnAudit(registration, action, at) {
 async function findInvited(phones, eventId) {
   const map = new Map();
   if (!phones || !phones.length) return map;
-  const hmacs = phones.map(p => hmacPhone(String(p)));
+  // 查邀约名单时同样要规范化，否则 H5 传本地写法查不到国际号
+  const hmacs = phones.map(p => hmacPhone(normalizePhone(p) || String(p)));
   const guests = await Guest.findAll({ where: { phone_hmac: { [Op.in]: hmacs } } });
   if (!guests.length) return map;
   const invs = await Invitation.findAll({
@@ -235,7 +237,7 @@ async function findInvited(phones, eventId) {
   });
   const gid2phone = new Map(guests.map(g => [g.id, g.phone_hmac]));
   const hmac2phone = new Map();
-  phones.forEach(p => hmac2phone.set(hmacPhone(String(p)), String(p)));
+  phones.forEach(p => hmac2phone.set(hmacPhone(normalizePhone(p) || String(p)), String(p)));
   // 排除「报名时自动生成的待审批邀约」（extra_fields.auto_created）——那不是真邀约，
   // 否则非邀约人提交后二次估价会误判为命中名单、白白免票免审
   const genuine = invs.filter(inv => !(inv.extra_fields && inv.extra_fields.auto_created));
@@ -466,7 +468,9 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
   const seen = new Set();
   for (const m of members) {
     if (!m.name || !String(m.name).trim()) return { ok: false, error: '姓名不能为空' };
-    if (!m.phone || !/^1[3-9]\d{9}$/.test(String(m.phone))) return { ok: false, error: `手机号格式错误：${m.phone}` };
+    // 2026-11-05：先规范化，后续去重 / 邀约匹配 / 落库全部用同一个值
+    m.phone = normalizePhone(m.phone);
+    if (!m.phone) return { ok: false, error: '手机号格式错误（支持大陆11位、香港8位/+852、美国10位/+1）' };
     if (seen.has(m.phone)) return { ok: false, error: `手机号重复：${m.phone}` };
     seen.add(m.phone);
     // 关注方向必填（2026-11-03）：与单人报名同一口径
@@ -548,7 +552,7 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
 
   for (let mi = 0; mi < norm.length; mi++) {
     const m = norm[mi];
-    const phone = String(m.phone);
+    const phone = normalizePhone(m.phone);
     const ph = hmacPhone(phone);
     let guest = await Guest.findOne({ where: { phone_hmac: ph } });
     if (!guest) {

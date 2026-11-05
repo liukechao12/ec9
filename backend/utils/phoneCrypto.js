@@ -5,6 +5,7 @@
  */
 const crypto = require('crypto');
 const config = require('../config');
+const { maskPhoneSafe } = require('./phoneUtil');
 
 function getEncryptionKey() {
   return Buffer.from(config.encryption.getKey(), 'utf8');
@@ -29,7 +30,9 @@ function decryptPhone(encryptedPhone) {
     const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(), iv);
     let decrypted = decipher.update(parts[1], 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    return /^1[3-9]\d{9}$/.test(decrypted) ? decrypted : null;
+    // 2026-11-05：兼容 E.164 国际号；否则解密出的香港/美国号会被吞成 null
+    const ok = /^1[3-9]\d{9}$/.test(decrypted) || /^\+[1-9]\d{6,14}$/.test(decrypted);
+    return ok ? decrypted : null;
   } catch (e) {
     return null;
   }
@@ -48,8 +51,8 @@ const hashPhone = hmacPhone;
 
 /** 掩码展示：138****5678 */
 function maskPhone(phone) {
-  if (!phone || phone.length < 11) return phone || '';
-  return phone.slice(0, 3) + '****' + phone.slice(7);
+  // 2026-11-05：短号（香港 8 位）也要掩码，不能整段明文返回
+  return maskPhoneSafe(phone);
 }
 
 /** 生成验证码哈希（HMAC，不存明文） */

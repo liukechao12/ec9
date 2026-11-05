@@ -1,4 +1,5 @@
 const XLSX = require('xlsx');
+const { normalizePhone, isValidPhone, clean } = require('./phoneUtil');
 
 /**
  * 解析通用嘉宾导入 Excel（姓名 / 手机 / 公司 / BD工号 / 备注）
@@ -41,7 +42,7 @@ function parseExcel(fileBuffer, options = {}) {
       return {
         row: index + 2, // Excel行号（从2开始，因为第1行是标题）
         name: String(name).trim(),
-        phone: String(phone).trim().replace(/\s+/g, ''),
+        phone: clean(phone), // 保留 + 号、去掉分隔符；格式判定交给 isValidPhone
         company: String(company || '').trim(),
         position: String(position || '').trim(),
         bd_id: String(bdId || '').trim(),
@@ -61,8 +62,8 @@ function parseExcel(fileBuffer, options = {}) {
  * @returns {boolean}
  */
 function validatePhone(phone) {
-  const phoneRegex = /^1[3-9]\d{9}$/;
-  return phoneRegex.test(phone);
+  // 2026-11-05：支持大陆 / 中国香港 / 美国 / 通用 E.164
+  return isValidPhone(phone);
 }
 
 /**

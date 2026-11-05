@@ -9,6 +9,7 @@ const adminDelete = require('../services/adminDeleteService');
 const { requireVerifiedReusable } = require('../middleware/requireVerified');
 const operationLog = require('../middleware/operationLog');
 const { hashPhone, encryptPhone } = require('../utils/phoneCrypto');
+const { normalizePhone } = require('../utils/phoneUtil');
 const { validateSelection, pickLang, toSid } = require('../services/ticketBinding');
 const { calcDiscount, fetchDiscountRules } = require('../services/discountRules');
 const { isStandardType } = require('../services/groupOrderService');
@@ -331,8 +332,9 @@ function generateInviteCode() {
 // 2025业绩说明会开放报名接口（无需邀请码，提交后待审批，审批通过发22号短信）
 router.post('/submit-performance', async (req, res) => {
   try {
-    const { phone, name, company, position } = req.body;
-    if (!phone || phone.length !== 11 || !/^1[3-9]\d{9}$/.test(phone)) {
+    let { phone, name, company, position } = req.body;
+    phone = normalizePhone(phone);
+    if (!phone) {
       return res.status(400).json({ code: 400, message: '请输入正确的11位手机号' });
     }
     if (!name || !company || !position) {
@@ -412,7 +414,8 @@ router.post('/submit-performance', async (req, res) => {
 // H5报名接口（通过手机号，不需要认证）
 router.post('/by-phone', async (req, res) => {
   try {
-    const { phone, invite_code } = req.body;
+    let { phone, invite_code } = req.body;
+    phone = normalizePhone(phone);
     
     if (!phone || !invite_code) {
       return res.status(400).json({
@@ -792,7 +795,8 @@ router.post('/submit-by-phone', async (req, res) => {
     inviter = clipField(inviter, 100);
     
     // 验证必填字段
-    if (!phone || phone.length !== 11 || !/^1[3-9]\d{9}$/.test(phone)) {
+    phone = normalizePhone(phone);
+    if (!phone) {
       return res.status(400).json({
         code: 400,
         message: '请输入正确的手机号'
@@ -1119,7 +1123,8 @@ router.post('/submit-group', uploadReports, requireVerifiedReusable, async (req,
     }
     if (!event_id) return res.status(400).json({ code: 400, message: '活动ID不能为空' });
     // 购票人手机号必须与验证凭证一致（防冒名）
-    if (!buyer_phone || !/^1[3-9]\d{9}$/.test(String(buyer_phone))) {
+    buyer_phone = normalizePhone(String(buyer_phone || ''));
+    if (!buyer_phone) {
       return res.status(400).json({ code: 400, message: '缺少购票人手机号' });
     }
     const { hmacPhone } = require('../utils/phoneCrypto');

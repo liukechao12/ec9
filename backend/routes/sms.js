@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { normalizePhone } = require('../utils/phoneUtil');
 const { SmsTemplate, SmsRule, SmsLog } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
@@ -367,7 +368,8 @@ router.post('/send-direct', authenticate, async (req, res) => {
     }
     
     // 验证手机号格式
-    if (phone.length !== 11 || !/^1[3-9]\d{9}$/.test(phone)) {
+    const toPhone = normalizePhone(phone);
+    if (!toPhone) {
       return res.status(400).json({
         code: 400,
         message: '请输入正确的手机号'
@@ -378,7 +380,7 @@ router.post('/send-direct', authenticate, async (req, res) => {
     
     // 发送短信
     const resp = await sendSms({
-      PhoneNumbers: phone,
+      PhoneNumbers: toPhone,
       SignName: sign_name,
       TemplateCode: template_code,
       TemplateParam: params ? JSON.stringify(params) : '{}'

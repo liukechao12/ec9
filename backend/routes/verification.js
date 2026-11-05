@@ -70,7 +70,7 @@ router.post('/dev-code', async (req, res) => {
   }
   const { phone } = req.body || {};
   if (!phone) return res.status(400).json({ code: 400, message: '缺少 phone' });
-  const hit = sms.devOutbox.get(hmacPhone(String(phone)));
+  const hit = sms.devOutbox.get(hmacPhone(require('../utils/phoneUtil').normalizePhone(phone) || String(phone)));
   if (!hit) return res.status(404).json({ code: 404, message: '该手机号暂无待用验证码' });
   res.json({ code: 0, message: 'ok', data: { code: hit.code, expires_at: hit.expires_at } });
 });

@@ -94,9 +94,11 @@ const I18N = {
     tk_total_line: "应付合计 ¥{amt}",
     tk_assign_title: "为每人选择票种",
     tk_assign_hint: "上方票卡可批量套用给所有人，下面可单独调整",
-    ben_student: "✗\n✗\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC礼袋",
-    ben_std: "✗\n✗\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC专属礼袋",
-    ben_vip: "VIP Tour\n专属交流会\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC专属限量礼袋",
+    /* 门票权益（2026-11-09 最新设计稿）：三列逐行对齐，前 3 行是 VIP 专属项，
+       学生票/标准票用 ✗ 表示不含；选票页 ticket.html 与电子票页 eticket.html 同源。 */
+    ben_student: "✗\n✗\n✗\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC礼袋",
+    ben_std: "✗\n✗\n✗\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC专属礼袋",
+    ben_vip: "VIP 专属茶歇\nVIP 午宴\nVIP 独家展现路线\n展区通票\n主题演讲\n论坛通票\n科技之夜\nEC专属限量礼袋",
     // 结果页
     result_success: "报名成功",
     result_pending: "待审核",
@@ -118,7 +120,8 @@ const I18N = {
     et_time: "报名时间：",
     tab_benefits: "门票权益",
     tab_agenda: "论坛议程",
-    benefits_content: "· 大会全体会议入场资格\n· 全部平行论坛参与资格\n· 展区参观与导览\n· 会议资料包\n· 茶歇与午餐",
+    /* 兜底：旧缓存的 eticket.html 仍会读这个 key，值按最新设计稿的标准票列同步 */
+    benefits_content: "· 展区通票\n· 主题演讲\n· 论坛通票\n· 科技之夜\n· EC专属礼袋",
     agenda_content: "上午   主题演讲\n下午   具身智能数据•模型•仿真闭环论坛\n下午   智驾安全与全球准入论坛\n下午   Physical AI 产业创新与资本赋能论坛\n展区   Open Tech Show · 产品体验区\n晚间   EC 科技之夜",
     /* 论坛议程卡片（2026-11-02 新稿）文案，结构见 common.js agendaHtml() */
     ag_am: "上午", ag_pm: "下午", ag_eve: "晚间",
@@ -313,9 +316,9 @@ const I18N = {
     tk_total_line: "應付合計 ¥{amt}",
     tk_assign_title: "為每人選擇票種",
     tk_assign_hint: "上方票卡可批量套用給所有人，下面可單獨調整",
-    ben_student: "✗\n✗\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC禮袋",
-    ben_std: "✗\n✗\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC專屬禮袋",
-    ben_vip: "VIP Tour\n專屬交流會\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC專屬限量禮袋",
+    ben_student: "✗\n✗\n✗\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC禮袋",
+    ben_std: "✗\n✗\n✗\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC專屬禮袋",
+    ben_vip: "VIP 專屬茶歇\nVIP 午宴\nVIP 獨家展現路線\n展區通票\n主題演講\n論壇通票\n科技之夜\nEC專屬限量禮袋",
     result_success: "報名成功",
     result_pending: "待審核",
     result_rejected: "駁回",
@@ -334,7 +337,7 @@ const I18N = {
     et_time: "報名時間：",
     tab_benefits: "門票權益",
     tab_agenda: "論壇議程",
-    benefits_content: "· 大會全體會議入場資格\n· 全部平行論壇參與資格\n· 展區參觀與導覽\n· 會議資料包\n· 茶歇與午餐",
+    benefits_content: "· 展區通票\n· 主題演講\n· 論壇通票\n· 科技之夜\n· EC專屬禮袋",
     agenda_content: "上午   主題演講\n下午   具身智能數據•模型•仿真閉環論壇\n下午   智駕安全與全球准入論壇\n下午   Physical AI 產業創新與資本賦能論壇\n展區   Open Tech Show · 產品體驗區\n晚間   EC 科技之夜",
     /* 論壇議程卡片（2026-11-02 新稿）文案 */
     ag_am: "上午", ag_pm: "下午", ag_eve: "晚間",
@@ -524,9 +527,9 @@ const I18N = {
     tk_total_line: "Total payable ¥{amt}",
     tk_assign_title: "Choose a ticket type for each person",
     tk_assign_hint: "Tap a card above to apply it to everyone, then adjust individually below",
-    ben_student: "✗\n✗\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Gift Bag",
-    ben_std: "✗\n✗\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Exclusive Gift Bag",
-    ben_vip: "VIP Tour\nExclusive Exchange Session\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Exclusive Limited Gift Bag",
+    ben_student: "✗\n✗\n✗\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Gift Bag",
+    ben_std: "✗\n✗\n✗\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Exclusive Gift Bag",
+    ben_vip: "VIP Exclusive Tea Break\nVIP Luncheon\nVIP Exclusive Showcase Tour\nExpo Pass\nKeynote Speeches\nForum Pass\nTech Night\nEC Exclusive Limited Gift Bag",
     result_success: "Registration Successful",
     result_pending: "Pending Review",
     result_rejected: "Rejected",
@@ -545,7 +548,7 @@ const I18N = {
     et_time: "Registered:",
     tab_benefits: "Benefits",
     tab_agenda: "Agenda",
-    benefits_content: "· Access to the keynote session\n· Access to all parallel forums\n· Exhibition visit & guided tour\n· Conference materials\n· Coffee breaks & lunch",
+    benefits_content: "· Expo Pass\n· Keynote Speeches\n· Forum Pass\n· Tech Night\n· EC Exclusive Gift Bag",
     agenda_content: "AM   Keynote Speeches\nPM   Embodied AI: Data · Model · Simulation\nPM   Intelligent Driving Safety & Global Access\nPM   Physical AI: Innovation & Capital Empowerment\nExpo   Open Tech Show · Product Experience Zone\nEvening   EC Tech Night",
     /* Agenda card copy (2026-11-02 redesign) */
     ag_am: "AM", ag_pm: "PM", ag_eve: "Evening",

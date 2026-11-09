@@ -56,6 +56,24 @@
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var d = E.S.data;
 
+  /* ---------- 门票权益（2026-11-09 最新设计稿） ----------
+     设计稿是三列对比表：学生票/标准票前 3 行是 ✗（不含 VIP 专属项），尊享票是
+     3 条 VIP 权益。电子票是个人凭证，只列持票人这张票实际享有的权益，所以过滤掉 ✗。
+     三套词条与选票页 ticket.html 共用 js/i18n.js，改文案只改一处。 */
+  var panel = document.getElementById("etPanel");
+  var ticketName = (d.ticket && d.ticket.name) || "";
+  function benefitsFor(name) {
+    var n = String(name || "");
+    var key = /尊享|VIP|Premium/i.test(n) ? "ben_vip"
+      : (/学生|學生|Student/i.test(n) ? "ben_student" : "ben_std");
+    return E.t(key).split("\n").map(function (s) { return s.trim(); })
+      .filter(function (s) { return s && !/^[✗×❌]$/.test(s); });
+  }
+  function renderBenefits() {
+    panel.style.whiteSpace = "pre-line";
+    panel.textContent = benefitsFor(ticketName).map(function (s) { return "· " + s; }).join("\n");
+  }
+
   // 品牌 header（设计稿：蓝底品牌区 + 白卡浮起）
   E.mountHeader(document.getElementById("header"), false);
 
@@ -85,7 +103,11 @@
       });
       renderStatus(!!m.paid, m.status);
       document.getElementById("tkCode").textContent = m.checkin_code || "—";
-      if (m.ticket_name) document.getElementById("tkType").textContent = m.ticket_name;
+      if (m.ticket_name) {
+        document.getElementById("tkType").textContent = m.ticket_name;
+        // /mine 才是权威票种：本地缓存过期时按服务端返回的票种重算权益
+        if (m.ticket_name !== ticketName) { ticketName = m.ticket_name; renderBenefits(); }
+      }
       // 多人代报：展示整单成员（本人高亮）
       if (m.group && m.group.members && m.group.members.length > 1) {
         var html = '<div class="et-divider" style="border-top:1px dashed #d5d8e0;margin:10px 0"></div>' +
@@ -100,17 +122,14 @@
     }).catch(function () { /* 网络异常保留本地渲染 */ });
   }
 
-  var panel = document.getElementById("etPanel");
-  panel.style.whiteSpace = "pre-line";
-  panel.textContent = E.t("benefits_content");
+  renderBenefits();
 
   Array.prototype.forEach.call(document.querySelectorAll(".et-tab"), function (el) {
     el.addEventListener("click", function () {
       Array.prototype.forEach.call(document.querySelectorAll(".et-tab"), function (x) { x.classList.remove("active"); });
       el.classList.add("active");
       if (el.dataset.tab === "b") {
-        panel.style.whiteSpace = "pre-line";
-        panel.textContent = E.t("benefits_content");
+        renderBenefits();
       } else {
         panel.style.whiteSpace = "normal";
         panel.innerHTML = E.agendaHtml();

@@ -1699,6 +1699,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                     <td>
                         <span class="status-badge ${getInvitationStatusClass(registrationStatus, isValid)}">${invitationStatusText(inv, registrationStatus, isValid)}</span>
                     </td>
+                    <td>${invitationSourceBadge(inv)}</td>
                     <td>
                         ${renderGiftTicketCell(inv)}
                     </td>
@@ -1765,7 +1766,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
     } catch (error) {
         console.error('加载邀约列表失败:', error);
         const tbody = document.getElementById('invitationsTableBody');
-        const colspan = (currentUser && currentUser.role === 'admin') ? 11 : 10;   // 含「付款」「赠票票种」两列
+        const colspan = (currentUser && currentUser.role === 'admin') ? 12 : 11;   // 增「报名来源」列
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 40px; color: #EF4444;">${window.t('admin.loadFailedWith', [error.message || window.t('admin.unknownError')])}<br><button onclick="loadInvitations()" style="margin-top: 10px; padding: 8px 16px; background: #155DFC; color: white; border: none; border-radius: 6px; cursor: pointer;">重试</button></td></tr>`;
     }
 }
@@ -2757,6 +2758,25 @@ function isSelfRegistration(inv) {
 function selfRegistrationBadge(inv) {
     if (!isSelfRegistration(inv)) return '';
     return '<span title="该记录由 H5 自助报名自动生成，并非我们发出的邀约；状态代表报名审核结果，与是否免票无关" style="display:inline-block;flex:none;padding:1px 6px;border-radius:4px;background:#EEF2FF;color:#4F46E5;font-size:11px;line-height:18px;border:1px solid #C7D2FE;white-space:nowrap;">自助报名</span>';
+}
+
+/**
+ * 2026-11-19：邀约管理「报名来源」列。
+ * 老板特邀二维码进来的人，createGroup 会在影子邀约 extra_fields 里留
+ * vip_invite_code / vip_invite_name；这里只读展示，不改数据与按钮行为。
+ */
+function invitationSourceBadge(inv) {
+    let ef = inv && inv.extra_fields;
+    // 兼容后端个别场景把 JSONB 以字符串返回
+    if (typeof ef === 'string') { try { ef = JSON.parse(ef); } catch (e) { ef = null; } }
+    const code = ef ? String(ef.vip_invite_code || '') : '';
+    if (code) {
+        const name = ef ? String(ef.vip_invite_name || '') : '';
+        return '<span title="特邀邀约码：' + code + '" style="display:inline-block;padding:1px 6px;border-radius:4px;background:#FFF1E8;color:#A8322B;font-size:11px;line-height:18px;border:1px solid #F0C6A8;white-space:nowrap;">特邀嘉宾</span>'
+            + '<br><span style="font-size:11px;color:#6B7280">' + (name || code) + '</span>';
+    }
+    if (isSelfRegistration(inv)) return '<span style="font-size:11px;color:#4F46E5">自助报名</span>';
+    return '<span style="font-size:11px;color:#9CA3AF">后台邀约</span>';
 }
 
 function invitationStatusText(inv, status, isValid) {

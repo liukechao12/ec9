@@ -6665,7 +6665,7 @@ async function loadRegAudit() {
     if (!body) return;
     applyAdminOnlyUI();
     const showAuditCol = isAdminUser();
-    const auditColSpan = showAuditCol ? 11 : 10;
+    const auditColSpan = showAuditCol ? 12 : 11;   // 2026-11-19 增「报名来源」列
     body.innerHTML = `<tr><td colspan="${auditColSpan}">加载中…</td></tr>`;
     try {
         const res = await apiRequest(`/registrations/group-list?status=${encodeURIComponent(status)}&keyword=${encodeURIComponent(keyword)}`);
@@ -6680,6 +6680,13 @@ async function loadRegAudit() {
             const tickets = [...new Set(g.members.map(m => m.ticket_name))].join('/');
             // 论坛：整单里各人可能选得不一样，去重后并列；「全部论坛」由后端按 session_all 判出来的
             const forums = [...new Set(g.members.map(m => m.session_name || '未选'))].join('/');
+            // 报名来源（2026-11-19）：特邀码进来的单直接标出码名与码值；其余区分邀约名单 / 自助报名
+            const vipMem = g.members.filter(m => m.vip_invite_code);
+            const vipNames = [...new Set(vipMem.map(m => m.vip_invite_name || m.vip_invite_code))];
+            const vipCodes = [...new Set(vipMem.map(m => m.vip_invite_code))];
+            const sourceCell = vipNames.length
+                ? `<span title="特邀邀约码：${vipCodes.join(' / ')}" style="display:inline-block;padding:1px 6px;border-radius:4px;background:#FFF1E8;color:#A8322B;font-size:11px;line-height:18px;border:1px solid #F0C6A8;white-space:nowrap;">特邀嘉宾</span><br><span style="font-size:11px;color:#6B7280">${vipNames.join(' / ')}</span>`
+                : (g.members.some(m => m.is_invited) ? '<span style="font-size:11px;color:#4F46E5">邀约名单</span>' : '<span style="font-size:11px;color:#9CA3AF">自助报名</span>');
             const canAudit = showAuditCol && g.status === 'submitted';
             // 多人一起审核：只有「全部通过」和「全部驳回」两种结果；满3张9折、满5张8折
             const disc = (g.paid_count >= 5) ? '满5张8折' : (g.paid_count >= 3 ? '满3张9折' : '');
@@ -6701,6 +6708,7 @@ async function loadRegAudit() {
                 <td style="max-width:260px" title="${names}">${names}</td>
                 <td>${g.submitter_phone || '-'}</td>
                 <td>${tickets}</td>
+                <td>${sourceCell}</td>
                 <td>${forums}</td>
                 <td>${g.members.length}<br><span style="font-size:11px;color:#6B7280">邀约 ${g.invited_count || 0} · 需付款 ${g.paid_count || 0}</span>${cntTip}</td>
                 <td>${stMap[g.status] || g.status}${g.members.some(m => m.reject_reason) ? '<br><span style="font-size:11px;color:#E34D59">' + (g.members.find(m => m.reject_reason) || {}).reject_reason + '</span>' : ''}</td>

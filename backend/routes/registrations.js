@@ -1343,7 +1343,10 @@ router.get('/group-list', authenticate, async (req, res) => {
         focus: r.focus, status: r.status, reject_reason: r.reject_reason,
         is_invited: !!(r.extra_fields && r.extra_fields.is_invited),
         audit_exempt: !!(r.extra_fields && r.extra_fields.audit_exempt),
-        is_buyer: !!(r.extra_fields && r.extra_fields.is_buyer)
+        is_buyer: !!(r.extra_fields && r.extra_fields.is_buyer),
+        // 老板特邀邀约码留痕（2026-11-19）：后台据此标出「哪些人是扫码进来的」
+        vip_invite_code: (r.extra_fields && r.extra_fields.vip_invite_code) || '',
+        vip_invite_name: (r.extra_fields && r.extra_fields.vip_invite_name) || ''
       });
     }
     let list = Array.from(groups.values());
@@ -1396,11 +1399,15 @@ router.get('/group-list', authenticate, async (req, res) => {
     if (req.query.status) list = list.filter(g => g.status === req.query.status);
 
     const kw = String(req.query.keyword || '').trim();
+    const kwLower = kw.toLowerCase();
     if (kw) {
       list = list.filter(g =>
         g.group_no.indexOf(kw) > -1 ||
         g.submitter_phone.indexOf(kw) > -1 ||
-        g.members.some(m => (m.name || '').indexOf(kw) > -1));
+        g.members.some(m => (m.name || '').indexOf(kw) > -1) ||
+        // 特邀邀约码：支持直接搜码（大小写不敏感），也支持按码名称搜
+        g.members.some(m => (m.vip_invite_code || '').toLowerCase().indexOf(kwLower) > -1 ||
+          (m.vip_invite_name || '').indexOf(kw) > -1));
     }
     res.json({ code: 0, message: 'ok', data: { list } });
   } catch (e) {
@@ -1467,7 +1474,8 @@ router.get('/export', authenticate, operationLog('registrations', '导出报名�
         if ((r.group_no || '').indexOf(kw) > -1
           || phoneOf(r).indexOf(kw) > -1
           || String(r.guest && r.guest.name || '').indexOf(kw) > -1
-          || String(r.guest && r.guest.company || '').indexOf(kw) > -1) {
+          || String(r.guest && r.guest.company || '').indexOf(kw) > -1
+          || String((r.extra_fields && r.extra_fields.vip_invite_code) || '').toLowerCase().indexOf(kw.toLowerCase()) > -1) {
           kwHit.add(r.group_no);
         }
       }
@@ -1497,6 +1505,8 @@ router.get('/export', authenticate, operationLog('registrations', '导出报名�
       if (!keep.has(r.group_no)) continue;
       const phone = phoneOf(r);
       const ef = r.extra_fields || {};
+      const vipCode = String(ef.vip_invite_code || '');
+      const vipName = String(ef.vip_invite_name || '');
       data.push({
         报名单号: r.group_no || '',
         活动: evMap[r.event_id] || '',
@@ -1510,6 +1520,8 @@ router.get('/export', authenticate, operationLog('registrations', '导出报名�
         关注方向: r.focus || '',
         邀请人: r.source_bd || '',
         成员身份: ef.is_buyer ? '购票人' : '同行人',
+        报名来源: vipCode ? ('特邀·' + (vipName || vipCode)) : (ef.is_invited ? '邀约名单' : '自助报名'),
+        特邀码: vipCode,
         邀约免票: ef.is_invited ? '是' : '否',
         报名状态: STATUS_CN[r.status] || r.status || '',
         提交时间: fmt(r.registration_time || r.submitted_at)

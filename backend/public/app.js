@@ -8,6 +8,21 @@ const API_BASE = '/api';
 let currentToken = localStorage.getItem('token');
 let currentUser = null;
 
+// 2026-11-17：关闭 BD 全部审批权限。后端 authorize('admin') 是硬门禁，
+// 这里统一做前端拦截与按钮显隐，避免 BD 看到能点却报 403（只读查看能力保留）。
+function isAdminUser() {
+    return !!(currentUser && currentUser.role === 'admin');
+}
+function guardAdmin(actionName) {
+    if (isAdminUser()) return true;
+    alert('权限不足：' + actionName + ' 仅管理员可操作');
+    return false;
+}
+function applyAdminOnlyUI() {
+    const show = isAdminUser();
+    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = show ? '' : 'none'; });
+}
+
 // 页面标题映射
 const pageTitles = {
     dashboard: '控制台',
@@ -332,6 +347,7 @@ async function handleLogin(e) {
             updateUserInfo();
             // 根据用户角色显示/隐藏菜单
             updateMenuVisibility();
+            applyAdminOnlyUI();
             showMainPage();
         } else {
             if (errorDiv) {
@@ -361,6 +377,7 @@ async function checkAuth() {
             updateUserInfo();
             // 根据用户角色显示/隐藏菜单
             updateMenuVisibility();
+            applyAdminOnlyUI();
             showMainPage();
         } else {
             showLoginPage();
@@ -1272,7 +1289,7 @@ async function loadInvitationBatches() {
         if (empty) empty.classList.add('hidden');
         const srcText = r => r.from_registration ? '报名提交' : '后台添加';
         body.innerHTML = list.map(r => {
-            const canAudit = Number(r.pending) > 0;
+            const canAudit = isAdminUser() && Number(r.pending) > 0;
             return `<tr>
                 <td>
                     <div style="font-family:monospace;font-size:12px;" title="${r.batch_no}">${r.batch_no}</div>
@@ -1352,6 +1369,7 @@ async function auditCurrentBatch(action) {
 }
 
 async function auditBatch(batchNo, action, fromModal) {
+    if (!guardAdmin('整批审核邀约')) return;
     let remark = '';
     let needPay = undefined;
     if (fromModal) {
@@ -1589,6 +1607,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                 const isGuestModified = hasRealModification(modificationHistory);
                 const nameStyle = isGuestModified ? 'color: #EF4444; font-weight: 600;' : '';
                 const nameTitle = isGuestModified ? formatModificationHistory(modificationHistory) : '';
+                const selfTag = selfRegistrationBadge(inv);
                 
                 // 统计状态（优先检查 is_valid）
                 // 状态定义：0-待回复，1-待审批，2-已接受，3-已拒绝
@@ -1654,6 +1673,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <div style="width: 40px; height: 40px; border-radius: 50%; background: #DBEAFE; display: flex; align-items: center; justify-content: center; color: #155DFC; font-size: 16px; font-weight: 400;">${initial}</div>
                             <span style="${nameStyle}" ${nameTitle ? `title="${nameTitle}"` : ''}>${inv.guest?.name || '-'}</span>
+                            ${selfTag}
                         </div>
                     </td>
                     <td>${inv.guest?.company || '-'}</td>
@@ -1677,7 +1697,7 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
                         </div>
                     </td>
                     <td>
-                        <span class="status-badge ${getInvitationStatusClass(registrationStatus, isValid)}">${getInvitationStatusText(registrationStatus, isValid)}</span>
+                        <span class="status-badge ${getInvitationStatusClass(registrationStatus, isValid)}">${invitationStatusText(inv, registrationStatus, isValid)}</span>
                     </td>
                     <td>
                         ${renderGiftTicketCell(inv)}
@@ -2543,6 +2563,27 @@ function isThisWeek(dateString) {
     return date >= weekAgo && date <= now;
 }
 
+// 变更记录的字段 / 来源 / 操作人中文化（2026-11-17 恢复 EC8 可见性）
+function modFieldLabel(f) {
+    const map = { name: '姓名', company: '公司', position: '职位', phone: '手机号', email: '邮箱' };
+    return map[f] || f;
+}
+function modSourceLabel(s) {
+    const map = {
+        h5_registration: 'H5报名', h5_registration_by_phone: 'H5报名',
+        h5_submit_group: 'H5报名', admin_panel: '后台管理'
+    };
+    return map[s] || s || '';
+}
+function modByLabel(b) {
+    if (b === 'system') return '系统';
+    if (b === 'guest') return '嘉宾本人';
+    return b || '';
+}
+function modMeta(item) {
+    return [modSourceLabel(item.source), modByLabel(item.by)].filter(Boolean).join(' · ');
+}
+
 // 将后端的 modification_history 展开为统一的变更项列表
 // 支持两种结构：
 // 1) 旧结构：[{ field, from, to, timestamp }, ...]
@@ -2575,7 +2616,9 @@ function extractModificationItems(history) {
                     field: key,
                     from,
                     to,
-                    time
+                    time,
+                    by: entry.modified_by || '',
+                    source: entry.modified_source || ''
                 });
             });
         } else {
@@ -2584,7 +2627,7 @@ function extractModificationItems(history) {
             const from = normalize(entry.from ?? entry.oldValue ?? '');
             const to = normalize(entry.to ?? entry.newValue ?? '');
             const time = entry.timestamp || entry.time || entry.updated_at || '';
-            result.push({ field, from, to, time });
+            result.push({ field, from, to, time, by: entry.modified_by || '', source: entry.modified_source || '' });
         }
     });
 
@@ -2597,12 +2640,11 @@ function formatModificationHistory(history) {
     if (!items.length) return '';
 
     const lines = items
+        .slice().reverse()
         .filter(item => {
             const from = (item.from || '').trim();
             const to = (item.to || '').trim();
             if (from === to) return false;
-            // 新增：如果原值为空、新值非空，认为是“新增录入”，不算修改
-            if (!from && to) return false;
             if (!from && !to) return false;
             return true;
         })
@@ -2610,7 +2652,8 @@ function formatModificationHistory(history) {
             const timeText = item.time ? ` (${formatDateTime(item.time)})` : '';
             const fromText = item.from || '（空）';
             const toText = item.to || '（空）';
-            return `${item.field}: ${fromText} -> ${toText}${timeText}`;
+            const meta = modMeta(item);
+            return `${modFieldLabel(item.field)}: ${fromText} -> ${toText}${timeText}${meta ? ' [' + meta + ']' : ''}`;
         });
 
     return lines.join('\\n');
@@ -2621,12 +2664,10 @@ function renderModificationHistory(history) {
     const items = extractModificationItems(history);
     if (!items.length) return '';
 
-    const filtered = items.filter(item => {
+    const filtered = items.slice().reverse().filter(item => {
         const from = (item.from || '').trim();
         const to = (item.to || '').trim();
         if (from === to) return false;
-        // 新增：如果原值为空、新值非空，认为是“新增录入”，不算修改
-        if (!from && to) return false;
         if (!from && !to) return false;
         return true;
     });
@@ -2639,7 +2680,8 @@ function renderModificationHistory(history) {
                 const timeText = item.time ? `（${formatDateTime(item.time)}）` : '';
                 const fromText = item.from || '（空）';
                 const toText = item.to || '（空）';
-                return `<li>${item.field}: ${fromText} → ${toText}${timeText}</li>`;
+                const meta = modMeta(item);
+                return `<li>${modFieldLabel(item.field)}: ${fromText} → ${toText}${timeText}${meta ? `（${meta}）` : ''}</li>`;
             }).join('')}
         </ul>
     `;
@@ -2649,12 +2691,10 @@ function renderModificationHistory(history) {
 function hasRealModification(history) {
     const items = extractModificationItems(history);
     if (!items.length) return false;
-    const filtered = items.filter(item => {
+    const filtered = items.slice().reverse().filter(item => {
         const from = (item.from || '').trim();
         const to = (item.to || '').trim();
         if (from === to) return false;
-        // 新增：如果原值为空、新值非空，认为是“新增录入”，不算修改
-        if (!from && to) return false;
         if (!from && !to) return false;
         return true;
     });
@@ -2699,6 +2739,31 @@ function getApprovalStatusClass(approvalStatus) {
         3: 'status-danger'    // 已拒绝 - 红色
     };
     return classMap[approvalStatus] || 'status-warning';
+}
+
+// 2026-11-17：H5 自助报名会在 ec9_invitations 自动生成一条影子记录
+// （extra_fields.auto_created=true）。它不是我们发出的邀约，
+// 其「已接受」实为「报名审核通过」，与是否免票无关。
+// 以下仅做展示标注与文案修正，不改数据、不改计价、不改按钮行为。
+function isSelfRegistration(inv) {
+    let ef = inv && inv.extra_fields;
+    // 兼容后端个别场景把 JSONB 以字符串返回
+    if (typeof ef === 'string') {
+        try { ef = JSON.parse(ef); } catch (e) { return false; }
+    }
+    return !!(ef && (ef.auto_created === true || ef.auto_created === 'true'));
+}
+
+function selfRegistrationBadge(inv) {
+    if (!isSelfRegistration(inv)) return '';
+    return '<span title="该记录由 H5 自助报名自动生成，并非我们发出的邀约；状态代表报名审核结果，与是否免票无关" style="display:inline-block;flex:none;padding:1px 6px;border-radius:4px;background:#EEF2FF;color:#4F46E5;font-size:11px;line-height:18px;border:1px solid #C7D2FE;white-space:nowrap;">自助报名</span>';
+}
+
+function invitationStatusText(inv, status, isValid) {
+    const text = getInvitationStatusText(status, isValid);
+    // 只修正影子邀约的「已接受」，其余状态与真实邀约保持原口径
+    if (isSelfRegistration(inv) && status === 2 && text === '已接受') return '审核通过';
+    return text;
 }
 
 function getInvitationStatusText(registrationStatus, isValid) {
@@ -3323,7 +3388,7 @@ async function loadGuestModificationHistory(guestId) {
                 const change = changes[key];
                 return `
                     <div style="font-size: 12px; margin-bottom: 4px;">
-                        <span style="color: #6B7280;">${key === 'name' ? '姓名' : key === 'company' ? '公司' : key === 'position' ? '职位' : key}：</span>
+                        <span style="color: #6B7280;">${modFieldLabel(key)}：</span>
                         <span style="text-decoration: line-through; color: #9CA3AF;">${change.old || '-'}</span>
                         <span style="margin: 0 4px; color: #6B7280;">→</span>
                         <span style="color: #155DFC; font-weight: 500;">${change.new || '-'}</span>
@@ -3335,8 +3400,8 @@ async function loadGuestModificationHistory(guestId) {
                 <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: ${index < history.length - 1 ? '1px solid #E5E7EB' : 'none'};">
                     <div style="font-size: 11px; color: #9CA3AF; margin-bottom: 8px;">
                         ${formatDateTime(record.modified_at)} | 
-                        ${record.modified_by === 'system' ? '系统' : record.modified_by} | 
-                        ${record.modified_source === 'h5_registration' ? 'H5报名' : record.modified_source === 'admin_panel' ? '后台管理' : record.modified_source}
+                        ${modByLabel(record.modified_by)} | 
+                        ${modSourceLabel(record.modified_source)}
                     </div>
                     ${changeItems}
                 </div>
@@ -4312,6 +4377,12 @@ async function viewInvitation(id) {
         
         const registrationStatus = invitation.registration_status !== undefined ? invitation.registration_status : 0;
         const isAdmin = currentUser && currentUser.role === 'admin';
+        const selfTag = selfRegistrationBadge(invitation);
+        const selfNoticeHtml = isSelfRegistration(invitation) ? `
+            <div style="margin-top: 10px; padding: 10px 12px; background: #F5F7FF; border: 1px solid #E0E7FF; border-radius: 8px; font-size: 12px; color: #4F46E5; line-height: 1.6;">
+                该记录由 H5 自助报名自动生成，并非我们发出的邀约。「审核通过」表示报名审核已通过，与是否免票无关；付款口径请看「是否需要付款」与「赠票票种」。
+            </div>
+        ` : '';
         const modificationHistory = invitation.guest?.modification_history;
         const isGuestModified = hasRealModification(modificationHistory);
         const guestNameStyle = isGuestModified ? 'color: #EF4444; font-weight: 600;' : '';
@@ -4335,7 +4406,7 @@ async function viewInvitation(id) {
                 <div style="border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px; background: #F9FAFB;">
                     <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
                         <span>审批信息</span>
-                        <span class="status-badge ${getInvitationStatusClass(registrationStatus, invitation.is_valid)}">${getInvitationStatusText(registrationStatus, invitation.is_valid)}</span>
+                        <span class="status-badge ${getInvitationStatusClass(registrationStatus, invitation.is_valid)}">${invitationStatusText(invitation, registrationStatus, invitation.is_valid)}</span>
                     </div>
                     ${invitation.approval_by ? `
                         <div style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">${window.t('admin.approverValue', [invitation.approval_by])}</div>
@@ -4467,13 +4538,17 @@ async function viewInvitation(id) {
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 <div>
                     <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">嘉宾信息</div>
-                    <div style="font-size: 16px; font-weight: 500; ${guestNameStyle}">${invitation.guest?.name || '-'}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="font-size: 16px; font-weight: 500; ${guestNameStyle}">${invitation.guest?.name || '-'}</div>
+                        ${selfTag}
+                    </div>
                     <div style="font-size: 14px; color: #6B7280; margin-top: 4px;">${invitation.guest?.company || '-'}</div>
                     ${guestPositionHtml}
                     ${invitation.guest?.phone_decrypted ? `
                         <div style="font-size: 14px; color: #6B7280; margin-top: 4px;">${window.t('admin.phoneValue', [invitation.guest.phone_decrypted])}</div>
                     ` : ''}
                     ${modificationHistoryHtml}
+                    ${selfNoticeHtml}
                 </div>
                 
                 <div>
@@ -4498,7 +4573,7 @@ async function viewInvitation(id) {
                     </div>
                     <div>
                         <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">报名状态</div>
-                        <div><span class="status-badge ${getInvitationStatusClass(invitation.registration_status, invitation.is_valid)}">${getInvitationStatusText(invitation.registration_status, invitation.is_valid)}</span></div>
+                        <div><span class="status-badge ${getInvitationStatusClass(invitation.registration_status, invitation.is_valid)}">${invitationStatusText(invitation, invitation.registration_status, invitation.is_valid)}</span></div>
                     </div>
                     <div>
                         <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">是否需要付款</div>
@@ -6588,12 +6663,15 @@ async function loadRegAudit() {
     const keyword = document.getElementById('regAuditKeyword').value.trim();
     const body = document.getElementById('regAuditBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="11">加载中…</td></tr>';
+    applyAdminOnlyUI();
+    const showAuditCol = isAdminUser();
+    const auditColSpan = showAuditCol ? 11 : 10;
+    body.innerHTML = `<tr><td colspan="${auditColSpan}">加载中…</td></tr>`;
     try {
         const res = await apiRequest(`/registrations/group-list?status=${encodeURIComponent(status)}&keyword=${encodeURIComponent(keyword)}`);
         regAuditCache = (res.data && res.data.list) || [];
         if (!regAuditCache.length) {
-            body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999">暂无数据</td></tr>';
+            body.innerHTML = `<tr><td colspan="${auditColSpan}" style="text-align:center;color:#999">暂无数据</td></tr>`;
             return;
         }
         const stMap = { submitted: '<span style="color:#E8A33D">待审核</span>', approved: '<span style="color:#3056D4">待支付</span>', paid: '<span style="color:#00B42A">已支付</span>', rejected: '<span style="color:#E34D59">已驳回</span>' };
@@ -6602,7 +6680,7 @@ async function loadRegAudit() {
             const tickets = [...new Set(g.members.map(m => m.ticket_name))].join('/');
             // 论坛：整单里各人可能选得不一样，去重后并列；「全部论坛」由后端按 session_all 判出来的
             const forums = [...new Set(g.members.map(m => m.session_name || '未选'))].join('/');
-            const canAudit = g.status === 'submitted';
+            const canAudit = showAuditCol && g.status === 'submitted';
             // 多人一起审核：只有「全部通过」和「全部驳回」两种结果；满3张9折、满5张8折
             const disc = (g.paid_count >= 5) ? '满5张8折' : (g.paid_count >= 3 ? '满3张9折' : '');
             const cntTip = disc ? `<br><span style="font-size:11px;color:#C2404F">${disc}</span>` : '';
@@ -6618,7 +6696,7 @@ async function loadRegAudit() {
                     + (rs.length === 0 ? '<br><span style="font-size:11px;color:#E34D59">缺报告</span>' : '')
                 : '-';
             return `<tr data-gi="${i}">
-                <td><input type="checkbox" class="reg-audit-ck" data-gno="${g.group_no}" ${canAudit ? '' : 'disabled'}></td>
+                ${showAuditCol ? `<td><input type="checkbox" class="reg-audit-ck" data-gno="${g.group_no}" ${canAudit ? '' : 'disabled'}></td>` : ''}
                 <td style="font-family:monospace;font-size:12px">${g.group_no}</td>
                 <td style="max-width:260px" title="${names}">${names}</td>
                 <td>${g.submitter_phone || '-'}</td>
@@ -6639,7 +6717,7 @@ async function loadRegAudit() {
             document.querySelectorAll('#regAuditBody .reg-audit-ck:not(:disabled)').forEach(c => c.checked = ckAll.checked);
         };
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="11" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="${auditColSpan}" style="color:#E34D59">加载失败：${e.message}</td></tr>`;
     }
 }
 
@@ -6665,6 +6743,7 @@ async function deleteRegGroup(groupNo, memberCount) {
 }
 
 async function regAuditOne(groupNo, action) {
+    if (!guardAdmin('报名审核')) return;
     let reason = '';
     if (action === 'reject') {
         reason = prompt('驳回原因（将展示给用户）：');
@@ -6694,6 +6773,7 @@ async function regAuditOne(groupNo, action) {
 }
 
 async function regAuditBulk(action) {
+    if (!guardAdmin('批量报名审核')) return;
     const gnos = Array.from(document.querySelectorAll('#regAuditBody .reg-audit-ck:checked')).map(c => c.dataset.gno);
     if (!gnos.length) { alert('请先勾选要审核的报名单（仅待审核可勾选）'); return; }
     let reason = '';
@@ -6764,6 +6844,7 @@ async function openStudentReports(groupNo) {
 
 function renderSrCard(m, r, groupNo) {
     const regId = Number(m.registration_id);
+    const canReview = isAdminUser();
     if (r) srFileNames[r.id] = r.file_name || 'report';
     const statusTag = r ? srStatusTag(r.status)
         : '<span style="color:#E34D59;font-size:12px;font-weight:600">缺报告（可代传）</span>';
@@ -6784,8 +6865,8 @@ function renderSrCard(m, r, groupNo) {
                                placeholder="不符合原因等" style="width:220px;"></label>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="btn btn-primary btn-sm" onclick="reviewStudentReport(${r.id},'approve','${groupNo}')">✓ 符合</button>
-                    <button class="btn btn-outline btn-sm" onclick="reviewStudentReport(${r.id},'reject','${groupNo}')">✗ 不符合</button>
+                    ${canReview ? `<button class="btn btn-primary btn-sm" onclick="reviewStudentReport(${r.id},'approve','${groupNo}')">✓ 符合</button>
+                    <button class="btn btn-outline btn-sm" onclick="reviewStudentReport(${r.id},'reject','${groupNo}')">✗ 不符合</button>` : '<span style="font-size:12px;color:#9CA3AF;">复核仅管理员可操作</span>'}
                     <button class="btn btn-outline btn-sm" onclick="downloadStudentReport(${r.id})">下载原文件</button>
                 </div>`
         : '<div style="font-size:12px;color:#6B7280;margin:6px 0 10px;">尚未上传《教育部学籍在线验证报告》，可在下方代传。</div>';
@@ -6796,15 +6877,16 @@ function renderSrCard(m, r, groupNo) {
                     <div>${statusTag}</div>
                 </div>
                 ${detail}
-                <div style="margin-top:12px;padding-top:12px;border-top:1px dashed #E5E6EB;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                ${canReview ? `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #E5E6EB;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                     <span style="font-size:12px;color:#6B7280;">${r ? '替换报告' : '代传报告'}（PDF/JPG/PNG ≤10MB）：</span>
                     <input type="file" id="srFile_${regId}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" style="font-size:12px;max-width:280px;">
                     <button class="btn btn-outline btn-sm" id="srUploadBtn_${regId}" onclick="uploadStudentReport(${regId},'${groupNo}')">${r ? '替换' : '上传'}报告</button>
-                </div>
+                </div>` : ''}
             </div>`;
 }
 
 async function uploadStudentReport(registrationId, groupNo) {
+    if (!guardAdmin('代传学籍报告')) return;
     const input = document.getElementById('srFile_' + registrationId);
     if (!input || !input.files || !input.files.length) { alert('请先选择报告文件'); return; }
     const f = input.files[0];
@@ -6879,6 +6961,7 @@ async function downloadStudentReport(id) {
 }
 
 async function reviewStudentReport(id, action, groupNo) {
+    if (!guardAdmin('学籍报告复核')) return;
     if (action === 'reject' && !confirm('确认标记为「不符合」？该单将无法审核通过，需重新处理。')) return;
     const codeEl = document.getElementById('srCode_' + id);
     const noteEl = document.getElementById('srNote_' + id);

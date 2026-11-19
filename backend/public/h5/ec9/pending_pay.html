@@ -90,7 +90,7 @@
       goPay = function () {
         E.go("pay.html", {
           event_id: eventId, group_no: groupNo,
-          order_no: order.order_no, pay_token: token
+          order_no: order.order_no, pay_token: token, v: "20261117nomock"
         });
       };
     }).catch(onFail);
@@ -126,7 +126,7 @@
       box.classList.remove("hidden");
       setAmount(price);
 
-      goPay = function () { E.go("pay.html", { event_id: eventId, reg_id: m.registration_id }); };
+      goPay = function () { E.go("pay.html", { event_id: eventId, reg_id: m.registration_id, v: "20261117nomock" }); };
     }).catch(onFail);
   }
 

@@ -81,8 +81,17 @@ app.use('/h5', express.static(H5, {
 // 邀约页：/invite/<邀约码>
 app.get('/invite/:code', (req, res) => sendH5(res, 'invite.html'));
 
-// 自助签到页：/checkin/<签到码>
-app.get('/checkin/:code', (req, res) => sendH5(res, 'checkin.html'));
+// 自助签到页：/checkin/<签到码> —— 指向 EC9 三语签到页
+// （原 public/h5/checkin.html 是 EC8 遗留：引用旧语言包、调用需鉴权的 /api/checkin-codes，实际打不开）
+app.get('/checkin/:code', (req, res) => sendH5(res, 'ec9/checkin.html'));
+
+// 老板特邀邀约码短链：/v/<码> → EC9 报名首页（2026-11-19）
+// ⚠️ 必须 302 重定向，不能 sendFile：index.html 里 css/js 是相对路径，
+//    挂在 /v/ 下会被浏览器解析成 /v/css/style.css 直接 404。
+app.get('/v/:code', (req, res) => {
+  const code = encodeURIComponent(String(req.params.code || '').trim());
+  res.redirect(302, '/h5/ec9/index.html?vip=' + code + '&event_id=1');
+});
 
 // 业绩说明会页（开放报名，无需邀请码）
 app.get('/pages/performance', (req, res) => sendH5(res, 'performance.html'));
@@ -145,6 +154,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/pay-config', require('./routes/pay-config'));
 app.use('/api/checkins', require('./routes/checkins'));
 app.use('/api/checkin-codes', require('./routes/checkin-codes'));
+app.use('/api/vip-invite-codes', require('./routes/vip-invite-codes'));
 app.use('/api/statistics', require('./routes/statistics'));
 app.use('/api/sms', require('./routes/sms'));
 app.use('/api/sms-config', require('./routes/sms-config'));

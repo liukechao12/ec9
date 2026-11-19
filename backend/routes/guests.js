@@ -759,6 +759,26 @@ router.put('/:id', authenticate, operationLog('guests', '更新嘉宾'), async (
       updateData.phone_hash = hashPhone(np);
     }
     
+    // 2026-11-17 恢复 EC8 口径：后台编辑嘉宾资料时记录变更（姓名/公司/职位）
+    const trackedKeys = ['name', 'company', 'position'];
+    const guestChanges = {};
+    for (const k of trackedKeys) {
+      if (!Object.prototype.hasOwnProperty.call(updateData, k)) continue;
+      const oldVal = guest[k] == null ? '' : String(guest[k]);
+      const newVal = updateData[k] == null ? '' : String(updateData[k]);
+      if (oldVal !== newVal) guestChanges[k] = { old: oldVal, new: newVal };
+    }
+    if (Object.keys(guestChanges).length) {
+      const guestHist = Array.isArray(guest.modification_history) ? guest.modification_history.slice() : [];
+      guestHist.push({
+        modified_at: new Date().toISOString(),
+        modified_by: (req.user && req.user.username) || 'admin',
+        modified_source: 'admin_panel',
+        changes: guestChanges
+      });
+      updateData.modification_history = guestHist;
+    }
+
     // 调试日志：记录要更新的数据
     console.log('更新数据:', JSON.stringify(updateData, null, 2));
     

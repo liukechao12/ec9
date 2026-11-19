@@ -174,120 +174,140 @@ router.post('/admin-checkin', authenticate, operationLog('checkins', '管理员�
   }
 });
 
-// 通过手机号签到（H5签到接口）
+// 通过「活动级签到码 + 手机号」签到（对齐 EC8 /checkin/<码> → by-phone）
+// ⚠️ EC9 与 EC8 的三处必要适配：
+//    1) 手机号是 phone_hmac（HMAC-SHA256），且要先 normalizePhone 支持国际号；
+//    2) 报名资格以 ec9_registrations status='paid' 为准（EC9 主链路是自主报名，多数人没有邀约）；
+//    3) ec9_checkins 的 registration_id / checkin_code_id 是 NOT NULL，用本人出票码填充。
+//    签到记录按 EC8 写入 location_type / location / device_info / user_agent / ip_address，并回写个人码 used_at。
 router.post('/by-phone', async (req, res) => {
   try {
-    const { phone, checkin_code, location, device_info, user_agent, ip_address } = req.body;
-    
+    const { phone, checkin_code, location, device_info, user_agent, lang } = req.body || {};
     if (!phone || !checkin_code) {
-      return res.status(400).json({
-        code: 400,
-        message: '手机号和签到码不能为空'
-      });
+      return res.status(400).json({ code: 400, message: '手机号和签到码不能为空' });
     }
-    
-    // 查找签到码
-    const checkinCode = await CheckinCode.findOne({
-      where: { code: checkin_code, is_active: 1 }
-    });
-    
-    if (!checkinCode) {
-      return res.status(404).json({
-        code: 404,
-        message: '签到码无效或已禁用'
-      });
-    }
-    
-    // 通过手机号查找嘉宾
-    // ⚠️ EC9 的 phone_hmac 是 HMAC-SHA256（带 PHONE_HMAC_KEY），
-    //    不是 EC8 的无盐 sha256，用错会永远查不到人。
-    const { hmacPhone } = require('../utils/phoneCrypto');
-    const phoneHash = hmacPhone(require('../utils/phoneUtil').normalizePhone(phone) || String(phone));
 
-    const guest = await Guest.findOne({
-      where: { phone_hash: phoneHash, status: 1 }
-    });
-    
-    if (!guest) {
-      return res.status(404).json({
-        code: 404,
-        message: '未报名或手机号错误'
+    const { sequelize } = require('../models');
+    const Q = sequelize.QueryTypes.SELECT;
+    const code = String(checkin_code).trim();
+
+    // 1. 校验活动级签到码（EC8 的 is_active / code_type）
+    const ccRows = await sequelize.query(
+      "SELECT id,event_id,code,code_type FROM ec9_event_checkin_codes WHERE code=:code AND is_active=1 LIMIT 1",
+      { replacements: { code }, type: Q }
+    );
+    const cc = ccRows[0];
+    if (!cc) return res.status(404).json({ code: 404, message: '签到码无效或已禁用' });
+
+    // 2. 手机号 → 嘉宾
+    const { hmacPhone } = require('../utils/phoneCrypto');
+    const { normalizePhone } = require('../utils/phoneUtil');
+    const phoneHmac = hmacPhone(normalizePhone(phone) || String(phone));
+    const guestRows = await sequelize.query(
+      "SELECT id,name,company FROM ec9_guests WHERE phone_hmac=:h AND status=1 ORDER BY id LIMIT 1",
+      { replacements: { h: phoneHmac }, type: Q }
+    );
+    const guest = guestRows[0];
+    if (!guest) return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
+
+    // 3. 报名资格：优先自主报名 paid，兼容老邀约链路
+    const regRows = await sequelize.query(
+      "SELECT id,invitation_id,ticket_type_id FROM ec9_registrations WHERE guest_id=:g AND event_id=:e AND status='paid' ORDER BY id LIMIT 1",
+      { replacements: { g: guest.id, e: cc.event_id }, type: Q }
+    );
+    let reg = regRows[0];
+    let invitationId = null;
+    if (!reg) {
+      const invRows = await sequelize.query(
+        "SELECT id FROM ec9_invitations WHERE guest_id=:g AND event_id=:e AND is_valid=1 AND registration_status=2 ORDER BY id LIMIT 1",
+        { replacements: { g: guest.id, e: cc.event_id }, type: Q }
+      );
+      if (!invRows.length) return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
+      invitationId = invRows[0].id;
+      const fallback = await sequelize.query(
+        "SELECT id,invitation_id,ticket_type_id FROM ec9_registrations WHERE invitation_id=:i ORDER BY id LIMIT 1",
+        { replacements: { i: invitationId }, type: Q }
+      );
+      reg = fallback[0];
+    } else {
+      invitationId = reg.invitation_id || null;
+    }
+    if (!reg) return res.status(404).json({ code: 404, message: '未报名或手机号错误' });
+
+    // 4. 判重（EC9 按 registration_id，自主报名没有邀约）
+    const dupRows = await sequelize.query(
+      "SELECT id,checkin_time FROM ec9_checkins WHERE registration_id=:r ORDER BY id LIMIT 1",
+      { replacements: { r: reg.id }, type: Q }
+    );
+    if (dupRows.length) {
+      return res.json({
+        code: 200, message: '您已签到',
+        data: {
+          status: 'already', already: true, checkin: dupRows[0],
+          guest: { name: guest.name, company: guest.company },
+          location_type: Number(cc.code_type)
+        }
       });
     }
-    
-    // 查找该嘉宾的有效邀请（已报名状态）
-    const invitation = await Invitation.findOne({
-      where: {
-        guest_id: guest.id,
-        event_id: checkinCode.event_id,
-        registration_status: 2, // 已报名
-        is_valid: 1
-      }
-    });
-    
-    if (!invitation) {
-      return res.status(404).json({
-        code: 404,
-        message: '未报名或手机号错误'
-      });
+
+    // 5. 本人出票码（ec9_checkins.checkin_code_id NOT NULL）
+    const codeRows = await sequelize.query(
+      "SELECT id,code FROM ec9_checkin_codes WHERE registration_id=:r ORDER BY id LIMIT 1",
+      { replacements: { r: reg.id }, type: Q }
+    );
+    if (!codeRows.length) {
+      return res.status(400).json({ code: 400, message: '该嘉宾没有签到码，请联系现场工作人员' });
     }
-    
-    // 检查是否已签到
-    const existingCheckin = await Checkin.findOne({
-      where: { invitation_id: invitation.id }
-    });
-    
-    if (existingCheckin) {
-      return res.status(400).json({
-        code: 400,
-        message: '您已经签到过了'
-      });
-    }
-    
-    // 创建签到记录
+
+    // 6. 留痕：EC8 前端传完整 UA 到 device_info(255) 会超长，这里拆开写
+    const ua = String(user_agent || req.headers['user-agent'] || '').slice(0, 500);
+    const ip = String(req.ip || '').slice(0, 45);
+    const loc = String(location || '').slice(0, 255);
+    const dev = ('onsite=' + code + '|' + String(device_info || '').slice(0, 180)).slice(0, 255);
+
     const checkin = await Checkin.create({
-      invitation_id: invitation.id,
-      event_id: checkinCode.event_id,
+      checkin_code_id: codeRows[0].id,
+      registration_id: reg.id,
       guest_id: guest.id,
-      checkin_code_id: checkinCode.id,
+      event_id: cc.event_id,
+      invitation_id: invitationId,
       checkin_time: new Date(),
-      location_type: checkinCode.code_type,
-      location,
-      device_info,
-      user_agent,
-      ip_address
+      location_type: Number(cc.code_type),
+      location: loc,
+      device_info: dev,
+      user_agent: ua,
+      ip_address: ip
     });
-    
-    // 触发登记成功短信
+
+    // 7. 回写个人签到码 used_at（EC9 表有这列，之前一直全 NULL）
+    try {
+      await CheckinCode.update({ used_at: new Date() },
+        { where: { id: codeRows[0].id, used_at: null } });
+    } catch (e) { console.error('[by-phone] 回写 used_at 失败:', e); }
+
+    // 8. 签到成功短信（与 event-checkin 保持一致，失败不影响签到）
     try {
       const { SmsService, MESSAGE_TYPES } = require('../services/SmsService');
-      await SmsService.sendMessage(MESSAGE_TYPES.CHECKIN_SUCCESS, { lang: SmsService.normalizeLang(req.body && req.body.lang),
+      await SmsService.sendMessage(MESSAGE_TYPES.CHECKIN_SUCCESS, {
+        lang: SmsService.normalizeLang(lang),
         guestId: guest.id,
-        eventId: checkinCode.event_id,
-        invitationId: invitation.id
+        eventId: cc.event_id,
+        invitationId: invitationId || undefined
       });
-    } catch (e) {
-      console.error('触发登记成功短信失败:', e);
-    }
-    
+    } catch (e) { console.error('[by-phone] 触发登记成功短信失败:', e); }
+
     res.json({
-      code: 200,
-      message: '签到成功',
+      code: 200, message: '签到成功',
       data: {
-        checkin,
-        guest: {
-          name: guest.name,
-          company: guest.company
-        },
-        event: await Event.findByPk(checkinCode.event_id)
+        status: 'checked_in', already: false, checkin,
+        guest: { name: guest.name, company: guest.company },
+        event: await Event.findByPk(cc.event_id),
+        location_type: Number(cc.code_type)
       }
     });
   } catch (error) {
-    res.status(500).json({
-      code: 500,
-      message: '签到失败',
-      error: error.message
-    });
+    console.error('[by-phone] error:', error);
+    res.status(500).json({ code: 500, message: '签到失败', error: error.message });
   }
 });
 

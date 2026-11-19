@@ -60,7 +60,12 @@ const config = {
     codeDailyLimit: parseInt(process.env.SMS_CODE_DAILY_LIMIT) || 10,
     // 联调开关：设置后不发短信，验证码固定为该值（默认留空=关闭）
     // 例：SMS_FIXED_CODE=123456 —— 仅用于跑通流程，上线前必须删掉
-    fixedCode: (process.env.SMS_FIXED_CODE || '').trim()
+    fixedCode: (process.env.SMS_FIXED_CODE || '').trim(),
+    // 支付资质审核演示专用：只放行 SMS_DEMO_PHONES 内的手机号用 SMS_DEMO_CODE 登录。
+    // 留空 = 完全关闭；真实用户的短信通道、频控、日上限、随机码不受任何影响。
+    // 例：SMS_DEMO_PHONES=13800000001,13800000002  SMS_DEMO_CODE=482913
+    demoPhones: (process.env.SMS_DEMO_PHONES || '').split(',').map(s => String(s).trim()).filter(Boolean),
+    demoCode: (process.env.SMS_DEMO_CODE || '').trim()
   },
 
   // ==================== 微信支付 ====================

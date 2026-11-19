@@ -39,8 +39,8 @@
   </div>
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/common.js"></script>
+<script src="js/i18n.js?v=20261119vip"></script>
+<script src="js/common.js?v=20261119vip"></script>
 <script>
 (function () {
   var E = window.EC9;
@@ -57,6 +57,18 @@
   })();
 
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
+  // 老板特邀邀约码：短链 /v/<码> 302 到本页；协议页返回时也要把码带回去
+  var vipCode = E.vipCode();
+  // ⚠️ redirect 必须是「带码的当前页地址」：只给协议链接加 &vip= 不够，
+  //    用户点《用户协议》→ 协议页切 Tab → 返回时若 redirect 不带码，就变回普通付费报名。
+  var selfUrl = "index.html?event_id=" + encodeURIComponent(eventId) +
+    (vipCode ? "&vip=" + encodeURIComponent(vipCode) : "");
+  if (vipCode) {
+    Array.prototype.forEach.call(document.querySelectorAll('a[href^="agreement.html"]'), function (a) {
+      var href = a.getAttribute("href").replace(/redirect=[^&]*/, "redirect=" + encodeURIComponent(selfUrl));
+      a.setAttribute("href", href + "&vip=" + encodeURIComponent(vipCode));
+    });
+  }
   var agreed = false;
   var ck = document.getElementById("agreeCk");
   /* 勾选框只有 14px，手机上很难点中；把点击热区扩到整行（协议链接除外，照常跳转） */
@@ -66,7 +78,7 @@
   });
 
   document.getElementById("btnContact").addEventListener("click", function () {
-    E.go("agreement.html", { tab: "contact", event_id: eventId, redirect: "index.html" });
+    E.go("agreement.html", { tab: "contact", event_id: eventId, redirect: selfUrl });
   });
 
   document.getElementById("btnRegister").addEventListener("click", function () {

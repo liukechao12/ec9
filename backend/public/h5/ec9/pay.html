@@ -26,15 +26,14 @@
     <div id="qrTip" class="invoice-tip hidden" data-i18n="qr_tip">请用微信扫一扫完成支付</div>
 
     <button class="btn-primary" id="btnPay" data-i18n="pay_now">立即支付</button>
-    <button class="btn-primary hidden" id="btnMock" style="background:#E8A33D" data-i18n="mock_pay">模拟支付</button>
 
     <div class="refund-tip" data-i18n="refund_tip"></div>
     <div class="error-pill hidden" id="errPill"></div>
   </div>
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/common.js"></script>
+<script src="js/i18n.js?v=20261117nomock"></script>
+<script src="js/common.js?v=20261117nomock"></script>
 <script>
 (function () {
   var E = window.EC9;
@@ -92,13 +91,9 @@
       E.toast(E.t("pay_loading"));
       E.Api.groupPay(orderNo, payToken).then(function (d) {
         if (d && d.jsapi_params) callWechatPay(d.jsapi_params);
-        else if (d && d.mock) { document.getElementById("btnMock").classList.remove("hidden"); startGroupPoll(); }
+        else if (d && d.mock) { E.errPill(E.t("pay_channel_closed")); }
         else startGroupPoll();
       }).catch(function (e) { E.errPill(e.message || E.t("err_pay_launch")); });
-    });
-
-    document.getElementById("btnMock").addEventListener("click", function () {
-      E.Api.groupMockPay(orderNo, payToken).then(function () { startGroupPoll(); }).catch(function (e) { E.errPill(e.message); });
     });
 
     function startGroupPoll() {
@@ -161,7 +156,7 @@
     E.Api.payJsapi(orderNo).then(function (d) {
       if (d && d.jsapi_params) { callWechatPay(d.jsapi_params); }
       else if (d && d.code_url) { showNative(d); }
-      else if (d && d.mock) { showNative({ mock: true }); }   // JSAPI 未配置 + mock 模式
+      else if (d && d.mock) { E.errPill(E.t("pay_channel_closed")); }
       else { startPoll(); }
     }).catch(function () {
       E.Api.payNative(orderNo).then(function (d) {
@@ -176,7 +171,6 @@
       document.getElementById("qrBox").classList.remove("hidden");
       document.getElementById("qrTip").classList.remove("hidden");
     }
-    if (d.mock) document.getElementById("btnMock").classList.remove("hidden");
     startPoll();
   }
 
@@ -193,10 +187,6 @@
       else E.errPill(res.err_msg || E.t("pay_cancel"));
     });
   }
-
-  document.getElementById("btnMock").addEventListener("click", function () {
-    E.Api.mockPay(orderNo).then(function () { startPoll(); }).catch(function (e) { E.errPill(e.message); });
-  });
 
   // 3. 轮询支付结果
   function startPoll() {

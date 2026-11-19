@@ -4,16 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title data-i18n="checkin_title">活动签到</title>
-<link rel="stylesheet" href="css/style.css">
+<!-- 绝对路径：/checkin/<码> 与 /h5/ec9/checkin.html 两种入口下都能正确加载资源 -->
+<link rel="stylesheet" href="/h5/ec9/css/style.css?v=20261118ec8ck">
 </head>
 <body>
-<div id="app">
+<div id="app" class="ck-page">
   <div id="header"></div>
 
-  <!-- ① 签到表单：只填手机号（对齐 EC8，现场签到不再走验证码登录） -->
-  <div class="sheet" id="pgForm">
+  <!-- 加载中 -->
+  <div class="sheet" id="pgLoad">
+    <div class="page-title" data-i18n="checkin_title">活动签到</div>
+    <div class="checkin-tip" data-i18n="ck_loading">正在加载签到信息…</div>
+  </div>
+
+  <!-- 出错（签到码无效 / 已禁用 / 网络错误） -->
+  <div class="sheet hidden" id="pgErr">
+    <div class="page-title" data-i18n="ck_err_title">出错了</div>
+    <div class="checkin-tip" id="errText"></div>
+    <button class="btn-primary" id="btnRetry" data-i18n="ck_retry">重新加载</button>
+  </div>
+
+  <!-- 签到表单：对齐 EC8，先显示活动信息 + 签到类型，再输手机号 -->
+  <div class="sheet hidden" id="pgForm">
     <div class="page-title" data-i18n="checkin_title">活动签到</div>
     <div class="checkin-tip" data-i18n="checkin_tip">请输入报名时使用的手机号</div>
+
+    <div class="ck-card" id="evtCard">
+      <div class="ck-card-title" id="evtName">—</div>
+      <div class="ck-row"><span data-i18n="ck_event_time">活动时间</span><b id="evtTime">—</b></div>
+      <div class="ck-row"><span data-i18n="ck_event_place">活动地点</span><b id="evtPlace">—</b></div>
+      <div class="ck-row"><span data-i18n="ck_type">签到类型</span><b id="evtType" class="ck-badge">—</b></div>
+    </div>
 
     <div class="form-row">
       <div class="form-label"><span data-i18n="phone">手机号：</span></div>
@@ -24,9 +45,9 @@
     <div class="error-pill hidden" id="errPill"></div>
   </div>
 
-  <!-- ② 签到成功 -->
+  <!-- 签到成功 -->
   <div class="sheet result-page hidden" id="pgOk">
-    <div class="result-icon"><img src="assets/earth_green_signin.png" alt=""></div>
+    <div class="result-icon"><img src="/h5/ec9/assets/earth_green_signin.png" alt=""></div>
     <div class="result-title" data-i18n="checkin_ok">签到成功</div>
     <div class="result-sub" data-i18n="checkin_done_tip">签到成功，请出示电子票入场</div>
     <div class="fee-box" id="okBox" style="text-align:left;margin-top:16px"></div>
@@ -34,9 +55,9 @@
     <button class="btn-primary" id="btnOkHome" style="background:#2A2A2C" data-i18n="back_home">回到首页</button>
   </div>
 
-  <!-- ③ 已签到（重复签到） -->
+  <!-- 已签到 -->
   <div class="sheet result-page hidden" id="pgRepeat">
-    <div class="result-icon"><img src="assets/earth_blue_repeat.png" alt=""></div>
+    <div class="result-icon"><img src="/h5/ec9/assets/earth_blue_repeat.png" alt=""></div>
     <div class="result-title" data-i18n="checkin_already">您已签到</div>
     <div class="result-sub" data-i18n="checkin_already_sub">无需重复签到，如有疑问请联系现场工作人员</div>
     <div class="fee-box" id="repeatBox" style="text-align:left;margin-top:16px"></div>
@@ -45,27 +66,26 @@
   </div>
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/common.js?v=20261105phone"></script>
+<script src="/h5/ec9/js/i18n.js?v=20261118ec8ck"></script>
+<script src="/h5/ec9/js/common.js?v=20261118ec8ck"></script>
 <script>
 (function () {
   var E = window.EC9;
   E.mountHeader(document.getElementById("header"), false);
 
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
-  var pgForm = document.getElementById("pgForm");
-  var pgOk = document.getElementById("pgOk");
-  var pgRepeat = document.getElementById("pgRepeat");
+  // 两种入口：/checkin/<码>（EC8 形态）与 /h5/ec9/checkin.html?code=<码>（兼容旧链接）
+  var last = location.pathname.replace(/\/+$/, "").split("/").pop();
+  var code = (last && last !== "checkin.html" && last !== "ec9") ? last : E.param("code", "");
+
+  var pages = ["pgLoad", "pgErr", "pgForm", "pgOk", "pgRepeat"];
+  var evtInfo = null;
   var phoneInput = document.getElementById("cPhone");
   var btn = document.getElementById("btnCheckin");
 
-  // 刚报名/登录过 → 直接带出手机号，现场不用再输
-  if (E.S.phone) phoneInput.value = E.S.phone;
-  else phoneInput.value = E.param("phone", "");
-
-  function show(el) {
-    [pgForm, pgOk, pgRepeat].forEach(function (x) { x.classList.add("hidden"); });
-    el.classList.remove("hidden");
+  function show(id) {
+    pages.forEach(function (p) { document.getElementById(p).classList.add("hidden"); });
+    document.getElementById(id).classList.remove("hidden");
   }
   function err(msg) {
     var p = document.getElementById("errPill");
@@ -78,16 +98,57 @@
     return d.getFullYear() + "/" + p2(d.getMonth() + 1) + "/" + p2(d.getDate()) +
       " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
   }
+  function typeText(t) {
+    return Number(t) === 2 ? E.t("ck_type_2") : E.t("ck_type_1");
+  }
   function infoRows(d) {
     var g = (d && d.guest) || {};
     var c = (d && d.checkin) || {};
-    var fn = E.param("name", "");
-    var fc = E.param("company", "");
+    var fn = E.param("name", ""), fc = E.param("company", "");
     var html = '<div class="fee-title">' + E.t("checkin_title") + '</div>';
     html += '<div class="fee-row"><span>' + E.t("ck_name") + '</span><span>' + E.esc(g.name || fn || "—") + '</span></div>';
     html += '<div class="fee-row"><span>' + E.t("ck_company") + '</span><span>' + E.esc(g.company || fc || "—") + '</span></div>';
     html += '<div class="fee-row"><span>' + E.t("ck_time") + '</span><span>' + fmt(c.checkin_time) + '</span></div>';
+    if (d && d.location_type) html += '<div class="fee-row"><span>' + E.t("ck_type") + '</span><span>' + E.esc(typeText(d.location_type)) + '</span></div>';
     return html;
+  }
+  function renderEvt(info) {
+    evtInfo = info || {};
+    var e = evtInfo.event || {};
+    document.getElementById("evtName").textContent = e.name || E.t("checkin_title");
+    document.getElementById("evtTime").textContent = fmt(e.start_time);
+    document.getElementById("evtPlace").textContent = e.location || "—";
+    document.getElementById("evtType").textContent = typeText(evtInfo.code_type);
+  }
+
+  // 刚报名/登录过 → 预填手机号（照 EC8：不自动签到，仍需本人确认）
+  if (E.S.phone) phoneInput.value = E.S.phone;
+  else phoneInput.value = E.param("phone", "");
+
+  function init() {
+    if (!code) {
+      // 无码：保留原来的 event-checkin 流程，旧链接不回归
+      document.getElementById("evtCard").classList.add("hidden");
+      show("pgForm");
+      return;
+    }
+    E.Api.checkinCodeInfo(code).then(function (info) {
+      renderEvt(info);
+      show("pgForm");
+    }).catch(function (e) {
+      document.getElementById("errText").textContent = (e && e.message) || E.t("ck_code_invalid");
+      show("pgErr");
+    });
+  }
+
+  function extras() {
+    return {
+      location: (evtInfo && evtInfo.event && evtInfo.event.location) || "",
+      device_info: JSON.stringify({
+        p: navigator.platform || "", w: screen.width || 0, h: screen.height || 0
+      }),
+      user_agent: navigator.userAgent || ""
+    };
   }
 
   btn.addEventListener("click", function () {
@@ -98,22 +159,22 @@
     btn.disabled = true;
     btn.textContent = E.t("checkin_ing");
 
-    E.Api.checkin(phone, Number(eventId)).then(function (d) {
-      // 后端已区分首次签到 / 重复签到
+    // 有码走 EC8 的 by-phone；无码走原来的 event-checkin
+    var p = code ? E.Api.checkinByCode(phone, code, extras()) : E.Api.checkin(phone, Number(eventId));
+    p.then(function (d) {
       if (d && d.already) {
         document.getElementById("repeatBox").innerHTML = infoRows(d);
-        show(pgRepeat);
+        show("pgRepeat");
       } else {
         document.getElementById("okBox").innerHTML = infoRows(d);
         if (d && d.guest && d.guest.name) E.S.patch({ name: d.guest.name });
-        show(pgOk);
+        show("pgOk");
       }
       E.S.phone = phone;
     }).catch(function (e) {
       btn.disabled = false;
       btn.textContent = E.t("checkin_btn");
-      show(pgForm);
-      // 直接用后端真实原因（未报名 / 未报名成功 / 没有签到码 ...），不再一律显示「网络错误」
+      show("pgForm");
       err((e && e.message) || E.t("err_checkin"));
     });
   });
@@ -124,6 +185,9 @@
   document.getElementById("btnOkHome").addEventListener("click", goHome);
   document.getElementById("btnRepeatTicket").addEventListener("click", goTicket);
   document.getElementById("btnRepeatHome").addEventListener("click", goHome);
+  document.getElementById("btnRetry").addEventListener("click", function () { location.reload(); });
+
+  init();
 })();
 </script>
 </body>

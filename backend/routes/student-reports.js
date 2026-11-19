@@ -1,5 +1,5 @@
 /**
- * 学生票《教育部学籍在线验证报告》后台接口（登录后台即可）
+ * 学生票《教育部学籍在线验证报告》后台接口（只读登录即可，审批写操作仅管理员）
  *
  *   GET  /api/student-reports                    报告列表（可按 group_no / status 筛选）
  *   GET  /api/student-reports/:id/file           鉴权读取报告文件（inline 预览，不暴露静态 URL）
@@ -16,13 +16,15 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const operationLog = require('../middleware/operationLog');
 const { sequelize, Registration, StudentReport, REPORT_STATUS } = require('../models');
 
-// 与「报名审核」的 /registrations/group/:groupNo/audit 保持一致：登录后台即可操作，
-// 不额外要求 admin 角色（BD 也要能进审核工作台做复核）。
+// 2026-11-17：BD 审批权限全部关闭。
+// 只读（报告列表 / 文件预览）登录后台即可；复核结论、代传报告等审核写操作仅 admin。
+// 与 /registrations/group/:groupNo/audit 的 authorize('admin') 保持同一口径。
 const loggedIn = [authenticate];
+const adminOnly = [authenticate, authorize('admin')];
 const PRIVATE_ROOT = path.resolve(__dirname, '../private/student_reports');
 
 // ---------- 管理员代传 / 补传：与报名时上传共用同一套私有目录与命名规则 ----------
@@ -93,7 +95,7 @@ router.get('/', ...loggedIn, operationLog('student_reports', '查看学籍报告
  *      清空复核结论并删除旧文件，替换后必须重新按报告中的「在线验证码」人工复核。
  *      这保证 auditGroup 的「报告未全部符合就拦截」逻辑不用改。
  */
-router.post('/upload', ...loggedIn, operationLog('student_reports', '管理员代传学籍报告'),
+router.post('/upload', ...adminOnly, operationLog('student_reports', '管理员代传学籍报告'),
   acceptReportFile, async (req, res) => {
     let writtenRel = '';
     try {
@@ -207,7 +209,7 @@ router.get('/:id/file', ...loggedIn, async (req, res) => {
  * 人工复核：按报告中的「在线验证码」去学信网核对后标记结论
  * body: { action: 'approve'|'reject', verify_code?, review_note? }
  */
-router.post('/:id/review', ...loggedIn, operationLog('student_reports', '人工复核学籍报告'), async (req, res) => {
+router.post('/:id/review', ...adminOnly, operationLog('student_reports', '人工复核学籍报告'), async (req, res) => {
   try {
     const { action, verify_code, review_note } = req.body || {};
     if (action !== 'approve' && action !== 'reject') {

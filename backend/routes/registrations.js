@@ -1112,14 +1112,15 @@ const groupOrderService = require('../services/groupOrderService');
 router.post('/submit-group', uploadReports, requireVerifiedReusable, async (req, res) => {
   try {
     const isMulti = !!req.is('multipart/form-data');
-    let event_id, members, buyer_phone;
+    let event_id, members, buyer_phone, vip_code;
     if (isMulti) {
       const b = req.body || {};
       event_id = b.event_id;
       buyer_phone = b.buyer_phone;
+      vip_code = b.vip_code;
       try { members = JSON.parse(b.members || '[]'); } catch (e) { members = []; }
     } else {
-      ({ event_id, members, buyer_phone } = req.body || {});
+      ({ event_id, members, buyer_phone, vip_code } = req.body || {});
     }
     if (!event_id) return res.status(400).json({ code: 400, message: '活动ID不能为空' });
     // 购票人手机号必须与验证凭证一致（防冒名）
@@ -1144,7 +1145,8 @@ router.post('/submit-group', uploadReports, requireVerifiedReusable, async (req,
       }));
 
     const result = await groupOrderService.createGroup({
-      buyerPhone: String(buyer_phone), eventId: Number(event_id), members, reportFiles
+      buyerPhone: String(buyer_phone), eventId: Number(event_id), members, reportFiles,
+      vipCode: vip_code ? String(vip_code).trim() : ''
     });
     if (!result.ok) return res.status(400).json({ code: 400, message: result.error });
     res.json({
@@ -1260,7 +1262,7 @@ router.get('/group/:groupNo', async (req, res) => {
  * POST /api/registrations/group/:groupNo/audit   管理员整单审核（一票否决）
  * body: { action: 'approve'|'reject', reason? }
  */
-router.post('/group/:groupNo/audit', authenticate, operationLog('registrations', '整单审核'), async (req, res) => {
+router.post('/group/:groupNo/audit', authenticate, authorize('admin'), operationLog('registrations', '整单审核'), async (req, res) => {
   try {
     const { action, reason } = req.body;
     const operator = req.admin ? req.admin.username : (req.user ? req.user.username : null);

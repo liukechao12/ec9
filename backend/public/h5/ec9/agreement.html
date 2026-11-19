@@ -41,6 +41,18 @@
   // （实测会跳到历史栈里任意一页，甚至不动）。
   var redirect = E.param("redirect", "");
 
+  // 老板特邀邀约码（2026-11-19）：协议页切 Tab 会 replaceState 重写 URL，
+  // 若不把码带回去，用户点一次《用户协议》再返回首页就变回普通付费报名。
+  // redirect 里也可能已经编码带了码（ticket.html 用整页 URL 当 redirect），一并兜底。
+  var vipCode = E.vipCode() || (function () {
+    var m = /[?&]vip=([^&]*)/.exec(redirect);
+    return m ? decodeURIComponent(m[1]) : "";
+  })();
+  function withVip(url) {
+    if (!vipCode || /([?&]vip=)/.test(url)) return url;
+    return url + (url.indexOf("?") > -1 ? "&" : "?") + "vip=" + encodeURIComponent(vipCode);
+  }
+
   // 语言切换挂载到页面容器
   var holder = document.createElement("div");
   document.getElementById("app").appendChild(holder);
@@ -120,8 +132,8 @@
     el.addEventListener("click", function () {
       renderTab(el.dataset.tab);
       // 同步 URL，刷新 / 分享时还能落在正确 Tab
-      history.replaceState(null, "", "agreement.html?tab=" + el.dataset.tab +
-        "&event_id=" + eventId + (redirect ? "&redirect=" + encodeURIComponent(redirect) : ""));
+      history.replaceState(null, "", withVip("agreement.html?tab=" + el.dataset.tab +
+        "&event_id=" + eventId + (redirect ? "&redirect=" + encodeURIComponent(redirect) : "")));
     });
   });
 
@@ -133,11 +145,11 @@
       // redirect 自带查询串（如 profile.html?event_id=1&reg_id=5）时直接用，
       // 不能再套 E.go —— 那会拼出两个 "?"
       if (redirect.indexOf("?") > -1) {
-        location.href = redirect.indexOf("event_id=") > -1
+        location.href = withVip(redirect.indexOf("event_id=") > -1
           ? redirect
-          : redirect + "&event_id=" + eventId;
+          : redirect + "&event_id=" + eventId);
       } else {
-        E.go(redirect, { event_id: eventId });
+        E.go(redirect, { event_id: eventId });  // E.go 会自动透传 URL 上的 vip
       }
       return;
     }

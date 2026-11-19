@@ -349,13 +349,6 @@
       }).then(function (r) { return r.json(); })
         .then(function (j) { if (j.code === 0 || j.code === 200) return j.data; throw new Error(j.message || "请求失败"); });
     },
-    groupMockPay: function (orderNo, payToken) {
-      return fetch(API + "/payment/group/" + orderNo + "/mock-pay", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pay_token: payToken })
-      }).then(function (r) { return r.json(); })
-        .then(function (j) { if (j.code === 0 || j.code === 200) return j.data; throw new Error(j.message || "请求失败"); });
-    },
     // 订单
     createOrder: function (registrationId, quantity, unitPrice) {
       return request("/orders", { method: "POST", body: { registration_id: registrationId, quantity: quantity, unit_price: unitPrice } });
@@ -364,9 +357,17 @@
     payNative: function (orderNo) { return request("/payment/native", { method: "POST", body: { order_no: orderNo } }); },
     payJsapi: function (orderNo) { return request("/payment/jsapi", { method: "POST", body: { order_no: orderNo } }); },
     queryPay: function (orderNo) { return request("/payment/query/" + orderNo); },
-    mockPay: function (orderNo) { return request("/payment/mock-pay/" + orderNo, { method: "POST" }); },
     // 签到
-    checkin: function (phone, eventId) { return request("/checkins/event-checkin", { method: "POST", body: { phone: phone, event_id: eventId } }); }
+    checkin: function (phone, eventId) { return request("/checkins/event-checkin", { method: "POST", body: { phone: phone, event_id: eventId } }); },
+    // 现场活动级签到码（对齐 EC8 /checkin/<码>）
+    checkinCodeInfo: function (code) { return request("/checkin-codes/lookup/" + encodeURIComponent(code)); },
+    // 老板特邀邀约码（公开只读，返回绑定的票种）
+    vipCodeInfo: function (code) { return request("/vip-invite-codes/lookup/" + encodeURIComponent(code)); },
+    checkinByCode: function (phone, code, extras) {
+      var body = { phone: phone, checkin_code: code };
+      if (extras) Object.keys(extras).forEach(function (k) { body[k] = extras[k]; });
+      return request("/checkins/by-phone", { method: "POST", body: body });
+    }
   };
 
   /* ---------- UI 小工具 ---------- */
@@ -438,8 +439,16 @@
   function go(page, params) {
     var q = [];
     for (var k in (params || {})) if (params[k] !== "" && params[k] != null) q.push(k + "=" + encodeURIComponent(params[k]));
-    location.href = page + (q.length ? "?" + q.join("&") : "");
+    // 老板特邀邀约码：从二维码短链落地后，报名链路每一跳自动带上 vip 参数。
+    // 只用 URL 参数、不落 localStorage/sessionStorage —— 从普通入口进来天然不带码，不会残留误锁票种。
+    var vip = currentVip();
+    if (vip && !/([?&]vip=)/.test(page)) q.push("vip=" + encodeURIComponent(vip));
+    // page 本身可能已带查询串（如 back 参数回跳），此时用 & 续接，别拼出第二个 "?"
+    location.href = page + (q.length ? (page.indexOf("?") > -1 ? "&" : "?") + q.join("&") : "");
   }
+
+  /** 当前页面的特邀邀约码（只读 URL 参数） */
+  function currentVip() { return param("vip", "") || ""; }
 
   /* ---------- 验证码倒计时 ---------- */
   function codeCountdown(btn) {
@@ -477,7 +486,7 @@
     S: S, t: t, esc: esc, applyLang: applyLang, Api: Api, agendaHtml: agendaHtml,
     validPhone: validPhone, normPhone: normPhone,
     toast: toast, errPill: errPill, header: header, mountHeader: mountHeader,
-    param: param, go: go, codeCountdown: codeCountdown,
+    param: param, go: go, vipCode: currentVip, codeCountdown: codeCountdown,
     fmtDate: fmtDate, discountText: discountText, localizeMsg: localizeMsg,
     DEFAULT_EVENT_ID: DEFAULT_EVENT_ID
   };

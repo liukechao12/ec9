@@ -26,7 +26,7 @@ const TicketType = require('../models/TicketType');
 const Event = require('../models/Event');
 const CheckinCode = require('../models/CheckinCode');
 const Invitation = require('../models/Invitation');
-const { StudentReport, REPORT_STATUS, RegistrationSession, Session } = require('../models');
+const { StudentReport, REPORT_STATUS, RegistrationSession, Session, sequelize } = require('../models');
 const { encryptPhone, hmacPhone, decryptPhone, maskPhone } = require('../utils/phoneCrypto');
 const { normalizePhone } = require('../utils/phoneUtil');
 const { validateSelection } = require('./ticketBinding');
@@ -457,9 +457,42 @@ function pickSessions(m) {
   return { all, ids: Array.from(new Set(ids)) };
 }
 
-async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
+async function createGroup({ buyerPhone, eventId, members, reportFiles = [], vipCode = '' }) {
   if (!Array.isArray(members) || members.length < 1) return { ok: false, error: '至少填报一位报名人' };
   if (members.length > 10) return { ok: false, error: '单次最多代报 10 人' };
+
+  // ===== 老板特邀邀约码（2026-11-19）=====
+  // 一码锁定一种票：免费 + 免审核 + 提交即出票 + 每单限 1 人 + 占用库存。
+  // ⚠️ 码与票种一律从库里查，**强制覆盖前端传值**，防抓包改 ticket_type_id 白嫖尊享票。
+  let vipInfo = null;
+  if (vipCode) {
+    const rows = await sequelize.query(
+      `SELECT c.id,c.code,c.name,c.ticket_type_id,c.is_active,
+              t.name AS ticket_name,t.on_shelf,t.status AS ticket_status,t.is_student,
+              t.stock_total,t.stock_locked,t.stock_sold
+         FROM ec9_vip_invite_codes c
+         LEFT JOIN ec9_ticket_types t ON t.id=c.ticket_type_id
+        WHERE UPPER(TRIM(c.code))=UPPER(TRIM(:code)) LIMIT 1`,
+      { replacements: { code: String(vipCode) }, type: sequelize.QueryTypes.SELECT }
+    );
+    const v = rows[0];
+    if (!v || Number(v.is_active) !== 1) return { ok: false, error: '特邀邀约码无效或已停用' };
+    if (!v.ticket_type_id || Number(v.on_shelf) !== 1 || Number(v.ticket_status) !== 1) {
+      return { ok: false, error: '特邀邀约码对应的票种已下架' };
+    }
+    if (Number(v.is_student) === 1) return { ok: false, error: '特邀邀约码不能绑定学生票' };
+    if (members.length !== 1) return { ok: false, error: '特邀通道每单仅限 1 人报名' };
+    // 特邀票也要占名额：库存不足时在落库前拒绝，避免自动出票把 stock_sold 顶穿 stock_total。
+    const leftN = Number(v.stock_total || 0) - Number(v.stock_locked || 0) - Number(v.stock_sold || 0);
+    if (Number(v.stock_total || 0) > 0 && leftN < 1) {
+      return { ok: false, error: '该票种名额已满，请联系主办方' };
+    }
+    vipInfo = {
+      id: Number(v.id), code: v.code, name: v.name,
+      ticket_type_id: Number(v.ticket_type_id), ticket_name: v.ticket_name || ''
+    };
+    for (const m of members) m.ticket_type_id = vipInfo.ticket_type_id;
+  }
 
   const event = await Event.findByPk(eventId);
   if (!event) return { ok: false, error: '活动不存在' };
@@ -498,6 +531,7 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
     return {
       ...m,
       is_invited: invited,
+      ...(vipInfo ? { need_pay: false } : {}),   // 特邀码：估价强制免费
       // 全选 → 展开成所有启用场次；否则用所选列表（已去重）
       session_pick: pick.all ? enabledIds.slice() : pick.ids,
       session_all: pick.all ? 1 : 0,
@@ -568,11 +602,32 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
       await guest.update({ status: 1 });
     } else {
       // 已有嘉宾：用本次填报更新档案（以最新提交为准）
-      await guest.update({
-        name: clip(m.name, 100),
-        company: clip(m.company, 200),
-        position: clip(m.position, 100)
-      });
+      // 2026-11-17 恢复 EC8 口径：记录姓名/公司/职位的改动，供后台「信息变更记录」查看
+      const nextName = clip(m.name, 100);
+      const nextCompany = clip(m.company, 200);
+      const nextPosition = clip(m.position, 100);
+      const asStr = (v) => (v == null ? '' : String(v));
+      const changes = {};
+      if (asStr(nextName) !== asStr(guest.name)) changes.name = { old: asStr(guest.name), new: asStr(nextName) };
+      if (asStr(nextCompany) !== asStr(guest.company)) changes.company = { old: asStr(guest.company), new: asStr(nextCompany) };
+      if (asStr(nextPosition) !== asStr(guest.position)) changes.position = { old: asStr(guest.position), new: asStr(nextPosition) };
+      const guestUpdate = {
+        name: nextName,
+        company: nextCompany,
+        position: nextPosition
+      };
+      if (Object.keys(changes).length) {
+        // 用新数组赋值，确保 Sequelize 能检测到 JSONB 字段变更
+        const hist = Array.isArray(guest.modification_history) ? guest.modification_history.slice() : [];
+        hist.push({
+          modified_at: new Date().toISOString(),
+          modified_by: 'guest',
+          modified_source: 'h5_registration',
+          changes
+        });
+        guestUpdate.modification_history = hist;
+      }
+      await guest.update(guestUpdate);
     }
 
     const isInvited = invitedMap.has(phone);
@@ -580,13 +635,33 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
     // 票种按本人所选（老客户端没传时 norm 里已回退标准票）
     const effTicketId = Number(m.ticket_type_id) || (isInvited && stdTicketId ? stdTicketId : 0);
     // 免费判定：¥0 票种 / 选了邀约管理给这个人指定的赠票 / 管理员特批免票
-    const invNeedPay = !isFreeFor(inv, effTicketId, priceMap.get(effTicketId) || 0);
+    const invNeedPay = vipInfo ? false : !isFreeFor(inv, effTicketId, priceMap.get(effTicketId) || 0);
     // 同步邀约管理：命中名单 → 邀约置「已报名(2)」；不在名单 → 建「待审批(1)」邀约
     const invId = await syncInvitationOnRegister({
       eventId, guestId: guest.id, isInvited, groupNo,
       invitationId: isInvited ? invitedMap.get(phone).invitation_id : null,
       at: now
     });
+    // 特邀码直接出票：影子邀约同步置「审核通过 + 免票」，避免后台出现「待审批却已出票」的矛盾。
+    // JSONB 必须用新对象赋值，Sequelize 才能检测到变更。
+    if (vipInfo && invId) {
+      const vinv = await Invitation.findByPk(invId);
+      if (vinv) {
+        const ef = Object.assign({}, vinv.extra_fields || {}, {
+          vip_invite_code: vipInfo.code, vip_invite_name: vipInfo.name
+        });
+        // ⚠️ 真邀约（后台建过、可能被管理员特意设成需付款）不能改 need_pay：
+        //    免费由 vipInfo 强制决定，改了反而动到后台原有口径。
+        //    只有「自助报名」自动建的影子邀约才置 0，避免后台出现「需付款却已免费出票」。
+        const upd = {
+          registration_status: 2, approval_status: 2, approval_time: now, extra_fields: ef
+        };
+        if (vinv.extra_fields && vinv.extra_fields.auto_created) {
+          upd.need_pay = 0; upd.is_valid = 1;
+        }
+        await vinv.update(upd);
+      }
+    }
     // 邀约名单内：免审核直接通过（audit_exempt 标记，驳回重提时仍免审）
     const reg = await Registration.create({
       event_id: eventId,
@@ -598,18 +673,20 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
       guest_id: guest.id,
       invitation_id: invId || (isInvited ? invitedMap.get(phone).invitation_id : null),
       group_no: groupNo,
-      status: (isInvited && !forceAudit) ? REG_STATUS.APPROVED : REG_STATUS.SUBMITTED,
+      status: (vipInfo || (isInvited && !forceAudit)) ? REG_STATUS.APPROVED : REG_STATUS.SUBMITTED,
       focus: clip(m.focus, 200),
       source_bd: clip(m.inviter, 100),
       submitted_at: now,
       registration_time: now,
-      audited_at: (isInvited && !forceAudit) ? now : null,
+      audited_at: (vipInfo || (isInvited && !forceAudit)) ? now : null,
       extra_fields: {
         submitter_phone: buyerPhone,
         is_buyer: phone === String(buyerPhone),
         is_invited: isInvited,
-        audit_exempt: isInvited && !forceAudit,
+        audit_exempt: !!vipInfo || (isInvited && !forceAudit),
         need_pay: invNeedPay,
+        // 特邀码留痕：便于后台对账、追溯这批免费票的来源
+        ...(vipInfo ? { vip_invite_code: vipInfo.code, vip_invite_name: vipInfo.name } : {}),
         // 邀约管理给这个人指定的赠票票种（选它免费）；未指定为 null
         invited_ticket_id: (inv && Number(inv.ticket_type_id) > 0) ? Number(inv.ticket_type_id) : null,
         // 本次是否正好选到了赠票（免费出票的直接证据，便于对账）
@@ -679,7 +756,15 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
   // 整单无付费票（全员免票邀约 / 全员免费票）→ 自动确认：免审核、免支付，直接出票
   // ⚠️ 含学生票例外：必须等人工复核报告「符合」，绝不能提交即出票
   if (Number(finalQuote.final_amount) === 0 && !forceAudit) {
-    const auto = await autoConfirmFreeGroup({ groupNo, eventId, quote: finalQuote, buyerPhone });
+    const auto = await autoConfirmFreeGroup({ groupNo, eventId, quote: finalQuote, buyerPhone, vipInfo });
+    if (auto.ok && vipInfo) {
+      try {
+        await sequelize.query(
+          'UPDATE ec9_vip_invite_codes SET use_count=use_count+1, updated_at=CURRENT_TIMESTAMP WHERE id=:id',
+          { replacements: { id: vipInfo.id } }
+        );
+      } catch (e) { console.warn('[vip-invite] 使用次数更新失败:', e.message); }
+    }
     return {
       ok: true, group_no: groupNo, quote: finalQuote, registrations: created,
       auto_approved: true, paid: auto.ok, pay_url: null, order: auto.order || null
@@ -707,7 +792,7 @@ async function createGroup({ buyerPhone, eventId, members, reportFiles = [] }) {
  * 全免单自动确认：整单 approved → 建 0 元单 → markPaid（全员入场码 + 全员短信）
  * （邀约嘉宾不花钱、不用审核，提交即出票）
  */
-async function autoConfirmFreeGroup({ groupNo, eventId, quote, buyerPhone }) {
+async function autoConfirmFreeGroup({ groupNo, eventId, quote, buyerPhone, vipInfo = null }) {
   const regs = await Registration.findAll({ where: { group_no: groupNo }, order: [['id', 'ASC']] });
   if (!regs.length) return { ok: false, error: '报名单不存在' };
   for (const r of regs) {
@@ -736,12 +821,23 @@ async function autoConfirmFreeGroup({ groupNo, eventId, quote, buyerPhone }) {
     price_detail: regs.map(r => ({
       registration_id: r.id, guest_id: r.guest_id, ticket_type_id: r.ticket_type_id,
       ticket_name: (quote.items.find(x => x.ticket_type_id === r.ticket_type_id) || {}).ticket_name || '',
-      price: 0, is_free: true, session_id: r.session_id
+      price: 0, is_free: true, session_id: r.session_id,
+      ...(vipInfo ? { vip_invite_code: vipInfo.code } : {})
     })),
     discount_rate: 1.00,
     pay_token: genPayToken(),
-    remark: `邀约/免费票自动确认 ${regs.length} 人`
+    remark: vipInfo ? `特邀邀约码 ${vipInfo.code} 自动出票 ${regs.length} 人` : `邀约/免费票自动确认 ${regs.length} 人`
   });
+  // 特邀码虽 0 元，仍按口径占用名额：只加 sold（本单没有 lock 阶段，不能减 locked）。
+  // price_detail 保持 is_free=true，避免关单/删单时 releaseGroupStock 误减 locked。
+  if (vipInfo) {
+    const perType = new Map();
+    for (const r of regs) perType.set(r.ticket_type_id, (perType.get(r.ticket_type_id) || 0) + 1);
+    for (const [ttId, n] of perType) {
+      const tt = await TicketType.findByPk(ttId);
+      if (tt) await tt.increment('stock_sold', { by: n });
+    }
+  }
   const codes = await markGroupPaid(order);
   try { await sendGroupPaidSms(order); } catch (e) {}
   return { ok: true, order: { order_no: orderNo, final_amount: 0 }, codes };

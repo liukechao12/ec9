@@ -5,7 +5,7 @@
  *   POST /api/payment/notify          微信支付回调（原样 XML，服务端验签）
  *   GET  /api/payment/query/:orderNo  H5 轮询订单状态
  *   POST /api/payment/refund          后台退款（管理员）
- *   POST /api/payment/mock-pay/:no    模拟扫码付款（仅 WXPAY_MODE=mock）
+ *   （2026-11-17 起模拟支付功能已下线：不提供 mock-pay 接口，mock 模式不接受支付回调）
  */
 const express = require('express');
 const router = express.Router();
@@ -27,6 +27,16 @@ async function assertOrderOwnership(order, req) {
     return { ok: false, error: '订单与当前验证手机号不匹配' };
   }
   return { ok: true, guest };
+}
+
+/**
+ * 2026-11-17：模拟支付功能整体下线。
+ * 支付资质到位前（payConfig.mode === 'mock'）不开放任何在线支付入口，
+ * 也不接受免验签的支付回调；仅 0 元订单仍按原逻辑自动出票。
+ */
+const PAY_CHANNEL_CLOSED = '在线支付暂未开通，请联系主办方';
+function payChannelOpen() {
+  return payConfig.get().mode !== 'mock';
 }
 
 /**
@@ -107,6 +117,10 @@ router.post('/native', requireVerifiedReusable, async (req, res) => {
       return res.json({ code: 0, message: '免费订单已确认', data: { status: 'paid', checkin_code: result.checkinCode } });
     }
 
+    if (!payChannelOpen()) {
+      return res.status(403).json({ code: 403, message: PAY_CHANNEL_CLOSED });
+    }
+
     // 已有进行中的支付记录则复用
     let payment = await Payment.findOne({ where: { out_trade_no: order_no } });
     if (!payment) {
@@ -159,6 +173,10 @@ router.post('/native', requireVerifiedReusable, async (req, res) => {
  */
 router.post('/notify', async (req, res) => {
   try {
+    // 模拟支付下线：mock 模式下回调不验签，必须整体拒绝，防止伪造回调把订单刷成 paid
+    if (!payChannelOpen()) {
+      return res.type('text/xml').send(wechat.notifyFail(PAY_CHANNEL_CLOSED));
+    }
     const raw = req.rawBody ? req.rawBody.toString('utf8') : '';
     const verified = await wechat.verifyNotify(raw);
     if (!verified.ok) {
@@ -232,10 +250,8 @@ router.post('/jsapi', requireVerifiedReusable, async (req, res) => {
       return res.status(400).json({ code: 400, message: payResult.error || 'JSAPI 下单失败' });
     }
 
-    // mock 模式：让前端走模拟支付
-    const cfg = require('../services/payConfigService');
-    if (cfg.get().mode === 'mock') {
-      return res.json({ code: 0, message: 'ok', data: { order_no: order.order_no, mock: true, jsapi_ready: false } });
+    if (!payChannelOpen()) {
+      return res.status(403).json({ code: 403, message: PAY_CHANNEL_CLOSED });
     }
 
     // 其余：前端回落 NATIVE 二维码
@@ -321,32 +337,7 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-/**
- * POST /mock-pay/:orderNo —— 模拟扫码付款（仅 mock 模式，开发联调用）
- */
-router.post('/mock-pay/:orderNo', requireVerifiedReusable, async (req, res) => {
-  try {
-    if (payConfig.get().mode !== 'mock') {
-      return res.status(403).json({ code: 403, message: '仅 mock 模式可用' });
-    }
-    const order = await Order.findOne({ where: { order_no: req.params.orderNo } });
-    if (!order) return res.status(404).json({ code: 404, message: '订单不存在' });
-    const own = await assertOrderOwnership(order, req);
-    if (!own.ok) return res.status(403).json({ code: 403, message: own.error });
-
-    const result = await handlePaySuccess({
-      out_trade_no: order.order_no,
-      total_fee: String(orderService.yuanToFen(order.final_amount)),
-      transaction_id: 'MOCK' + crypto.randomBytes(8).toString('hex'),
-      nonce_str: crypto.randomBytes(8).toString('hex'),
-      mock: true
-    });
-    if (!result.ok) return res.status(500).json({ code: 500, message: result.error });
-    res.json({ code: 0, message: '模拟支付成功', data: { order_no: order.order_no, idempotent: !!result.idempotent } });
-  } catch (e) {
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
+// 2026-11-17：模拟支付接口已下线，不再提供任何「一键置为已支付」的入口。
 
 // ==================== 多人代报：pay_token 免登录支付通道 ====================
 // 短信付款链接场景：购票人从短信打开链接，无验证码凭证，用订单上的 pay_token 鉴权。
@@ -424,36 +415,10 @@ router.post('/group/:orderNo/pay', async (req, res) => {
       return res.status(400).json({ code: 400, message: payResult.error || 'JSAPI 下单失败' });
     }
 
-    const cfg = require('../services/payConfigService');
-    if (cfg.get().mode === 'mock') {
-      return res.json({ code: 0, message: 'ok', data: { order_no: order.order_no, mock: true, jsapi_ready: false } });
+    if (!payChannelOpen()) {
+      return res.status(403).json({ code: 403, message: PAY_CHANNEL_CLOSED });
     }
     return res.status(400).json({ code: 400, message: 'JSAPI 未配置（缺少 openid），请使用扫码支付' });
-  } catch (e) {
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
-
-/** POST /group/:orderNo/mock-pay  body:{pay_token} —— 短信链接模拟支付（mock 模式） */
-router.post('/group/:orderNo/mock-pay', async (req, res) => {
-  try {
-    if (payConfig.get().mode !== 'mock') {
-      return res.status(403).json({ code: 403, message: '仅 mock 模式可用' });
-    }
-    const order = await Order.findOne({ where: { order_no: req.params.orderNo } });
-    if (!order || !order.group_no) return res.status(404).json({ code: 404, message: '订单不存在' });
-    const pt = assertPayToken(order, req);
-    if (!pt.ok) return res.status(403).json({ code: 403, message: pt.error });
-
-    const result = await handlePaySuccess({
-      out_trade_no: order.order_no,
-      total_fee: String(orderService.yuanToFen(order.final_amount)),
-      transaction_id: 'MOCK' + crypto.randomBytes(8).toString('hex'),
-      nonce_str: crypto.randomBytes(8).toString('hex'),
-      mock: true
-    });
-    if (!result.ok) return res.status(500).json({ code: 500, message: result.error });
-    res.json({ code: 0, message: '模拟支付成功', data: { order_no: order.order_no, idempotent: !!result.idempotent } });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }

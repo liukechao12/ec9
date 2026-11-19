@@ -19,6 +19,13 @@ const { hmacPhone, hashCode } = require('../utils/phoneCrypto');
 const { normalizePhone } = require('../utils/phoneUtil');
 const sms = require('./verificationSmsService');
 
+// 支付审核演示白名单（2026-11-11）：仅 SMS_DEMO_PHONES 内的手机号可用 SMS_DEMO_CODE 登录。
+// 与全局 SMS_FIXED_CODE 的区别：真实用户的短信通道、频控、日上限、随机码完全不变；
+// 白名单为空或固定码不是 6 位数字时，本段逻辑整体失效（等价于没改）。
+const DEMO_PHONES = (config.sms.demoPhones || []).map(p => normalizePhone(String(p)) || String(p));
+const DEMO_CODE = String(config.sms.demoCode || '');
+const isDemoPhone = (phone) => !!(/^\d{6}$/.test(DEMO_CODE) && DEMO_PHONES.includes(phone));
+
 if (config.sms.fixedCode) {
   console.warn('[verification] ⚠️ 联调模式：验证码固定为 ' + config.sms.fixedCode +
     '，不发送真实短信。上线前必须移除 SMS_FIXED_CODE');
@@ -46,9 +53,10 @@ async function sendCode(phone, purpose = 'register', ip = '') {
   }
   const phoneHmac = hmacPhone(phone);
   const now = new Date();
+  const demo = isDemoPhone(phone);
 
-  // 联调模式（固定验证码）：跳过频率限制与日上限，方便反复跑流程
-  if (!config.sms.fixedCode) {
+  // 联调模式（固定验证码）或演示白名单：跳过频率限制与日上限，方便反复跑流程
+  if (!config.sms.fixedCode && !demo) {
     const [recent] = await VerificationCode.findAll({
       where: { phone_hmac: phoneHmac, purpose },
       order: [['created_at', 'DESC']],
@@ -76,7 +84,7 @@ async function sendCode(phone, purpose = 'register', ip = '') {
   }
 
   // 生成 + 哈希落库
-  const code = config.sms.fixedCode || genCode();
+  const code = demo ? DEMO_CODE : (config.sms.fixedCode || genCode());
   const expiresAt = new Date(now.getTime() + smsConfig.get().code_expire_minutes * 60000);
   await VerificationCode.create({
     phone_hmac: phoneHmac,
@@ -86,9 +94,9 @@ async function sendCode(phone, purpose = 'register', ip = '') {
     expires_at: expiresAt
   });
 
-  // 联调模式：固定验证码时完全不走短信通道
-  if (config.sms.fixedCode) {
-    console.warn('[verification] 联调模式生效：验证码固定为 ' + config.sms.fixedCode + '，未真实发送短信');
+  // 演示白名单 / 联调模式：完全不走短信通道（固定码只对这些号生效）
+  if (demo || config.sms.fixedCode) {
+    console.warn('[verification] 演示白名单/联调模式生效：未真实发送短信');
     return { ok: true, mock: true };
   }
 
@@ -113,6 +121,23 @@ async function verifyCode(phone, code, purpose = 'register') {
     return { ok: false, error: '验证码格式不正确' };
   }
   const phoneHmac = hmacPhone(phone);
+
+  // 演示白名单：允许「不点获取验证码」直接用固定码登录，且不受过期/错误次数限制。
+  // 做法：作废该号旧的未消费记录（只标记，不删数据），再补一条固定码记录，
+  // 后续仍走原有校验 / 消费 / 签发凭证链路，不额外开旁路 token。
+  if (isDemoPhone(phone) && String(code) === DEMO_CODE) {
+    await VerificationCode.update(
+      { consumed_at: new Date() },
+      { where: { phone_hmac: phoneHmac, purpose, consumed_at: null } }
+    );
+    await VerificationCode.create({
+      phone_hmac: phoneHmac,
+      code_hash: hashCode(DEMO_CODE),
+      purpose,
+      ip: '',
+      expires_at: new Date(Date.now() + smsConfig.get().code_expire_minutes * 60000)
+    });
+  }
 
   const [record] = await VerificationCode.findAll({
     where: { phone_hmac: phoneHmac, purpose, consumed_at: null },

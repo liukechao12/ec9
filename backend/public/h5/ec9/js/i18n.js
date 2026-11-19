@@ -659,7 +659,7 @@ Object.assign(I18N["zh-CN"], {
   stock_left: "剩余",
   pay_title: "支付",
   pay_now: "立即支付",
-  mock_pay: "模拟支付",
+  pay_channel_closed: "在线支付暂未开通，请联系主办方",
   pay_loading: "正在发起支付…",
   pay_waiting: "等待支付结果…",
   pay_in_wechat: "请在微信内打开以完成支付",
@@ -681,7 +681,7 @@ Object.assign(I18N["zh-Hant"], {
   stock_left: "剩餘",
   pay_title: "支付",
   pay_now: "立即支付",
-  mock_pay: "模擬支付",
+  pay_channel_closed: "線上支付尚未開通，請聯繫主辦方",
   pay_loading: "正在發起支付…",
   pay_waiting: "等待支付結果…",
   pay_in_wechat: "請在微信內打開以完成支付",
@@ -703,7 +703,7 @@ Object.assign(I18N["en"], {
   stock_left: "left",
   pay_title: "Payment",
   pay_now: "Pay Now",
-  mock_pay: "Mock Payment",
+  pay_channel_closed: "Online payment is not available yet. Please contact the organizer.",
   pay_loading: "Initiating payment…",
   pay_waiting: "Waiting for payment result…",
   pay_in_wechat: "Please open in WeChat to complete payment",
@@ -909,6 +909,64 @@ Object.assign(I18N["en"], {
   no_pending_order: "No pending order",
   order_load_fail: "Failed to load order",
   order_not_ready: "Order not ready, please retry"
+});
+
+/* ===== 现场活动级签到码（对齐 EC8 /checkin/<码>）===== */
+Object.assign(I18N["zh-CN"], {
+  ck_loading: "正在加载签到信息…",
+  ck_err_title: "出错了",
+  ck_retry: "重新加载",
+  ck_event_time: "活动时间",
+  ck_event_place: "活动地点",
+  ck_type: "签到类型",
+  ck_type_1: "深圳专用",
+  ck_type_2: "深圳+香港通用",
+  ck_code_invalid: "签到码无效或已禁用"
+});
+Object.assign(I18N["zh-Hant"], {
+  ck_loading: "正在載入簽到資訊…",
+  ck_err_title: "出錯了",
+  ck_retry: "重新載入",
+  ck_event_time: "活動時間",
+  ck_event_place: "活動地點",
+  ck_type: "簽到類型",
+  ck_type_1: "深圳專用",
+  ck_type_2: "深圳+香港通用",
+  ck_code_invalid: "簽到碼無效或已停用"
+});
+Object.assign(I18N["en"], {
+  ck_loading: "Loading check-in information…",
+  ck_err_title: "Something went wrong",
+  ck_retry: "Reload",
+  ck_event_time: "Event Time",
+  ck_event_place: "Venue",
+  ck_type: "Check-in Type",
+  ck_type_1: "Shenzhen Only",
+  ck_type_2: "Shenzhen + Hong Kong, China",
+  ck_code_invalid: "Invalid or disabled check-in code"
+});
+
+/* 老板特邀邀约码（2026-11-19）：锁定票种 / 免费免审 / 提交即出票 */
+Object.assign(I18N["zh-CN"], {
+  vip_badge: "特邀嘉宾 · 免费",
+  vip_locked: "已为您锁定「{ticket}」，无需付款、无需审核，提交即出票",
+  vip_code_invalid: "邀约码无效或已停用，请联系主办方",
+  vip_one_only: "特邀通道每单仅限 1 人报名",
+  vip_free_tag: "特邀免费"
+});
+Object.assign(I18N["zh-Hant"], {
+  vip_badge: "特邀嘉賓 · 免費",
+  vip_locked: "已為您鎖定「{ticket}」，無需付款、無需審核，提交即出票",
+  vip_code_invalid: "邀約碼無效或已停用，請聯繫主辦方",
+  vip_one_only: "特邀通道每單僅限 1 人報名",
+  vip_free_tag: "特邀免費"
+});
+Object.assign(I18N["en"], {
+  vip_badge: "Invited Guest · Complimentary",
+  vip_locked: "Locked to \"{ticket}\" — no payment, no review, ticket issued on submit",
+  vip_code_invalid: "This invitation code is invalid or disabled. Please contact the organizer.",
+  vip_one_only: "Invited-guest channel accepts 1 attendee per order",
+  vip_free_tag: "Complimentary"
 });
 
 const LANGS = ["zh-CN", "en", "zh-Hant"];

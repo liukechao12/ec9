@@ -16,6 +16,50 @@ function generateInviteCode() {
 }
 
 /**
+ * 报名来源筛选（与前端 invitationSourceBadge 口径一致，优先级 vip > self > manual）：
+ *   vip        = extra_fields 带 vip_invite_code（特邀嘉宾，全部码）
+ *   vip:<CODE> = 指定特邀码（大小写不敏感；码值白名单 + Sequelize 转义，双重防注入）
+ *   self       = 无 vip code 且 auto_created=true（H5 自助报名的影子邀约）
+ *   manual     = 其余（后台发出的邀约）
+ * 直接写入 where 的 Op.and，供列表 / 导出 / 统计共用；非法值一律忽略，不报 500。
+ */
+function applySourceTypeFilter(where, sourceType) {
+  const raw = typeof sourceType === 'string' ? sourceType.trim() : '';
+  if (!raw) return;
+  const hasVip = `COALESCE("Invitation"."extra_fields"->>'vip_invite_code', '') <> ''`;
+  const autoCreated = `COALESCE("Invitation"."extra_fields"->>'auto_created', 'false') = 'true'`;
+  const codeCol = `UPPER(COALESCE("Invitation"."extra_fields"->>'vip_invite_code', ''))`;
+  let cond;
+  if (raw === 'vip') {
+    cond = hasVip;
+  } else if (raw.indexOf('vip:') === 0) {
+    const code = raw.slice(4).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+    if (!code) return;
+    cond = codeCol + ' = ' + Invitation.sequelize.escape(code.toUpperCase());
+  } else if (raw === 'self') {
+    cond = `NOT (${hasVip}) AND ${autoCreated}`;
+  } else if (raw === 'manual') {
+    cond = `NOT (${hasVip}) AND NOT (${autoCreated})`;
+  } else {
+    return;
+  }
+  where[Op.and] = [...(where[Op.and] || []), Invitation.sequelize.literal(cond)];
+}
+
+/** 导出 Excel 的报名来源文案（口径同前端 invitationSourceBadge），只读不改数据 */
+function invitationSourceLabel(inv) {
+  let ef = inv.extra_fields;
+  if (typeof ef === 'string') { try { ef = JSON.parse(ef); } catch (e) { ef = null; } }
+  const code = ef && ef.vip_invite_code ? String(ef.vip_invite_code) : '';
+  if (code) {
+    const name = ef.vip_invite_name ? String(ef.vip_invite_name) : code;
+    return { label: '特邀嘉宾 · ' + name, code: code };
+  }
+  if (ef && (ef.auto_created === true || ef.auto_created === 'true')) return { label: '自助报名', code: '' };
+  return { label: '后台邀约', code: '' };
+}
+
+/**
  * 归一化「赠票票种」入参：合法的在售票种 id 原样返回；0 / 空 / 非法 → null（未指定，照价收费）
  */
 async function resolveTicketTypeId(v) {
@@ -167,7 +211,7 @@ function buildInviteUrl(event, inviteCode) {
 // 获取所有邀请（需要认证）
 router.get('/', authenticate, operationLog('invitations', '获取邀约列表'), async (req, res) => {
   try {
-    const { page = 1, pageSize = 10, event_id, guest_id, registration_status, is_valid, search, source_bd, batch_no } = req.query;
+    const { page = 1, pageSize = 10, event_id, guest_id, registration_status, is_valid, search, source_bd, batch_no, source_type } = req.query;
     const offset = (page - 1) * pageSize;
     
     const where = {};
@@ -195,6 +239,9 @@ router.get('/', authenticate, operationLog('invitations', '获取邀约列表'),
     if (req.user.role === 'admin' && typeof source_bd === 'string' && source_bd.trim() !== '') {
       where.source_bd = source_bd.trim();
     }
+
+    // 按报名来源筛选（后台邀约 / 自助报名 / 特邀嘉宾 / 指定特邀码）
+    applySourceTypeFilter(where, source_type);
     
     const { count, rows } = await Invitation.findAndCountAll({
       where,
@@ -546,7 +593,7 @@ router.get('/source-bds', authenticate, operationLog('invitations', '获取邀�
 // 导出邀约为Excel（需要认证）
 router.get('/export', authenticate, operationLog('invitations', '导出邀约Excel'), async (req, res) => {
   try {
-    const { event_id, guest_id, registration_status, is_valid, source_bd } = req.query;
+    const { event_id, guest_id, registration_status, is_valid, source_bd, source_type } = req.query;
     const where = {};
     if (event_id) where.event_id = event_id;
     if (guest_id) where.guest_id = guest_id;
@@ -562,6 +609,9 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
     if (req.user.role === 'admin' && typeof source_bd === 'string' && source_bd.trim() !== '') {
       where.source_bd = source_bd.trim();
     }
+
+    // 按报名来源筛选导出（与列表口径一致）
+    applySourceTypeFilter(where, source_type);
 
     const invitations = await Invitation.findAll({
       where,
@@ -588,6 +638,7 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
       }
       const accommodation = inv.accommodation ? JSON.stringify(inv.accommodation) : '';
       const seats = inv.seats ? JSON.stringify(inv.seats) : '';
+      const sourceInfo = invitationSourceLabel(inv);
       const statusTextMap = {
         0: '待回复',
         1: '待审批',
@@ -607,6 +658,8 @@ router.get('/export', authenticate, operationLog('invitations', '导出邀约Exc
         是否需付款: Number(inv.need_pay) === 0 ? '免票' : '需付款',
         赠票票种: (Number(inv.ticket_type_id) > 0 ? (ttName.get(Number(inv.ticket_type_id)) || ('#' + inv.ticket_type_id)) : ''),
         邀约码: inv.invite_code || '',
+        报名来源: sourceInfo.label,
+        特邀码: sourceInfo.code,
         住宿分配: accommodation,
         座位分配: seats,
         创建时间: inv.created_at ? inv.created_at.toISOString() : '',

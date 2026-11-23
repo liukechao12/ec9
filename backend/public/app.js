@@ -1556,8 +1556,40 @@ async function adminCheckinSelectedInvitations() {
 }
 
 // 加载邀约列表
+/**
+ * 2026-11-23：邀约管理「报名来源」下拉里的具体码选项。
+ * 从 /vip-invite-codes 动态读取（含停用码，便于筛历史数据），换码不用改前端；
+ * 请求失败时静默降级为三态筛选，不阻塞列表加载。
+ */
+let __vipCodeOptionsLoaded = false;
+async function ensureVipCodeOptions() {
+    if (__vipCodeOptionsLoaded) return;
+    const group = document.getElementById('invitationVipCodeGroup');
+    if (!group) return;
+    try {
+        const res = await apiRequest('/vip-invite-codes');
+        const rows = (res && res.data && Array.isArray(res.data)) ? res.data : [];
+        const sel = document.getElementById('invitationSourceFilter');
+        const keep = sel ? sel.value : '';
+        group.innerHTML = '';
+        rows.forEach(function (r) {
+            const code = String(r.code || '');
+            if (!/^[A-Za-z0-9_-]{1,32}$/.test(code)) return;
+            const o = document.createElement('option');
+            o.value = 'vip:' + code;
+            o.textContent = (r.name || code) + (Number(r.is_active) === 1 ? '' : '（已停用）');
+            group.appendChild(o);
+        });
+        if (sel && keep) sel.value = keep;
+        __vipCodeOptionsLoaded = true;
+    } catch (e) {
+        // 拿不到码表不影响「全部来源 / 三态」筛选
+    }
+}
+
 async function loadInvitations(page = currentInvitationPage, pageSize = currentInvitationPageSize) {
     try {
+        await ensureVipCodeOptions();
         resetInvitationSelectionUI();
         currentInvitationPage = page;
         currentInvitationPageSize = pageSize;
@@ -1580,6 +1612,12 @@ async function loadInvitations(page = currentInvitationPage, pageSize = currentI
         const sourceBd = (currentUser && currentUser.role === 'admin') ? getInvitationBdFilterUsername() : '';
         if (sourceBd) {
             url += `&source_bd=${encodeURIComponent(sourceBd)}`;
+        }
+
+        // 报名来源筛选（三态 / 指定特邀码）
+        const sourceTypeFilter = document.getElementById('invitationSourceFilter');
+        if (sourceTypeFilter && sourceTypeFilter.value) {
+            url += `&source_type=${encodeURIComponent(sourceTypeFilter.value)}`;
         }
         
         const data = await apiRequest(url);
@@ -1783,6 +1821,10 @@ async function exportInvitations() {
         const sourceBd = (currentUser && currentUser.role === 'admin') ? getInvitationBdFilterUsername() : '';
         if (sourceBd) {
             params.set('source_bd', sourceBd);
+        }
+        const sourceTypeFilter = document.getElementById('invitationSourceFilter');
+        if (sourceTypeFilter && sourceTypeFilter.value) {
+            params.set('source_type', sourceTypeFilter.value);
         }
         if (Array.from(params.keys()).length > 0) {
             url += `?${params.toString()}`;

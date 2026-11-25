@@ -389,16 +389,37 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
     // 同步报名记录状态（建单前置）
     await syncRegistrationApproved(invitation.id, invitation.event_id, invitation.guest_id);
 
-    // 报名成功 → 补单（免票出票 / 需付款建待支付单）
+    // 2026-11-25 修复：管理员手动设成功时，若本人从未提交过报名（无任何报名记录），
+    // 自动补建报名记录 + 0 元 PAID 订单 + 个人签到码 + 报名成功短信。
+    // 幂等键 invitation_id：已有报名记录一律跳过，沿用下方原建单逻辑，不重复出票、不重复发短信。
     let orderInfo = null;
+    let backfill = null;
     try {
-      const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
-      for (const reg of regs) {
-        const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
-        if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+      backfill = await groupOrderService.backfillManualRegistration(invitation, {
+        sendSms: true,
+        enqueue: false,
+        occupyStock: true,
+        batch: 'manual',
+        operator: req.user.username
+      });
+      if (backfill && backfill.ok && !backfill.skipped) {
+        orderInfo = { ok: true, free: true, paid: true, group_no: backfill.group_no, order_no: backfill.order_no };
       }
     } catch (e) {
-      console.error('[手动报名成功] 建单异常（不阻塞）：', e.message);
+      console.error('[手动报名成功] 补登记异常（不阻塞）：', e.message);
+    }
+
+    // 已有报名记录（补登记跳过）→ 沿用原补单逻辑：免票出票 / 需付款建待支付单
+    if (!orderInfo) {
+      try {
+        const regs = await Registration.findAll({ where: { invitation_id: invitation.id }, order: [['id', 'DESC']] });
+        for (const reg of regs) {
+          const r = await groupOrderService.ensureGroupOrderAfterApprove(reg);
+          if (r && r.ok && !r.skipped) { orderInfo = r; break; }
+        }
+      } catch (e) {
+        console.error('[手动报名成功] 建单异常（不阻塞）：', e.message);
+      }
     }
 
     await invitation.reload({
@@ -416,9 +437,12 @@ router.post('/:id/mark-registered', authenticate, operationLog('invitations', '�
 
     res.json({
       code: 200,
-      message: orderInfo && orderInfo.free ? '已设为报名成功（免票，已自动出票）' : '已手动设置为报名成功',
+      message: backfill && backfill.ok && !backfill.skipped
+        ? '已设为报名成功（已补报名记录、出票并发送报名成功短信）'
+        : (orderInfo && orderInfo.free ? '已设为报名成功（免票，已自动出票）' : '已手动设置为报名成功'),
       data: invitation,
-      order: orderInfo
+      order: orderInfo,
+      backfill: backfill
     });
   } catch (error) {
     res.status(500).json({

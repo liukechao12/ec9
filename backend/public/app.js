@@ -5211,18 +5211,18 @@ async function markInvitationRegistered(id) {
         return;
     }
 
-    if (!confirm('确定要将该邀约手动设置为“报名成功”吗？')) {
+    if (!confirm('确定要将该邀约手动设置为“报名成功”吗？\n\n注意：若该嘉宾尚未提交过报名，系统将自动补建报名记录、免费出票，并立即发送一条报名成功短信，不可撤销。')) {
         return;
     }
 
     const remark = prompt('请输入备注（可选）：');
 
     try {
-        await apiRequest(`/invitations/${id}/mark-registered`, {
+        const res = await apiRequest(`/invitations/${id}/mark-registered`, {
             method: 'POST',
             body: JSON.stringify({ remark: remark || '' })
         });
-        alert('已设置为报名成功');
+        alert((res && res.message) || '已设置为报名成功');
         loadInvitations(currentInvitationPage, currentInvitationPageSize);
         if (currentInvitationId === id) {
             viewInvitation(id);

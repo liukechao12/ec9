@@ -1284,9 +1284,204 @@ async function sellGroupStock(order, { transaction: t = null } = {}) {
   }
 }
 
+/* 新增公共服务：管理员「手动设置报名成功」补登记（2026-11-25 修复）
+ * 幂等键 = invitation_id。已有报名记录 / 已出票 / 已发过 REG_SUCCESS 一律跳过。
+ * 补建：ec9_registrations(paid) → 0 元 PAID 订单 → 个人签到码 → REG_SUCCESS 短信（或入队）。
+ * 参数：
+ *   sendSms      true=立即发；false=只入队（存量补登记）
+ *   enqueue      true=写 ec9_backfill_sms_queue（与 sendSms 互斥，enqueue 优先）
+ *   occupyStock  true=stock_sold +1（不动 locked）
+ *   defaultTicketTypeId  邀约没指定票种时的兜底（胡静那条）
+ *   batch        留痕标记
+ */
+async function backfillManualRegistration(invitation, opts = {}) {
+  const {
+    sendSms = true,
+    enqueue = false,
+    occupyStock = true,
+    defaultTicketTypeId = 0,
+    batch = '20261125',
+    operator = ''
+  } = opts;
+
+  const inv = invitation;
+  if (!inv || !inv.id) return { ok: false, error: '邀约不存在' };
+  const eventId = Number(inv.event_id) || 1;
+
+  // ---- 幂等 1：该邀约名下是否已有报名记录（含正常 H5 报名） ----
+  const dup = await Registration.findOne({
+    where: { invitation_id: inv.id },
+    order: [['id', 'DESC']]
+  });
+  if (dup) return { ok: true, skipped: true, reason: 'already_has_registration', registration_id: dup.id };
+
+  // ---- 幂等 2：该嘉宾在本活动是否已有任何报名记录（防跨邀约重复出票） ----
+  const dupGuest = await Registration.findOne({
+    where: { guest_id: inv.guest_id, event_id: eventId },
+    order: [['id', 'DESC']]
+  });
+  if (dupGuest) return { ok: true, skipped: true, reason: 'already_has_registration_by_guest', registration_id: dupGuest.id };
+
+  const guest = await Guest.findByPk(inv.guest_id);
+  if (!guest) return { ok: false, error: '嘉宾不存在' };
+
+  // ---- 票种：邀约指定优先，缺省按标准票 ----
+  let ttId = Number(inv.ticket_type_id) || 0;
+  if (!ttId) ttId = Number(defaultTicketTypeId) || Number(await standardTicketId()) || 0;
+  const tt = ttId ? await TicketType.findByPk(ttId) : null;
+  if (!tt) return { ok: false, error: '票种不存在' };
+  if (Number(tt.is_student) === 1) return { ok: false, error: '学生票需人工复核，不走补登记' };
+  if (Number(tt.on_shelf) !== 1 || Number(tt.status) !== 1) return { ok: false, error: '票种已下架' };
+  // 占库存口径：余量不足时拒绝出票，避免 stock_sold 顶穿 stock_total
+  if (occupyStock && Number(tt.stock_total) > 0) {
+    const left = Number(tt.stock_total) - Number(tt.stock_locked || 0) - Number(tt.stock_sold || 0);
+    if (left < 1) return { ok: false, error: `票种「${tt.name}」名额已满，请先扩容库存` };
+  }
+
+  // ---- 手机号（解密 + 规范化），判断是否国际号 ----
+  let phone = '';
+  try { phone = normalizePhone(decryptPhone(guest.phone) || '') || ''; } catch (e) { phone = ''; }
+  const isIntl = !!phone && !/^1[3-9]\d{9}$/.test(phone);
+
+  // ---- 短信防重：该号已发过 REG_SUCCESS 就跳过 ----
+  const sentBefore = phone ? await sequelize.query(
+    "SELECT id FROM ec9_sms_logs WHERE phone = :p AND message_type = 'REG_SUCCESS' AND status = '1' LIMIT 1",
+    { replacements: { p: phone }, type: sequelize.QueryTypes.SELECT }
+  ) : [];
+  const alreadySent = sentBefore.length > 0;
+
+  const now = new Date();
+  const groupNo = genGroupNo();
+  const orderNo = 'EC9' + Date.now() + String((orderSeq++) % 100).padStart(2, '0');
+
+  // ---- 事务补建：报名记录 + 0 元 PAID 订单 + 签到码 + 库存 ----
+  const made = await sequelize.transaction(async (t) => {
+    const reg = await Registration.create({
+      event_id: eventId,
+      session_id: 0,
+      session_all: 0,
+      ticket_type_id: tt.id,
+      guest_id: inv.guest_id,
+      invitation_id: inv.id,
+      group_no: groupNo,
+      form_data: { name: guest.name, company: guest.company || '', position: guest.position || '' },
+      status: REG_STATUS.PAID,
+      submitted_at: now,
+      audited_at: now,
+      registration_time: now,
+      source_bd: inv.source_bd || null,
+      focus: '',
+      extra_fields: {
+        manual_backfill: batch,
+        manual_backfill_at: now.toISOString(),
+        manual_backfill_by: operator || 'system',
+        is_buyer: true,
+        is_invited: true,
+        audit_exempt: true,
+        need_pay: false,
+        submitter_phone: phone || null,
+        invited_ticket_id: tt.id,
+        used_invited_ticket: true
+      }
+    }, { transaction: t });
+
+    const order = await Order.create({
+      order_no: orderNo,
+      registration_id: reg.id,
+      guest_id: inv.guest_id,
+      event_id: eventId,
+      session_id: 0,
+      ticket_type_id: tt.id,
+      quantity: 1,
+      unit_price: 0,
+      total_amount: 0,
+      discount_amount: 0,
+      final_amount: 0,
+      status: ORDER_STATUS.PAID,
+      paid_at: now,
+      expire_at: new Date(now.getTime() + 24 * 3600 * 1000),
+      group_no: groupNo,
+      price_detail: [{
+        registration_id: reg.id,
+        guest_id: inv.guest_id,
+        ticket_type_id: tt.id,
+        ticket_name: tt.name || '',
+        price: 0,
+        is_free: true,
+        session_id: 0
+      }],
+      discount_rate: 1.00,
+      pay_token: genPayToken(),
+      remark: `后台手动报名成功补登记 ${batch} 1 人`
+    }, { transaction: t });
+
+    const codes = await markGroupPaid(order, { transaction: t });
+
+    if (occupyStock) await tt.increment('stock_sold', { by: 1, transaction: t });
+    return { reg, order, codes };
+  });
+
+  // ---- 短信：即时发 / 入队 / 跳过 ----
+  let sms = 'not_sent';
+  if (enqueue) {
+    // 队列表由部署脚本预建；ON CONFLICT 保证幂等
+    const st = isIntl ? 'skipped_intl' : (alreadySent ? 'skipped_duplicate' : 'pending');
+    try {
+      await sequelize.query(
+        `INSERT INTO ec9_backfill_sms_queue
+           (invitation_id, guest_id, registration_id, phone, name, status, batch)
+         VALUES (:iid, :gid, :rid, :phone, :name, :st, :batch)
+         ON CONFLICT (invitation_id) DO NOTHING`,
+        {
+          replacements: {
+            iid: inv.id, gid: inv.guest_id, rid: made.reg.id,
+            phone: phone || '', name: guest.name || '', st, batch
+          }
+        }
+      );
+      sms = st;
+    } catch (e) {
+      sms = 'enqueue_failed:' + e.message;
+      console.warn('[backfillManualRegistration] 入队失败（不阻塞出票）:', e.message);
+    }
+  } else if (sendSms && !isIntl && !alreadySent && phone) {
+    try {
+      const r = await SmsService.sendByBusinessType(
+        SmsService.MESSAGE_TYPES.REG_SUCCESS,
+        { guestId: inv.guest_id, eventId, lang: 'zh-CN' }
+      );
+      sms = (r && r.success) ? 'sent' : ('failed:' + ((r && (r.error || r.errorMessage)) || 'unknown'));
+    } catch (e) {
+      sms = 'failed:' + e.message;
+      console.warn('[backfillManualRegistration] 短信异常（不阻塞出票）:', e.message);
+    }
+  } else if (isIntl) {
+    sms = 'skipped_intl';
+  } else if (alreadySent) {
+    sms = 'skipped_duplicate';
+  } else if (!phone) {
+    sms = 'skipped_no_phone';
+  }
+
+  return {
+    ok: true,
+    skipped: false,
+    invitation_id: inv.id,
+    guest_id: inv.guest_id,
+    registration_id: made.reg.id,
+    order_no: made.order.order_no,
+    group_no: groupNo,
+    ticket_type_id: tt.id,
+    checkin_code: (made.codes[0] && made.codes[0].checkin_code) || null,
+    phone: phone ? phone.slice(0, 3) + '****' + phone.slice(-4) : '',
+    sms
+  };
+}
+
 module.exports = {
   calcDiscount, applyDiscount, isStandardType, isFreeRegistration, isFreeFor, needPayOf,
   pickTier, rateToZhe, fetchDiscountRules, DEFAULT_TIERS, quoteGroup, createGroup, getGroup, auditGroup, findInvited, findInvitedByGuestIds, standardTicketId,
   createGroupOrder, ensureGroupOrderAfterApprove, recalcOrdersForInvitation, payUrlOf,
-  markGroupPaid, sendGroupPaidSms, sendGroupApprovedSms, releaseGroupStock, sellGroupStock, genCheckinCode
+  markGroupPaid, sendGroupPaidSms, sendGroupApprovedSms, releaseGroupStock, sellGroupStock, genCheckinCode,
+  backfillManualRegistration
 };

@@ -418,10 +418,72 @@ router.post('/group/:orderNo/pay', async (req, res) => {
     if (!payChannelOpen()) {
       return res.status(403).json({ code: 403, message: PAY_CHANNEL_CLOSED });
     }
-    return res.status(400).json({ code: 400, message: 'JSAPI 未配置（缺少 openid），请使用扫码支付' });
+    // 微信外 / 网页授权不可用：回落 Native 扫码（与 /native 同款下单）
+    let payment = await Payment.findOne({ where: { out_trade_no: order.order_no } });
+    if (!payment) {
+      payment = await Payment.create({
+        order_id: order.id, channel: 'wechat', out_trade_no: order.order_no,
+        amount: order.final_amount, status: 'created'
+      });
+    }
+    const payResult = await wechat.unifiedOrder({
+      orderNo: order.order_no,
+      body: `EC9会议报名-${order.order_no}`,
+      totalFeeFen: orderService.yuanToFen(order.final_amount),
+      ip: req.ip,
+      productId: order.order_no
+    });
+    if (!payResult.ok) return res.status(500).json({ code: 500, message: payResult.error || '下单失败' });
+    let qrImage = null;
+    if (payResult.codeUrl) {
+      try { qrImage = await QRCode.toDataURL(payResult.codeUrl, { width: 260, margin: 1 }); } catch (e) { /* 前端可自行渲染 */ }
+    }
+    res.json({ code: 0, message: 'ok', data: {
+      order_no: order.order_no, amount: Number(order.final_amount),
+      code_url: payResult.codeUrl, qr_image: qrImage, mock: !!payResult.mock
+    } });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }
 });
+
+// ==================== 微信内 JSAPI：snsapi_base 静默网页授权 ====================
+// H5 支付页在微信内且本地无 openid 时，先跳 /oauth/authorize；微信回跳 /oauth/callback，
+// 服务端用 AppSecret + code 换 openid，再带 hash 回到原支付页（openid 不落 URL 查询串、不进服务端日志）。
+
+/** 只允许站内 H5 相对路径，防开放重定向 */
+function safeLocalRedirect(raw) {
+  const s = String(raw || '');
+  if (!/^\/h5\/ec9\/[A-Za-z0-9_.-]+\.html/.test(s)) return '';
+  if (s.indexOf('://') > -1 || /[\r\n]/.test(s) || /javascript:|data:/i.test(s)) return '';
+  return s;
+}
+
+router.get('/oauth/authorize', async (req, res) => {
+  const redirect = safeLocalRedirect(req.query.redirect);
+  if (!redirect) return res.status(400).send('invalid redirect');
+  const wx = payConfig.get();
+  const sep = redirect.indexOf('#') > -1 ? '&' : '#';
+  if (wx.mode === 'mock' || !wx.app_id || !wx.app_secret) {
+    return res.redirect(302, redirect + sep + 'wx_oauth_unavailable=1');
+  }
+  const cb = config.frontend.baseUrl.replace(/\/$/, '') + '/api/payment/oauth/callback';
+  const url = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=' + encodeURIComponent(wx.app_id) +
+    '&redirect_uri=' + encodeURIComponent(cb) +
+    '&response_type=code&scope=snsapi_base&state=' + encodeURIComponent(redirect) +
+    '#wechat_redirect';
+  res.redirect(302, url);
+});
+
+router.get('/oauth/callback', async (req, res) => {
+  const redirect = safeLocalRedirect(req.query.state);
+  if (!redirect) return res.status(400).send('invalid state');
+  const sep = redirect.indexOf('#') > -1 ? '&' : '#';
+  const r = await wechat.getOpenidByCode(String(req.query.code || ''));
+  if (!r.ok) return res.redirect(302, redirect + sep + 'wx_oauth_unavailable=1');
+  res.redirect(302, redirect + sep + 'wx_openid=' + encodeURIComponent(r.openid));
+});
+
+// ==================== 团单（短信付款链接）无 openid 时回落 Native 扫码 ====================
 
 module.exports = router;

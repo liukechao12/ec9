@@ -32,12 +32,35 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261117nomock"></script>
-<script src="js/common.js?v=20261117nomock"></script>
+<script src="js/i18n.js?v=20261126jsapi"></script>
+<script src="js/common.js?v=20261126jsapi"></script>
 <script>
 (function () {
   var E = window.EC9;
   E.mountHeader(document.getElementById("header"), false);
+
+  /* ---- 微信内 JSAPI：snsapi_base 静默授权取 openid ---- */
+  var inWechat = /MicroMessenger/i.test(navigator.userAgent || "");
+  var openid = "";
+  try {
+    var hm = /[#&]wx_openid=([^&]+)/.exec(location.hash || "");
+    if (hm) {
+      openid = decodeURIComponent(hm[1]);
+      sessionStorage.setItem("ec9_wx_openid", openid);
+    } else openid = sessionStorage.getItem("ec9_wx_openid") || "";
+    var oauthOff = /wx_oauth_unavailable=1/.test(location.hash || "");
+    if (oauthOff) sessionStorage.setItem("ec9_wx_oauth_off", "1");
+    if (hm || oauthOff) history.replaceState(null, "", location.pathname + location.search);
+  } catch (e) { /* 隐私模式无 sessionStorage：降级扫码 */ }
+  if (inWechat && !openid) {
+    var off = false;
+    try { off = sessionStorage.getItem("ec9_wx_oauth_off") === "1"; } catch (e) {}
+    if (!off) {
+      location.replace("/api/payment/oauth/authorize?redirect=" +
+        encodeURIComponent(location.pathname + location.search));
+      return;
+    }
+  }
 
   var eventId = E.param("event_id", E.DEFAULT_EVENT_ID);
   var regId = E.param("reg_id", "") || (E.S.data.reg_id || "");
@@ -89,12 +112,21 @@
 
     document.getElementById("btnPay").addEventListener("click", function () {
       E.toast(E.t("pay_loading"));
-      E.Api.groupPay(orderNo, payToken).then(function (d) {
+      E.Api.groupPay(orderNo, payToken, openid).then(function (d) {
         if (d && d.jsapi_params) callWechatPay(d.jsapi_params);
+        else if (d && d.code_url) { showGroupNative(d); startGroupPoll(); }
         else if (d && d.mock) { E.errPill(E.t("pay_channel_closed")); }
         else startGroupPoll();
       }).catch(function (e) { E.errPill(e.message || E.t("err_pay_launch")); });
     });
+
+    function showGroupNative(d) {
+      if (d.qr_image) document.getElementById("qrImg").src = d.qr_image;
+      if (d.code_url) {
+        document.getElementById("qrBox").classList.remove("hidden");
+        document.getElementById("qrTip").classList.remove("hidden");
+      }
+    }
 
     function startGroupPoll() {
       if (polling) return;
@@ -114,7 +146,7 @@
       if (typeof WeixinJSBridge === "undefined") { E.toast(E.t("pay_in_wechat")); return; }
       WeixinJSBridge.invoke("getBrandWCPayRequest", {
         appId: p.appId, timeStamp: p.timeStamp, nonceStr: p.nonceStr,
-        package: p.package, signType: p.signType || "RSA", paySign: p.paySign
+        package: p.package, signType: p.signType || "MD5", paySign: p.paySign
       }, function (res) {
         if (res.err_msg === "get_brand_wcpay_request:ok") startGroupPoll();
         else E.errPill(res.err_msg || E.t("pay_cancel"));
@@ -153,7 +185,7 @@
     E.toast(E.t("pay_loading"));
 
     // JSAPI（后端补齐后生效）；失败则回落 NATIVE 二维码
-    E.Api.payJsapi(orderNo).then(function (d) {
+    jsapiOrder(orderNo, openid).then(function (d) {
       if (d && d.jsapi_params) { callWechatPay(d.jsapi_params); }
       else if (d && d.code_url) { showNative(d); }
       else if (d && d.mock) { E.errPill(E.t("pay_channel_closed")); }
@@ -164,6 +196,17 @@
       }).catch(function (e2) { E.errPill(e2.message || E.t("err_pay_launch")); });
     });
   });
+
+  function jsapiOrder(no, oid) {
+    return fetch("/api/payment/jsapi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-verify-token": E.S.token || "" },
+      body: JSON.stringify({ order_no: no, openid: oid || null })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.code === 0 || j.code === 200) return j.data != null ? j.data : {};
+      throw new Error(j.message || "请求失败");
+    });
+  }
 
   function showNative(d) {
     if (d.qr_image) {
@@ -181,7 +224,7 @@
     }
     WeixinJSBridge.invoke("getBrandWCPayRequest", {
       appId: p.appId, timeStamp: p.timeStamp, nonceStr: p.nonceStr,
-      package: p.package, signType: p.signType || "RSA", paySign: p.paySign
+      package: p.package, signType: p.signType || "MD5", paySign: p.paySign
     }, function (res) {
       if (res.err_msg === "get_brand_wcpay_request:ok") startPoll();
       else E.errPill(res.err_msg || E.t("pay_cancel"));

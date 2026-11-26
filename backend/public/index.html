@@ -1300,6 +1300,15 @@
 
                         <div class="form-row">
                             <div class="form-group">
+                                <label><span>公众号 AppSecret（微信内 JSAPI 支付用）</span></label>
+                                <input type="password" id="pcAppSecret" name="app_secret" autocomplete="new-password" placeholder="留空表示不修改">
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;" id="pcAppSecretMask">-</div>
+                                <div style="font-size:12px;color:#6B7280;margin-top:4px;">仅微信内 JSAPI 网页授权需要；Native 扫码支付不依赖此项</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
                                 <label><span data-i18n="ec9.payCfg.signType">签名类型</span></label>
                                 <select id="pcSignType" name="sign_type">
                                     <option value="MD5">MD5</option>
@@ -2674,6 +2683,6 @@
     <script src="/i18n.js?v=20261014.3"></script>
     <script src="app.js?v=20261125manual"></script>
     <!-- EC9 新增模块（场次/票种/订单/支付流水）：必须排在 app.js 之后，依赖其 apiRequest/formatDateTime -->
-    <script src="ec9-modules.js?v=20261104del"></script>
+    <script src="ec9-modules.js?v=20261126jsapi"></script>
 </body>
 </html>

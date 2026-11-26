@@ -23,6 +23,7 @@ const PaymentConfig = sequelize.define('PaymentConfig', {
 
   api_key_enc: { type: DataTypes.TEXT, comment: 'API v2 密钥（AES 加密）' },
   api_v3_key_enc: { type: DataTypes.TEXT, comment: 'API v3 密钥（AES 加密，V3 接口预留）' },
+  app_secret_enc: { type: DataTypes.TEXT, comment: '公众号 AppSecret（AES 加密，JSAPI 网页授权取 openid 用）' },
 
   sign_type: { type: DataTypes.STRING(10), defaultValue: 'MD5', comment: 'V2 签名类型：MD5 / HMAC-SHA256' },
   cert_path: { type: DataTypes.STRING(255), comment: '退款用 API 证书（apiclient_cert.p12）绝对路径' },

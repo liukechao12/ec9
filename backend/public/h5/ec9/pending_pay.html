@@ -28,8 +28,8 @@
   </div>
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/common.js"></script>
+<script src="js/i18n.js?v=20261126jsapi"></script>
+<script src="js/common.js?v=20261126jsapi"></script>
 <script>
 (function () {
   var E = window.EC9;
@@ -90,7 +90,7 @@
       goPay = function () {
         E.go("pay.html", {
           event_id: eventId, group_no: groupNo,
-          order_no: order.order_no, pay_token: token, v: "20261117nomock"
+          order_no: order.order_no, pay_token: token, v: "20261126jsapi"
         });
       };
     }).catch(onFail);
@@ -126,7 +126,7 @@
       box.classList.remove("hidden");
       setAmount(price);
 
-      goPay = function () { E.go("pay.html", { event_id: eventId, reg_id: m.registration_id, v: "20261117nomock" }); };
+      goPay = function () { E.go("pay.html", { event_id: eventId, reg_id: m.registration_id, v: "20261126jsapi" }); };
     }).catch(onFail);
   }
 

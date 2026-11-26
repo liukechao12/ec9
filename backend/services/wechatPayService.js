@@ -248,6 +248,91 @@ async function closeWxOrder(outTradeNo) {
 }
 
 /** 回调成功应答（固定报文） */
+
+/** GET 微信公众平台接口（网页授权换 openid 用，不需要商户证书） */
+function httpsGet(url) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.request({
+      hostname: u.hostname, path: u.pathname + u.search, method: 'GET', timeout: 15000
+    }, res => {
+      let buf = '';
+      res.on('data', c => buf += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: buf }));
+    });
+    req.on('timeout', () => { req.destroy(new Error('微信公众平台请求超时')); });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/**
+ * snsapi_base 网页授权：用微信回传的 code 换 openid
+ * AppSecret 只在服务端使用，绝不回前端。
+ */
+async function getOpenidByCode(code) {
+  const wx = payConfig.get();
+  if (!wx.app_id || !wx.app_secret) return { ok: false, error: '未配置公众号 AppID / AppSecret' };
+  if (!code || !/^[0-9a-zA-Z_-]{4,128}$/.test(String(code))) return { ok: false, error: '无效的授权 code' };
+  try {
+    const url = 'https://api.weixin.qq.com/sns/oauth2/access_token?appid=' + encodeURIComponent(wx.app_id) +
+      '&secret=' + encodeURIComponent(wx.app_secret) +
+      '&code=' + encodeURIComponent(String(code)) + '&grant_type=authorization_code';
+    const res = await httpsGet(url);
+    let data = {};
+    try { data = JSON.parse(res.body || '{}'); } catch (e) { return { ok: false, error: '微信授权响应解析失败' }; }
+    if (data.errcode) return { ok: false, error: '微信授权失败 ' + data.errcode + ': ' + (data.errmsg || '') };
+    if (!data.openid) return { ok: false, error: '微信未返回 openid' };
+    return { ok: true, openid: data.openid };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * JSAPI 统一下单（V2）：trade_type=JSAPI + openid，返回前端调起支付所需的二次签名参数。
+ * paySign 用驼峰参数名 appId/timeStamp/nonceStr/package/signType，密钥与 signType 同 APIv2。
+ */
+async function unifiedOrderJsapi({ orderNo, body, totalFeeFen, ip, openid }) {
+  const wx = payConfig.get();
+  if (wx.mode === 'mock') return { ok: false, error: '模拟模式不支持 JSAPI 下单' };
+  if (!openid) return { ok: false, error: '缺少 openid' };
+  try {
+    const key = await effectiveKey();
+    const params = {
+      appid: wx.app_id,
+      mch_id: wx.mch_id,
+      nonce_str: nonceStr(),
+      body: String(body).slice(0, 128),
+      out_trade_no: orderNo,
+      total_fee: String(totalFeeFen),
+      spbill_create_ip: ip || '127.0.0.1',
+      notify_url: wx.notify_url.startsWith('http') ? wx.notify_url : (config.frontend.baseUrl + wx.notify_url),
+      trade_type: 'JSAPI',
+      openid: String(openid)
+    };
+    params.sign = sign(params, key, wx.sign_type);
+    const res = await httpsRequest(`https://${WX_HOST}/pay/unifiedorder`, xml.build(params));
+    const data = xml.parse(res.body);
+    if (data.return_code !== 'SUCCESS') return { ok: false, error: data.return_msg || '统一下单失败' };
+    if (data.result_code !== 'SUCCESS') return { ok: false, error: `${data.err_code}: ${data.err_code_des || ''}` };
+    if (!data.prepay_id) return { ok: false, error: '微信未返回 prepay_id' };
+
+    const signType = wx.sign_type || 'MD5';
+    const payParams = {
+      appId: wx.app_id,
+      timeStamp: String(Math.floor(Date.now() / 1000)),
+      nonceStr: nonceStr(),
+      package: 'prepay_id=' + data.prepay_id,
+      signType: signType
+    };
+    payParams.paySign = sign(payParams, key, signType);
+    return { ok: true, jsapi_params: payParams, prepayId: data.prepay_id };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 function notifySuccess() {
   return '<xml><return_code><![CDATA[SUCCESS]]></return_code><return_msg><![CDATA[OK]]></return_msg></xml>';
 }
@@ -256,4 +341,5 @@ function notifyFail(msg) {
   return xml.build({ return_code: 'FAIL', return_msg: msg || 'FAIL' });
 }
 
-module.exports = { sign, nonceStr, unifiedOrder, verifyNotify, queryOrder, refund, closeWxOrder, notifySuccess, notifyFail };
+module.exports = { sign, nonceStr, unifiedOrder, unifiedOrderJsapi, getOpenidByCode, httpsGet,
+  verifyNotify, queryOrder, refund, closeWxOrder, notifySuccess, notifyFail };

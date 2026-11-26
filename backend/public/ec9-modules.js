@@ -1040,6 +1040,7 @@ function fillPayConfigForm(c) {
     // 密钥输入框永远留空（回传空 = 不修改），只展示掩码
     setVal('pcApiKey', '');
     setVal('pcApiV3Key', '');
+    setVal('pcAppSecret', '');
     const mask = (id, masked, isSet) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1054,6 +1055,7 @@ function fillPayConfigForm(c) {
     };
     mask('pcApiKeyMask', c.api_key_masked, c.api_key_set);
     mask('pcApiV3KeyMask', c.api_v3_key_masked, c.api_v3_key_set);
+    mask('pcAppSecretMask', c.app_secret_masked, c.app_secret_set);
 
     // 顶部状态卡
     const modeRow = PC_MODES.find(m => m[0] === (c.mode || 'mock'));
@@ -1077,6 +1079,7 @@ async function savePayConfig() {
         mch_id: val('pcMchId'),
         api_key: val('pcApiKey'),
         api_v3_key: val('pcApiV3Key'),
+        app_secret: val('pcAppSecret'),
         sign_type: val('pcSignType'),
         cert_path: val('pcCertPath'),
         notify_url: val('pcNotifyUrl'),

@@ -42,6 +42,7 @@ function fromEnv() {
     sub_mch_id: '',
     api_key: w.apiKey || '',
     api_v3_key: '',
+    app_secret: '',
     sign_type: w.signType || 'MD5',
     cert_path: w.certPath || '',
     cert_serial_no: '',
@@ -65,6 +66,7 @@ function decryptRow(row) {
     sub_mch_id: plain.sub_mch_id || '',
     api_key: decryptSecret(plain.api_key_enc) || '',
     api_v3_key: decryptSecret(plain.api_v3_key_enc) || '',
+    app_secret: decryptSecret(plain.app_secret_enc) || '',
     sign_type: plain.sign_type || 'MD5',
     cert_path: plain.cert_path || '',
     cert_serial_no: plain.cert_serial_no || '',
@@ -134,6 +136,8 @@ function masked() {
     api_key_set: !!c.api_key,
     api_v3_key_masked: c.api_v3_key ? maskSecret(c.api_v3_key) : '',
     api_v3_key_set: !!c.api_v3_key,
+    app_secret_masked: c.app_secret ? maskSecret(c.app_secret) : '',
+    app_secret_set: !!c.app_secret,
     source: cacheSource
   };
 }
@@ -169,7 +173,7 @@ async function save(patch, adminId) {
 
   // 密钥：前端回传掩码 / 空 → 保持原值不动；否则更新
   // 掩码判定：等于当前值的掩码，或含 4 个以上连续星号（真实密钥不会出现星号）
-  ['api_key', 'api_v3_key'].forEach((k) => {
+  ['api_key', 'api_v3_key', 'app_secret'].forEach((k) => {
     const v = patch[k];
     if (v === undefined || v === null || v === '' || v === MASK_PLACEHOLDER) return;
     if (typeof v === 'string' && (v === maskSecret(cur[k]) || /\*{4,}/.test(v))) return;
@@ -199,6 +203,7 @@ async function save(patch, adminId) {
     sub_mch_id: next.sub_mch_id || null,
     api_key_enc: encryptSecret(next.api_key),
     api_v3_key_enc: encryptSecret(next.api_v3_key),
+    app_secret_enc: encryptSecret(next.app_secret),
     sign_type: next.sign_type,
     cert_path: next.cert_path || null,
     cert_serial_no: next.cert_serial_no || null,
@@ -262,6 +267,10 @@ function selfTest() {
   }
   if (c.notify_url && /^https?:\/\//i.test(c.notify_url) && !/^https:/i.test(c.notify_url)) {
     add('warn', 'notifyNotHttps', '回调地址不是 https，微信生产环境要求 https');
+  }
+
+  if (c.mode === 'real' && !c.app_secret) {
+    add('warn', 'appSecretUnset', '未配置公众号 AppSecret，微信内 JSAPI 支付不可用（Native 扫码不受影响）');
   }
 
   if (c.cert_path) {
